@@ -1,0 +1,34 @@
+services:
+  geminus-admin:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    container_name: geminus-admin
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../:/var/www/html/
+    working_dir: /var/www/html/admin/
+    command: php spark serve --host geminus-admin --port 9090
+    depends_on:
+      - db
+  
+  db:
+    image: postgres:16
+    container_name: geminus-db
+    shm_size: 128mb
+    environment:
+      POSTGRES_DB: geminus
+      POSTGRES_PASSWORD: geminus.admin
+      POSTGRES_USER: geminus
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+  
+  adminer:
+    image: adminer
+    container_name: geminus-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    

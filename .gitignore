@@ -1,0 +1,2 @@
+docker/pgdata/*
+!docker/pgdata/.gitkeep
