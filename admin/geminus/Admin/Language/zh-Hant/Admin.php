@@ -8,4 +8,9 @@ return [
     'logout' => '登出',
 
     'dashboard' => '儀表板',
+
+    'error404' => '未找到',
+    'error404Title' => '哎呀… 您剛剛發現了一個錯誤頁面',
+    'error404Message' => '很抱歉，您正在尋找的頁面未找到',
+    'takeMeHome' => '帶我回首頁',
 ];
