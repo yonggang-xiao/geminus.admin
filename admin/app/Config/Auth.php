@@ -433,7 +433,7 @@ class Auth extends ShieldAuth
      *
      * @var class-string<UserModel>
      */
-    public string $userProvider = UserModel::class;
+    public string $userProvider = \Geminus\Admin\Models\UserModel::class;
 
     /**
      * Returns the URL that a user should be redirected
