@@ -1,6 +1,6 @@
 <div class="nav-item dropdown">
     <a href="#" class="p-0 btn btn-icon" data-bs-toggle="dropdown" aria-label="Open language selector">
-        <i class="ti ti-language fs-2"></i>
+        <i class="ti ti-language icon"></i>
     </a>
     <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
         <?php foreach (config('App')->supportedLocales as $locale): ?>

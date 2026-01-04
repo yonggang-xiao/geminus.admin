@@ -12,7 +12,7 @@
             <p class="empty-subtitle text-secondary"><?= lang('Admin.error404Message') ?></p>
             <div class="empty-action">
                 <a href="/." class="btn btn-primary btn-4">
-                    <i class="ti ti-arrow-left icon fs-2"></i>
+                    <i class="ti ti-arrow-left icon"></i>
                     <?= lang('Admin.takeMeHome') ?>
                 </a>
             </div>
