@@ -3,10 +3,10 @@
         <i class="ti ti-language icon"></i>
     </a>
     <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-        <?php foreach (config('App')->supportedLocales as $locale): ?>
+    <?php foreach (config('App')->supportedLocales as $locale): ?>
         <a href="#" class="dropdown-item <?= service('request')->getLocale() === $locale ? 'active' : '' ?>">
             <?= lang('Admin.localeName', [], $locale) ?>
         </a>
-        <?php endforeach ?>
+    <?php endforeach ?>
     </div>
 </div>

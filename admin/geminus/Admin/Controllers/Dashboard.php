@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Geminus\Admin\Controllers;
 
 use App\Controllers\BaseController;

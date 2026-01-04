@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="<?= service('request')->getLocale() ?>">
 
 <head>
     <meta charset="utf-8" />
@@ -50,13 +50,13 @@
         </header>
         <!-- Main content -->
         <div class="page-wrapper">
-            <?php if (session()->getFlashdata('alert')) : ?>
+        <?php if (session()->getFlashdata('alert')) : ?>
             <div class="page-header d-print-none">
                 <div class="container-xl">
                     <?= $this->include('Geminus\Admin\Views\alert') ?>
                 </div>
             </div>
-            <?php endif ?>
+        <?php endif ?>
             <div class="page-body">
                 <div class="container-xl">
                     <?= $this->renderSection('content') ?>
@@ -66,6 +66,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
+    <?= $this->renderSection('javascript') ?>
 </body>
 
 </html>

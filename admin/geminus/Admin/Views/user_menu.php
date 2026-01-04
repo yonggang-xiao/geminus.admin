@@ -1,6 +1,6 @@
 <div class="nav-item dropdown">
     <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown" aria-label="Open user menu">
-        <span class="avatar"><?= esc(mb_substr($me->username, 0, 2)) ?></span>
+        <?= view_cell('Geminus\Admin\Cells\AvatarCell', ['user' => $me]) ?>
         <div class="d-none d-xl-block ps-2">
             <div><?= esc($me->username) ?></div>
         </div>

@@ -6,6 +6,7 @@ if (! function_exists('uploaded_file_url')) {
     /**
      * Get the full URL for an uploaded file given its path.
      *
+     * @param string $type     The type/category of the file (e.g., 'avatars', 'documents').
      * @param string $filePath The relative path of the uploaded file.
      *
      * @return string The full URL to access the uploaded file.
