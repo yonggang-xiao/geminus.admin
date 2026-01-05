@@ -17,7 +17,7 @@ class AdminUser extends User
         if ($avatar) {
             return uploaded_file_url('avatars', $avatar);
         }
-        
+
         return null;
     }
 }

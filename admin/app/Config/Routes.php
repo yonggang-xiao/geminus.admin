@@ -7,6 +7,6 @@ use CodeIgniter\Router\RouteCollection;
  */
 $routes->get('/', '\Geminus\Admin\Controllers\Dashboard::index');
 
-$routes->group('{locale}', static function($routes) {
+$routes->group('{locale}', static function ($routes) {
     service('auth')->routes($routes);
 });

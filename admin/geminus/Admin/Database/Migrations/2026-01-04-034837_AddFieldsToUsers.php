@@ -4,6 +4,7 @@ namespace Geminus\Admin\Database\Migrations;
 
 use CodeIgniter\Database\Forge;
 use CodeIgniter\Database\Migration;
+use Config\Auth;
 
 class AddFieldsToUsers extends Migration
 {
@@ -13,7 +14,7 @@ class AddFieldsToUsers extends Migration
     {
         parent::__construct($forge);
 
-        /** @var \Config\Auth $authConfig */
+        /** @var Auth $authConfig */
         $authConfig   = config('Auth');
         $this->tables = $authConfig->tables;
     }
@@ -26,22 +27,22 @@ class AddFieldsToUsers extends Migration
                 'constraint' => 255,
                 'null'       => true,
                 'default'    => null,
-                'comment'    => '头像文件路径或外链 URL'
+                'comment'    => '头像文件路径或外链 URL',
             ],
             'language' => [
                 'type'       => 'VARCHAR',
                 'constraint' => 20,
                 'null'       => false,
                 'default'    => 'en',
-                'comment'    => '界面语言首选项'
+                'comment'    => '界面语言首选项',
             ],
             'timezone' => [
                 'type'       => 'VARCHAR',
                 'constraint' => 64,
                 'null'       => false,
                 'default'    => 'UTC',
-                'comment'    => '时区标识，如 Asia/Shanghai'
-            ], 
+                'comment'    => '时区标识，如 Asia/Shanghai',
+            ],
         ];
         $this->forge->addColumn($this->tables['users'], $fields);
     }
