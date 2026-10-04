@@ -58,7 +58,35 @@ class Profile extends BaseController
         $user->fill($data);
         $users->save($user);
 
-        return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.profileSaved')]);
+        return redirect()->to(site_url($data['language'] . '/admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.profileSaved')]);
+    }
+
+    public function language(): RedirectResponse
+    {
+        $locale = $this->request->getPost('language');
+        if (! is_string($locale) || ! in_array($locale, config('App')->supportedLocales, true)) {
+            return redirect()->back()->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidPreference')]);
+        }
+
+        $user           = auth()->user();
+        $user->language = $locale;
+        auth()->getProvider()->save($user);
+
+        $returnPath = $this->request->getPost('return');
+        $segments   = is_string($returnPath) ? explode('/', trim($returnPath, '/')) : [];
+        if (count($segments) < 2 || ! in_array($segments[0], config('App')->supportedLocales, true) || $segments[1] !== 'admin') {
+            return redirect()->to(site_url($locale . '/admin/dashboard'));
+        }
+
+        array_shift($segments);
+
+        foreach ($segments as $segment) {
+            if (! preg_match('/\A[a-zA-Z0-9_-]+\z/D', $segment)) {
+                return redirect()->to(site_url($locale . '/admin/dashboard'));
+            }
+        }
+
+        return redirect()->to(site_url($locale . '/' . implode('/', $segments)));
     }
 
     public function avatar(): RedirectResponse

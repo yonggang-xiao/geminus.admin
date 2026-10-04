@@ -24,6 +24,18 @@ final class ProfileAccessTest extends CIUnitTestCase
         $result->assertRedirect();
     }
 
+    public function testLanguageSwitchRequiresAuthenticationAndCsrf(): void
+    {
+        $this->post('/en/admin/profile/language', [
+            csrf_token() => csrf_hash(),
+            'language'   => 'zh-Hans',
+            'return'     => '/en/admin/profile',
+        ])->assertRedirect();
+
+        $this->expectException(SecurityException::class);
+        $this->post('/en/admin/profile/language', ['language' => 'zh-Hans']);
+    }
+
     public function testTokenCreationRequiresAuthentication(): void
     {
         $result = $this->post('/en/admin/profile/tokens', [
@@ -94,6 +106,110 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->get('/zh-Hant/admin/profile')->assertSee('至少 8 個字元，最多 255 個字元');
         $this->get('/zh-Hans/admin/profile')->assertSee('上传头像');
         $this->get('/zh-Hant/admin/profile')->assertSee('上傳頭像');
+    }
+
+    public function testProfileLanguagePreferenceChangesRedirectLocale(): void
+    {
+        $user        = new AdminUser(['username' => 'preferencetest']);
+        $user->email = 'preference@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $result = $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => $user->username,
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Asia/Shanghai',
+        ]);
+
+        $result->assertRedirect();
+        $this->assertSame('/zh-Hans/admin/profile', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame('zh-Hans', $users->findById($user->id)->language);
+        $this->get('/zh-Hans/admin/profile')->assertSee('上传头像');
+    }
+
+    public function testLanguageSelectorSavesPreferenceAndKeepsCurrentPage(): void
+    {
+        $user        = new AdminUser(['username' => 'selectortest']);
+        $user->email = 'selector@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $page = $this->get('/en/admin/profile');
+        $this->assertStringContainsString('name="return" value="/en/admin/profile"', $page->response()->getBody());
+        $this->assertStringContainsString('name="language" value="zh-Hant"', $page->response()->getBody());
+        $this->assertSame(3, substr_count($page->response()->getBody(), 'name="language" value="zh-Hant"'));
+        $this->assertSame(1, substr_count($page->response()->getBody(), 'aria-label="Open language selector"'));
+        $this->assertMatchesRegularExpression('/<div class="d-lg-none">.*?name="language" value="zh-Hant"/s', $page->response()->getBody());
+
+        $result = $this->post('/en/admin/profile/language', [
+            csrf_token() => csrf_hash(),
+            'language'   => 'zh-Hant',
+            'return'     => '/en/admin/profile',
+        ]);
+
+        $result->assertRedirect();
+        $this->assertSame('/zh-Hant/admin/profile', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame('zh-Hant', $users->findById($user->id)->language);
+        $this->get('/zh-Hant/admin/profile')->assertSee('上傳頭像');
+    }
+
+    public function testHomeUsesSavedLanguagePreference(): void
+    {
+        $user        = new AdminUser(['username' => 'homepagepref']);
+        $user->email = 'homepage@example.com';
+        $user->setPassword('A-local-password-123!');
+        $user->language = 'zh-Hans';
+        $users          = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+
+        $result = $this->get('/');
+
+        $result->assertRedirect();
+        $this->assertSame('/zh-Hans/admin/dashboard', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->get('/en/admin/dashboard')->assertSee('Dashboard');
+    }
+
+    public function testLanguageSwitchRejectsInvalidLocaleAndExternalReturn(): void
+    {
+        $user        = new AdminUser(['username' => 'invalidlocale']);
+        $user->email = 'invalidlocale@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $this->post('/en/admin/profile/language', [
+            csrf_token() => csrf_hash(),
+            'language'   => 'invalid',
+            'return'     => '/en/admin/profile',
+        ])->assertRedirect();
+        $this->assertSame($user->language, $users->findById($user->id)->language);
+
+        $result = $this->post('/en/admin/profile/language', [
+            csrf_token() => csrf_hash(),
+            'language'   => 'zh-Hans',
+            'return'     => '//outside.example/path',
+        ]);
+        $result->assertRedirect();
+        $this->assertSame('/zh-Hans/admin/dashboard', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame('zh-Hans', $users->findById($user->id)->language);
+
+        $result = $this->post('/en/admin/profile/language', [
+            csrf_token() => csrf_hash(),
+            'language'   => 'en',
+            'return'     => ['en', 'admin', 'profile'],
+        ]);
+        $result->assertRedirect();
+        $this->assertSame('/en/admin/dashboard', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
     }
 
     public function testAvatarUploadRejectsMissingFileAndRemovalClearsAvatar(): void

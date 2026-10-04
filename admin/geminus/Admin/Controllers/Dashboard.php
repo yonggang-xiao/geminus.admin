@@ -10,8 +10,13 @@ class Dashboard extends BaseController
 {
     public function index()
     {
+        $user = auth()->user();
+        if ($this->request->getUri()->getPath() === '/' && in_array($user->language, config('App')->supportedLocales, true)) {
+            return redirect()->to(site_url($user->language . '/admin/dashboard'));
+        }
+
         return view('Geminus\Admin\Views\dashboard', [
-            'me'         => auth()->user(),
+            'me'         => $user,
             'page_title' => lang('Admin.dashboard'),
         ]);
     }

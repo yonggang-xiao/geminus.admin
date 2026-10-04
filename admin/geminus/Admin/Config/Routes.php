@@ -10,6 +10,7 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
     $routes->get('profile', 'Profile::index', ['as' => 'admin/profile']);
     $routes->post('profile', 'Profile::update', ['as' => 'admin/profile/update']);
+    $routes->post('profile/language', 'Profile::language', ['as' => 'admin/profile/language']);
     $routes->post('profile/avatar', 'Profile::avatar', ['as' => 'admin/profile/avatar']);
     $routes->post('profile/avatar/remove', 'Profile::removeAvatar', ['as' => 'admin/profile/avatar/remove']);
     $routes->post('profile/password', 'Profile::password', ['as' => 'admin/profile/password']);

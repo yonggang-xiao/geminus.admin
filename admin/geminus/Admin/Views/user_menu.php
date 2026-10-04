@@ -10,6 +10,18 @@
             <a href="?theme=dark" class="dropdown-item hide-theme-dark"><?= lang('Admin.darkMode') ?></a>
             <a href="?theme=light" class="dropdown-item hide-theme-light"><?= lang('Admin.lightMode') ?></a>
             <div class="dropdown-divider"></div>
+            <div class="dropdown-header"><?= esc(lang('Admin.language')) ?></div>
+            <?php foreach (config('App')->supportedLocales as $locale): ?>
+                <form method="post" action="<?= route_to('admin/profile/language') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="language" value="<?= esc($locale) ?>">
+                    <input type="hidden" name="return" value="<?= esc(service('request')->getUri()->getPath()) ?>">
+                    <button type="submit" class="dropdown-item <?= service('request')->getLocale() === $locale ? 'active' : '' ?>" <?= service('request')->getLocale() === $locale ? 'aria-current="true"' : '' ?>>
+                        <?= esc(lang('Admin.localeName', [], $locale)) ?>
+                    </button>
+                </form>
+            <?php endforeach ?>
+            <div class="dropdown-divider"></div>
         </div>
         <a href="<?= route_to('admin/profile') ?>" class="dropdown-item"><?= lang('Admin.accountSettings') ?></a>
         <a href="<?= route_to('logout') ?>" class="dropdown-item"><?= lang('Admin.logout') ?></a>

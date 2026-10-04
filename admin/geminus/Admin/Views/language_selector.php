@@ -4,9 +4,14 @@
     </a>
     <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
     <?php foreach (config('App')->supportedLocales as $locale): ?>
-        <a href="#" class="dropdown-item <?= service('request')->getLocale() === $locale ? 'active' : '' ?>">
-            <?= lang('Admin.localeName', [], $locale) ?>
-        </a>
+        <form method="post" action="<?= route_to('admin/profile/language') ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="language" value="<?= esc($locale) ?>">
+            <input type="hidden" name="return" value="<?= esc(service('request')->getUri()->getPath()) ?>">
+            <button type="submit" class="dropdown-item <?= service('request')->getLocale() === $locale ? 'active' : '' ?>" <?= service('request')->getLocale() === $locale ? 'aria-current="true"' : '' ?>>
+                <?= esc(lang('Admin.localeName', [], $locale)) ?>
+            </button>
+        </form>
     <?php endforeach ?>
     </div>
 </div>
