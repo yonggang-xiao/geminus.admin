@@ -1,0 +1,82 @@
+# GeminusAdmin
+
+GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是预置所有后台功能，而是通过一致的模块约定、安全边界和自动化验证，让业务代码在快速生成后仍易于理解、测试和维护。
+
+## 系统构成
+
+- `admin/app/`：CodeIgniter 4 应用入口，包含路由、配置和通用应用代码；通过自动加载配置接入后台模块。
+- `admin/geminus/Admin/`：后台管理模块，包含控制器、视图、组件、语言文件及数据库迁移等，提供仪表盘和后台页面布局。用户认证基于 CodeIgniter Shield。
+- `admin/public/`：Web 入口与静态资源目录，由 FrankenPHP 提供访问。
+- `docker/`：本地运行环境，使用 Docker Compose 运行 FrankenPHP 应用、PostgreSQL 数据库和 Adminer 数据库管理工具。
+
+## 工程目标
+
+- 统一业务模块的路由、权限、页面和数据库迁移约定，减少重复设计和实现分歧。
+- 将身份认证、资源授权、输入验证等安全要求落实到可复用的实现与测试中，避免只依赖开发提示。
+- 提供可参考的业务模块和自动化检查，让 AI 生成的代码有明确范例，并能在合并前发现问题。
+
+## 主要功能（规划）
+
+以下为系统的目标能力，具体可用情况以当前实现为准：
+
+### 身份与访问
+
+- 登录方式：支持 Microsoft 账号单点登录（SSO）；可按需启用本地账号密码登录。
+- 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；仅在启用本地登录时提供用户创建或邀请、密码重置。
+- 个人中心：维护个人资料和 API 密钥；仅在启用本地登录时管理登录密码。
+- API 访问：使用 Access Token 认证，支持密钥有效期设置和吊销。
+
+### 系统管理与安全
+
+- 系统设置：配置邮件发送、Microsoft 单点登录等功能。
+- 日志与审计：记录登录和用户操作，支持按操作者、对象、时间和结果查询。
+- 安全防护：提供 CSRF 表单防护，以及登录和 API 请求的速率限制。
+
+### 开发与扩展
+
+- 模块扩展：按业务模块注册路由、菜单、权限、页面和数据库迁移。
+- 通用数据管理：提供列表筛选、分页、排序、表单验证、文件上传和数据导出。
+- 开发支持：提供模块开发示例、权限命名约定、测试样例和部署说明。
+
+### 界面体验
+
+- 支持多语言和多时区显示。
+
+## 快速启动
+
+需要安装 Docker 和 Docker Compose，并确保本机的 80、443 和 8080 端口未被占用。以下命令均在仓库根目录执行。
+
+1. 复制环境配置文件：
+
+	```sh
+	cp admin/env admin/.env
+	```
+
+2. 在 `admin/.env` 中取消注释并设置数据库连接（主机名 `db` 是 Docker Compose 中的服务名）：
+
+	```dotenv
+	database.default.hostname = db
+	database.default.database = geminus
+	database.default.username = geminus
+	database.default.password = geminus.admin
+	database.default.DBDriver = Postgre
+	database.default.port = 5432
+	```
+
+3. 构建并启动应用、PostgreSQL 和 Adminer：
+
+	```sh
+	docker compose -f docker/docker-compose.yaml up -d --build
+	docker compose -f docker/docker-compose.yaml exec geminus-admin composer install
+	docker compose -f docker/docker-compose.yaml exec geminus-admin php spark migrate --all
+	```
+
+4. 创建首个管理员账号（将示例邮箱替换为实际邮箱）：
+
+	```sh
+	docker compose -f docker/docker-compose.yaml exec geminus-admin php spark shield:user create -n admin -e admin@example.com -g admin
+	```
+
+	按终端提示输入并确认密码。公开注册已关闭；此命令创建的是 `admin` 角色的本地登录账号，不会自动配置 Microsoft SSO。
+
+启动后访问 [https://localhost](https://localhost)，使用刚创建的账号登录。本地 HTTPS 使用自签名证书，浏览器可能提示证书不受信任。数据库管理界面位于 [http://localhost:8080](http://localhost:8080)。停止服务可运行 `docker compose -f docker/docker-compose.yaml down`。
