@@ -1,1 +1,1 @@
-<span class="avatar" <?= $user->avatar ? 'style="background-image:url(' . $user->getAvatarUrl() . ')"' : '' ?>><?= esc(mb_substr($user->username, 0, 2)) ?></span>
+<span class="avatar<?= in_array($size, ['lg', 'xl'], true) ? ' avatar-' . $size : '' ?>" <?= $user->avatar ? 'style="background-image:url(' . esc($user->getAvatarUrl(), 'attr') . ')" aria-label="' . esc($user->username, 'attr') . '"' : '' ?>><?= $user->avatar ? '' : esc(mb_substr($user->username, 0, 2)) ?></span>

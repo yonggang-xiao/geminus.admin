@@ -35,10 +35,13 @@
     <source>
         <include>
             <directory suffix=".php">./app</directory>
+            <directory suffix=".php">./geminus/Admin</directory>
         </include>
         <exclude>
             <directory suffix=".php">./app/Views</directory>
+            <directory suffix=".php">./geminus/Admin/Views</directory>
             <file>./app/Config/Routes.php</file>
+            <file>./geminus/Admin/Config/Routes.php</file>
         </exclude>
     </source>
     <php>

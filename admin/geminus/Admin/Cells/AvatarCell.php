@@ -8,4 +8,5 @@ use Geminus\Admin\Entities\AdminUser;
 class AvatarCell extends Cell
 {
     public ?AdminUser $user = null;
+    public string $size     = '';
 }

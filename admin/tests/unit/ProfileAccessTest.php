@@ -1,0 +1,289 @@
+<?php
+
+use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Test\CIUnitTestCase;
+use CodeIgniter\Test\DatabaseTestTrait;
+use CodeIgniter\Test\FeatureTestTrait;
+use Composer\InstalledVersions;
+use Geminus\Admin\Entities\AdminUser;
+
+/**
+ * @internal
+ */
+final class ProfileAccessTest extends CIUnitTestCase
+{
+    use DatabaseTestTrait;
+    use FeatureTestTrait;
+
+    protected $namespace;
+
+    public function testProfileRequiresAuthentication(): void
+    {
+        $result = $this->get('/en/admin/profile');
+
+        $result->assertRedirect();
+    }
+
+    public function testTokenCreationRequiresAuthentication(): void
+    {
+        $result = $this->post('/en/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Test',
+            'expires'    => '2030-01-01',
+        ]);
+
+        $result->assertRedirect();
+    }
+
+    public function testAvatarChangesRequireAuthentication(): void
+    {
+        $this->post('/en/admin/profile/avatar', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->post('/en/admin/profile/avatar/remove', [csrf_token() => csrf_hash()])->assertRedirect();
+    }
+
+    public function testLoginPostWithoutCsrfIsRejected(): void
+    {
+        $this->expectException(SecurityException::class);
+
+        $this->post('/en/login');
+    }
+
+    public function testLoginFormSubmitsWithCsrf(): void
+    {
+        $this->assertStringContainsString('name="' . csrf_token() . '"', $this->get('/en/login')->response()->getBody());
+
+        $result = $this->post('/en/login', [
+            csrf_token() => csrf_hash(),
+            'email'      => 'nobody@example.com',
+            'password'   => 'incorrect',
+        ]);
+
+        $result->assertRedirect();
+    }
+
+    public function testAuthenticatedUserCanViewProfile(): void
+    {
+        $user        = new AdminUser(['username' => 'profiletest']);
+        $user->email = 'profile@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+
+        $result = $this->get('/en/admin/profile');
+
+        $result->assertOK();
+        $result->assertSee('profile@example.com');
+        $result->assertSee('English', 'option');
+        $result->assertSee('简体中文', 'option');
+        $result->assertSee('繁體中文', 'option');
+        $result->assertSee('Asia/Shanghai');
+        $result->assertDontSee('Europe/Paris');
+        $result->assertSee('JPEG, PNG or WebP, up to 2 MB.');
+        $this->assertStringContainsString('enctype="multipart/form-data"', $result->response()->getBody());
+        $this->assertStringContainsString('avatar-xl', $result->response()->getBody());
+        $this->assertStringContainsString('>pr</span>', $result->response()->getBody());
+        $result->assertSee('Use at least 8 characters (up to 255).');
+        $this->assertStringContainsString('aria-describedby="new-password-hint"', $result->response()->getBody());
+        $this->assertStringContainsString('id="new-password-hint"', $result->response()->getBody());
+        $this->assertStringContainsString('dist/libs/vanilla-calendar-pro/index.js', $result->response()->getBody());
+        $this->assertStringContainsString('data-bs-toggle="datepicker" data-bs-date-min="', $result->response()->getBody());
+        $this->assertStringContainsString('dateFormat: (date) =>', $result->response()->getBody());
+
+        $this->get('/zh-Hans/admin/profile')->assertSee('至少 8 个字符，最多 255 个字符');
+        $this->get('/zh-Hant/admin/profile')->assertSee('至少 8 個字元，最多 255 個字元');
+        $this->get('/zh-Hans/admin/profile')->assertSee('上传头像');
+        $this->get('/zh-Hant/admin/profile')->assertSee('上傳頭像');
+    }
+
+    public function testAvatarUploadRejectsMissingFileAndRemovalClearsAvatar(): void
+    {
+        $user        = new AdminUser(['username' => 'avatartest']);
+        $user->email = 'avatar@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $this->post('/en/admin/profile/avatar', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertArrayHasKey('avatar', session('avatar_errors'));
+        $this->assertNull($users->findById($user->id)->avatar);
+
+        $avatarDirectory = WRITEPATH . 'uploads/avatars/';
+        if (! is_dir($avatarDirectory)) {
+            mkdir($avatarDirectory, 0777, true);
+        }
+
+        $filename = 'avatar-test-' . bin2hex(random_bytes(8)) . '.png';
+        $filePath = $avatarDirectory . $filename;
+        file_put_contents($filePath, 'test');
+
+        try {
+            $user->avatar = $filename;
+            $users->save($user);
+            auth()->login($users->findById($user->id));
+
+            $result = $this->withSession($_SESSION)->get('/en/admin/profile');
+            $result->assertSee('Remove avatar');
+            $this->assertStringContainsString('aria-label="avatartest"', $result->response()->getBody());
+            $this->assertStringNotContainsString('>av</span>', $result->response()->getBody());
+            $this->post('/en/admin/profile/avatar/remove', [csrf_token() => csrf_hash()])->assertRedirect();
+
+            $this->assertNull($users->findById($user->id)->avatar);
+            $this->assertFileDoesNotExist($filePath);
+        } finally {
+            if (is_file($filePath)) {
+                unlink($filePath);
+            }
+        }
+    }
+
+    public function testAuthenticatedUserCanCreateAndRevokeToken(): void
+    {
+        $user        = new AdminUser(['username' => 'tokentest']);
+        $user->email = 'token@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $result = $this->post('/en/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Test key',
+            'expires'    => '2030-01-01',
+        ]);
+
+        $result->assertRedirect();
+        $tokens = $user->accessTokens();
+        $this->assertCount(1, $tokens);
+        $rawToken = session('alert')['detail'];
+
+        $result = $this->withSession($_SESSION)->get('/en/admin/profile');
+        $result->assertSee(lang('Admin.tokenOnce'));
+        $result->assertSee($rawToken);
+
+        $result = $this->post('/en/admin/profile/tokens/' . $tokens[0]->id . '/revoke', [
+            csrf_token() => csrf_hash(),
+        ]);
+
+        $result->assertRedirect();
+        $this->assertSame([], $user->accessTokens());
+        $this->withSession($_SESSION)->get('/en/admin/profile')->assertSee(lang('Admin.tokenRevoked'));
+
+        $this->post('/en/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Expired key',
+            'expires'    => '2020-01-01',
+        ])->assertRedirect();
+        $result = $this->withSession($_SESSION)->get('/en/admin/profile');
+        $this->assertStringContainsString('value="2020-01-01"', $result->response()->getBody());
+    }
+
+    public function testValidationErrorsUseRequestedLocale(): void
+    {
+        $user        = new AdminUser(['username' => 'localizedtest']);
+        $user->email = 'localized@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+
+        $this->post('/zh-Hans/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Test key',
+            'expires'    => '2030/1/1',
+        ])->assertRedirect();
+
+        $this->assertSame('zh-Hans', service('request')->getLocale());
+        $this->assertSame('zh-Hans', service('language')->getLocale());
+        $this->assertSame('有效期至（UTC）必须是有效的日期。', session('token_errors')['expires']);
+
+        $this->post('/zh-Hant/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Test key',
+            'expires'    => '2030/1/1',
+        ])->assertRedirect();
+        $this->assertSame('有效期限（UTC）必須是有效的日期。', session('token_errors')['expires']);
+
+        $this->post('/zh-Hant/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => '',
+            'expires'    => '2030-01-01',
+        ])->assertRedirect();
+        $this->assertSame('請填寫金鑰名稱。', session('token_errors')['name']);
+
+        $this->post('/zh-Hans/admin/profile/password', [
+            csrf_token()       => csrf_hash(),
+            'current_password' => 'A-local-password-123!',
+            'new_password'     => 'Another-local-password-456!',
+            'confirm_password' => 'different',
+        ])->assertRedirect();
+        $this->assertSame('确认新密码与新密码不一致。', session('password_errors')['confirm_password']);
+
+        $this->post('/en/admin/profile/tokens', [
+            csrf_token() => csrf_hash(),
+            'name'       => 'Test key',
+            'expires'    => '2030/1/1',
+        ])->assertRedirect();
+        $this->assertSame('The Expires on (UTC) field must contain a valid date.', session('token_errors')['expires']);
+    }
+
+    public function testChineseValidationLanguagesCoverAllFrameworkRules(): void
+    {
+        $framework = require SYSTEMPATH . 'Language/en/Validation.php';
+
+        foreach (['zh-Hans' => 'zh-CN', 'zh-Hant' => 'zh-TW'] as $locale => $packageLocale) {
+            $translated = require APPPATH . 'Language/' . $locale . '/Validation.php';
+            $package    = require InstalledVersions::getInstallPath('codeigniter4/translations') . '/Language/' . $packageLocale . '/Validation.php';
+
+            $this->assertEqualsCanonicalizing(array_keys($framework), array_keys($translated));
+            $this->assertSame($package['alpha'], $translated['alpha']);
+        }
+    }
+
+    public function testAuthenticatedUserCanUpdateDetailsAndPassword(): void
+    {
+        $user        = new AdminUser(['username' => 'detailstest']);
+        $user->email = 'details@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $result = $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'newdetails',
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Asia/Shanghai',
+        ]);
+
+        $result->assertRedirect();
+        $updated = $users->findById($user->id);
+        $this->assertSame('newdetails', $updated->username);
+        $this->assertSame('Asia/Shanghai', $updated->timezone);
+        $this->withSession($_SESSION)->get('/en/admin/profile')->assertSee(lang('Admin.profileSaved'));
+
+        $result = $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'newdetails',
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Europe/Paris',
+        ]);
+
+        $result->assertRedirect();
+        $this->assertSame('Asia/Shanghai', $users->findById($user->id)->timezone);
+
+        $result = $this->post('/en/admin/profile/password', [
+            csrf_token()       => csrf_hash(),
+            'current_password' => 'A-local-password-123!',
+            'new_password'     => 'Another-local-password-456!',
+            'confirm_password' => 'Another-local-password-456!',
+        ]);
+
+        $result->assertRedirect();
+        $this->assertTrue(service('passwords')->verify('Another-local-password-456!', $users->findById($user->id)->getPasswordHash()));
+    }
+}

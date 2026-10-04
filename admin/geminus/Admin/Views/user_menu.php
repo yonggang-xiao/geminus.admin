@@ -11,7 +11,7 @@
             <a href="?theme=light" class="dropdown-item hide-theme-light"><?= lang('Admin.lightMode') ?></a>
             <div class="dropdown-divider"></div>
         </div>
-        <a href="#" class="dropdown-item"><?= lang('Admin.accountSettings') ?></a>
+        <a href="<?= route_to('admin/profile') ?>" class="dropdown-item"><?= lang('Admin.accountSettings') ?></a>
         <a href="<?= route_to('logout') ?>" class="dropdown-item"><?= lang('Admin.logout') ?></a>
     </div>
 </div>

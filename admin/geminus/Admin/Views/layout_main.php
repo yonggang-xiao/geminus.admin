@@ -8,6 +8,7 @@
     <script src="/static/js/tabler-theme.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/css/tabler.min.css" integrity="sha384-tT2UAGE9hxG/p5d0iGIvZ/s8El3nWWG3tfG02i8iOY5Pbf8cZZRVmcrrVs+JG5Vw" crossorigin="anonymous" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.35.0/dist/tabler-icons.min.css" />
+    <?= $this->renderSection('head') ?>
 </head>
 
 <body>
@@ -46,9 +47,6 @@
         </header>
         <!-- Main content -->
         <div class="page-wrapper">
-        <?php if (session()->getFlashdata('alert')) : ?>
-            <?= $this->include('Geminus\Admin\Views\alert') ?>
-        <?php endif ?>
             <div class="page-header d-print-none" aria-label="Page header">
                 <div class="container-xl">
                     <?= $this->renderSection('header') ?>
@@ -56,6 +54,9 @@
             </div>
             <div class="page-body">
                 <div class="container-xl">
+                    <?php if (session('alert')): ?>
+                        <?= $this->include('Geminus\Admin\Views\alert') ?>
+                    <?php endif; ?>
                     <?= $this->renderSection('content') ?>
                 </div>
             </div>
