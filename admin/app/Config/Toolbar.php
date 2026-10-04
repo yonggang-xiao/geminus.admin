@@ -104,6 +104,8 @@ class Toolbar extends BaseConfig
      */
     public array $watchedDirectories = [
         'app',
+        'geminus',
+        'public/static',
     ];
 
     /**

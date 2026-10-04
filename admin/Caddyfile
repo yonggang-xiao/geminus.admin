@@ -1,0 +1,14 @@
+# Start with: frankenphp run
+
+{
+    admin off
+}
+
+localhost {
+    root * public
+    encode zstd br gzip
+    php_server {
+        try_files {path} index.php
+    }
+    file_server
+}

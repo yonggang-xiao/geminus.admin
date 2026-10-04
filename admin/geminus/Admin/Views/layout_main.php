@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><?= esc($page_title) ?></title>
     <script src="/static/js/tabler-theme.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/css/tabler.min.css" integrity="sha384-tT2UAGE9hxG/p5d0iGIvZ/s8El3nWWG3tfG02i8iOY5Pbf8cZZRVmcrrVs+JG5Vw" crossorigin="anonymous" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.35.0/dist/tabler-icons.min.css" />
 </head>
 
@@ -18,9 +18,9 @@
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <h1 class="navbar-brand navbar-brand-autodark">
+                <h1 class="navbar-brand">
                     <a href="#">
-                        <img src="/static/logo-white.svg" width="110" height="32" alt="Admin" class="navbar-brand-image" />
+                        <img src="/static/logo-white.png" width="110" height="32" alt="Admin" class="navbar-brand-image" />
                     </a>
                 </h1>
                 <div class="navbar-nav flex-row d-lg-none">
@@ -32,18 +32,14 @@
             </div>
         </aside>
         <!-- Top navbar -->
-        <header class="navbar navbar-expand-lg sticky-top d-none d-lg-flex">
+        <header class="navbar sticky-top d-none d-lg-flex">
             <div class="container-xl">
-                <div class="row flex-fill align-items-center">
-                    <div class="col">
-                        <h2 class="page-title"><?= esc($page_title) ?></h2>
-                    </div>
-                    <div class="col d-flex">
-                        <div class="navbar-nav ms-auto gap-2 align-items-center">
-                            <?= $this->include('Geminus\Admin\Views\theme_toggle') ?>
-                            <?= $this->include('Geminus\Admin\Views\language_selector') ?>
-                            <?= $this->include('Geminus\Admin\Views\user_menu') ?>
-                        </div>
+                <div></div>
+                <div class="navbar-nav flex-row order-lg-last">
+                    <div class="d-lg-flex gap-2">
+                        <?= $this->include('Geminus\Admin\Views\theme_toggle') ?>
+                        <?= $this->include('Geminus\Admin\Views\language_selector') ?>
+                        <?= $this->include('Geminus\Admin\Views\user_menu') ?>
                     </div>
                 </div>
             </div>
@@ -51,21 +47,25 @@
         <!-- Main content -->
         <div class="page-wrapper">
         <?php if (session()->getFlashdata('alert')) : ?>
-            <div class="page-header d-print-none">
+            <?= $this->include('Geminus\Admin\Views\alert') ?>
+        <?php endif ?>
+            <div class="page-header d-print-none" aria-label="Page header">
                 <div class="container-xl">
-                    <?= $this->include('Geminus\Admin\Views\alert') ?>
+                    <?= $this->renderSection('header') ?>
                 </div>
             </div>
-        <?php endif ?>
             <div class="page-body">
                 <div class="container-xl">
                     <?= $this->renderSection('content') ?>
                 </div>
             </div>
+            <footer class="footer footer-transparent d-print-none">
+                <div class="container-xl"></div>
+            </footer>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler.min.js" integrity="sha384-1yCHfhyU8+V33urXkAlLLpNYd9jdzXkxdafCg0+auIIEtYFnOuM/DwJQgk5sXY98" crossorigin="anonymous"></script>
     <?= $this->renderSection('javascript') ?>
 </body>
 

@@ -10,16 +10,16 @@
         "slack": "https://codeigniterchat.slack.com"
     },
     "require": {
-        "php": "^8.1",
-        "codeigniter4/framework": "^4.0",
-        "codeigniter4/shield": "^1.2",
-        "codeigniter4/translations": "^4.6"
+        "php": "^8.4",
+        "codeigniter4/framework": "^4.7",
+        "codeigniter4/shield": "^1.4",
+        "codeigniter4/translations": "^4.7"
     },
     "require-dev": {
-        "codeigniter/coding-standard": "^1.8",
-        "fakerphp/faker": "^1.9",
+        "codeigniter/coding-standard": "^1.9",
+        "fakerphp/faker": "^1.24",
         "mikey179/vfsstream": "^1.6",
-        "phpunit/phpunit": "^10.5.16"
+        "phpunit/phpunit": "^13.4"
     },
     "autoload": {
         "psr-4": {

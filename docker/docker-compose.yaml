@@ -5,11 +5,16 @@ services:
       dockerfile: Dockerfile
     container_name: geminus-admin
     ports:
-      - "9090:9090"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     volumes:
-      - ../:/var/www/html/
-    working_dir: /var/www/html/admin/
-    command: php spark serve --host geminus-admin --port 9090
+      - ../admin:/app
+      - caddy_data:/data
+      - caddy_config:/config
+    working_dir: /app
+    command: frankenphp run --config Caddyfile
+    tty: true
     depends_on:
       - db
   
@@ -31,4 +36,8 @@ services:
       - "8080:8080"
     depends_on:
       - db
+
+volumes:
+  caddy_data:
+  caddy_config:
     
