@@ -1,0 +1,8 @@
+:root {
+    --tblr-primary: #38bdf8;
+    --tblr-primary-fg: #082f49;
+}
+
+.navbar-vertical[data-bs-theme="dark"] {
+    --tblr-navbar-bg: #2f2e43;
+}

@@ -66,6 +66,7 @@ final class ProfileAccessTest extends CIUnitTestCase
 
         $result->assertOK();
         $this->assertStringContainsString('src="/static/js/form-submission.js"', $result->response()->getBody());
+        $this->assertStringContainsString('href="/static/css/theme.css"', $result->response()->getBody());
         $result->assertSee('profile@example.com');
         $result->assertSee('English', 'option');
         $result->assertSee('简体中文', 'option');

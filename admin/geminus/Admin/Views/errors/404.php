@@ -6,9 +6,9 @@
     <div class="container-tight py-4">
         <div class="empty">
             <div class="empty-img">
-                <img src="/static/images/undraw_page-not-found_6wni.svg" alt="404" />
+                <img src="/static/images/undraw_page-not-found_6wni.svg" alt="" />
             </div>
-            <p class="empty-title"><?= lang('Admin.error404Title') ?></p>
+            <h1 class="empty-title"><?= lang('Admin.error404Title') ?></h1>
             <p class="empty-subtitle text-secondary"><?= lang('Admin.error404Message') ?></p>
             <div class="empty-action">
                 <a href="/." class="btn btn-primary btn-lg">

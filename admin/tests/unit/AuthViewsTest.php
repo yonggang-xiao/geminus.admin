@@ -28,7 +28,10 @@ final class AuthViewsTest extends CIUnitTestCase
         $this->assertStringContainsString('name="' . csrf_token() . '"', $loginPage);
         $this->assertStringContainsString('src="/static/js/form-submission.js"', $loginPage);
         $this->assertStringContainsString('@tabler/core@1.6.1/dist/css/tabler.min.css', $loginPage);
-        $this->assertStringContainsString('class="container-tight py-4"', $loginPage);
+        $this->assertStringContainsString('href="/static/css/theme.css"', $loginPage);
+        $this->assertStringContainsString('class="row align-items-center g-4"', $loginPage);
+        $this->assertStringContainsString('class="col-lg d-none d-lg-block"', $loginPage);
+        $this->assertStringContainsString('src="/static/images/undraw_login_weas.svg"', $loginPage);
         $this->assertStringContainsString('for="login-email"', $loginPage);
         $this->assertStringNotContainsString('bootstrap@5.2.3', $loginPage);
 
