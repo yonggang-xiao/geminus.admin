@@ -3,6 +3,7 @@
 namespace Config;
 
 use CodeIgniter\Config\BaseService;
+use CodeIgniter\Email\Email as EmailService;
 
 /**
  * Services Configuration file.
@@ -19,6 +20,23 @@ use CodeIgniter\Config\BaseService;
  */
 class Services extends BaseService
 {
+    public static function email($config = null, bool $getShared = true): EmailService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('email', $config);
+        }
+
+        $config ??= clone config(Email::class);
+
+        if ($config instanceof Email) {
+            foreach (['fromEmail', 'fromName', 'protocol', 'SMTPHost', 'SMTPUser', 'SMTPPort', 'SMTPCrypto'] as $property) {
+                $config->{$property} = service('settings')->get('Email.' . $property);
+            }
+        }
+
+        return new EmailService($config);
+    }
+
     /*
      * public static function example($getShared = true)
      * {

@@ -8,6 +8,9 @@ $routes->group('admin/files', ['namespace' => 'Geminus\Admin\Controllers'], stat
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
+    $routes->get('settings/email', 'EmailSettings::index', ['as' => 'admin/settings/email', 'filter' => 'permission:admin.settings']);
+    $routes->post('settings/email', 'EmailSettings::update', ['as' => 'admin/settings/email/update', 'filter' => 'permission:admin.settings']);
+    $routes->post('settings/email/test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test', 'filter' => 'permission:admin.settings']);
     $routes->get('profile', 'Profile::index', ['as' => 'admin/profile']);
     $routes->post('profile', 'Profile::update', ['as' => 'admin/profile/update']);
     $routes->post('profile/language', 'Profile::language', ['as' => 'admin/profile/language']);

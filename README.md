@@ -80,3 +80,30 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 	按终端提示输入并确认密码。公开注册已关闭；此命令创建的是 `admin` 角色的本地登录账号，不会自动配置 Microsoft SSO。
 
 启动后访问 [https://localhost](https://localhost)，使用刚创建的账号登录。本地 HTTPS 使用自签名证书，浏览器可能提示证书不受信任。数据库管理界面位于 [http://localhost:8080](http://localhost:8080)。停止服务可运行 `docker compose -f docker/docker-compose.yaml down`。
+
+## 运行测试
+
+测试必须使用独立的 PostgreSQL 数据库，不要将 `database.tests.database` 指向业务库。启动容器后，在仓库根目录执行一次建库命令：
+
+```sh
+docker compose -f docker/docker-compose.yaml exec -T db psql -U geminus -d postgres -c 'CREATE DATABASE geminus_test OWNER geminus'
+```
+
+在 `admin/.env` 中添加以下测试连接配置（不要改动上面的 `database.default.*` 业务库配置）：
+
+```dotenv
+database.tests.hostname = db
+database.tests.database = geminus_test
+database.tests.username = geminus
+database.tests.password = geminus.admin
+database.tests.DBDriver = Postgre
+database.tests.DBPrefix =
+database.tests.charset = utf8
+database.tests.port = 5432
+```
+
+运行后台测试；测试所需的表由测试流程创建，无需在测试库中手动执行迁移：
+
+```sh
+docker compose -f docker/docker-compose.yaml exec -T geminus-admin vendor/bin/phpunit --testsuite App --no-coverage
+```

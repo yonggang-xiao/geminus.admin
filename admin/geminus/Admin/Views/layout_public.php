@@ -16,6 +16,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler.min.js" integrity="sha384-1yCHfhyU8+V33urXkAlLLpNYd9jdzXkxdafCg0+auIIEtYFnOuM/DwJQgk5sXY98" crossorigin="anonymous"></script>
     <?= $this->renderSection('javascript') ?>
+    <script src="/static/js/form-submission.js"></script>
 </body>
 
 </html>
