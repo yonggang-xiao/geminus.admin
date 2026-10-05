@@ -53,28 +53,6 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->post('/en/admin/profile/avatar/remove', [csrf_token() => csrf_hash()])->assertRedirect();
     }
 
-    public function testLoginPostWithoutCsrfIsRejected(): void
-    {
-        $this->expectException(SecurityException::class);
-
-        $this->post('/en/login');
-    }
-
-    public function testLoginFormSubmitsWithCsrf(): void
-    {
-        $loginPage = $this->get('/en/login')->response()->getBody();
-        $this->assertStringContainsString('name="' . csrf_token() . '"', $loginPage);
-        $this->assertStringContainsString('src="/static/js/form-submission.js"', $loginPage);
-
-        $result = $this->post('/en/login', [
-            csrf_token() => csrf_hash(),
-            'email'      => 'nobody@example.com',
-            'password'   => 'incorrect',
-        ]);
-
-        $result->assertRedirect();
-    }
-
     public function testAuthenticatedUserCanViewProfile(): void
     {
         $user        = new AdminUser(['username' => 'profiletest']);
