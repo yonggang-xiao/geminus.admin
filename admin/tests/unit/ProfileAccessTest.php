@@ -62,7 +62,9 @@ final class ProfileAccessTest extends CIUnitTestCase
 
     public function testLoginFormSubmitsWithCsrf(): void
     {
-        $this->assertStringContainsString('name="' . csrf_token() . '"', $this->get('/en/login')->response()->getBody());
+        $loginPage = $this->get('/en/login')->response()->getBody();
+        $this->assertStringContainsString('name="' . csrf_token() . '"', $loginPage);
+        $this->assertStringContainsString('src="/static/js/form-submission.js"', $loginPage);
 
         $result = $this->post('/en/login', [
             csrf_token() => csrf_hash(),
@@ -85,12 +87,19 @@ final class ProfileAccessTest extends CIUnitTestCase
         $result = $this->get('/en/admin/profile');
 
         $result->assertOK();
+        $this->assertStringContainsString('src="/static/js/form-submission.js"', $result->response()->getBody());
         $result->assertSee('profile@example.com');
         $result->assertSee('English', 'option');
         $result->assertSee('简体中文', 'option');
         $result->assertSee('繁體中文', 'option');
         $result->assertSee('Asia/Shanghai');
         $result->assertDontSee('Europe/Paris');
+
+        foreach (['profile-avatar', 'profile-username', 'profile-language', 'profile-timezone', 'current_password', 'new_password', 'confirm_password', 'token-name', 'token-expires'] as $inputId) {
+            $this->assertStringContainsString('class="form-label required" for="' . $inputId . '"', $result->response()->getBody());
+        }
+        $this->assertStringContainsString('id="profile-timezone" name="timezone" class="form-select" required', $result->response()->getBody());
+        $this->assertStringContainsString('class="form-label" for="profile-email"', $result->response()->getBody());
         $result->assertSee('JPEG, PNG or WebP, up to 2 MB.');
         $this->assertStringContainsString('enctype="multipart/form-data"', $result->response()->getBody());
         $this->assertStringContainsString('avatar-xl', $result->response()->getBody());

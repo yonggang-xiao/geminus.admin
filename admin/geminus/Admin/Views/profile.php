@@ -21,7 +21,7 @@
                             <div class="flex-fill">
                                 <form method="post" action="<?= route_to('admin/profile/avatar') ?>" enctype="multipart/form-data">
                                     <?= csrf_field() ?>
-                                    <label class="form-label" for="profile-avatar"><?= esc(lang('Admin.chooseAvatar')) ?></label>
+                                    <label class="form-label required" for="profile-avatar"><?= esc(lang('Admin.chooseAvatar')) ?></label>
                                     <input id="profile-avatar" type="file" name="avatar" class="form-control<?= session('avatar_errors.avatar') ? ' is-invalid' : '' ?>" accept="image/jpeg,image/png,image/webp" aria-describedby="avatar-hint" required>
                                     <?php if (session('avatar_errors.avatar')): ?><div class="invalid-feedback"><?= esc(session('avatar_errors.avatar')) ?></div><?php endif; ?>
                                     <div id="avatar-hint" class="form-text"><?= esc(lang('Admin.avatarHint')) ?></div>
@@ -39,7 +39,7 @@
                     <form method="post" action="<?= route_to('admin/profile/update') ?>">
                         <?= csrf_field() ?>
                         <div class="mb-3">
-                            <label class="form-label" for="profile-username"><?= esc(lang('Admin.username')) ?></label>
+                            <label class="form-label required" for="profile-username"><?= esc(lang('Admin.username')) ?></label>
                             <input id="profile-username" name="username" class="form-control<?= session('profile_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username', $me->username)) ?>" required maxlength="30">
                             <?php if (session('profile_errors.username')): ?><div class="invalid-feedback"><?= esc(session('profile_errors.username')) ?></div><?php endif; ?>
                         </div>
@@ -48,8 +48,8 @@
                             <input id="profile-email" class="form-control" value="<?= esc($me->email ?? '') ?>" readonly>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label" for="profile-language"><?= esc(lang('Admin.language')) ?></label>
-                            <select id="profile-language" name="language" class="form-select<?= session('profile_errors.language') ? ' is-invalid' : '' ?>">
+                            <label class="form-label required" for="profile-language"><?= esc(lang('Admin.language')) ?></label>
+                            <select id="profile-language" name="language" class="form-select<?= session('profile_errors.language') ? ' is-invalid' : '' ?>" required>
                                 <?php foreach ($languages as $language): ?>
                                     <option value="<?= esc($language) ?>" <?= old('language', $me->language) === $language ? 'selected' : '' ?>><?= esc(lang('Admin.localeName', [], $language)) ?></option>
                                 <?php endforeach; ?>
@@ -57,7 +57,7 @@
                             <?php if (session('profile_errors.language')): ?><div class="invalid-feedback"><?= esc(session('profile_errors.language')) ?></div><?php endif; ?>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label" for="profile-timezone"><?= esc(lang('Admin.timezone')) ?></label>
+                            <label class="form-label required" for="profile-timezone"><?= esc(lang('Admin.timezone')) ?></label>
                             <?= view_cell('Geminus\Admin\Cells\TimezoneSelectorCell', [
                                 'selectedTimezone' => old('timezone', $me->timezone),
                                 'inputId'          => 'profile-timezone',
@@ -80,7 +80,7 @@
                             <?= csrf_field() ?>
                             <?php foreach (['current_password' => 'currentPassword', 'new_password' => 'newPassword', 'confirm_password' => 'confirmPassword'] as $field => $label): ?>
                                 <div class="mb-3">
-                                    <label class="form-label" for="<?= esc($field) ?>"><?= esc(lang('Admin.' . $label)) ?></label>
+                                    <label class="form-label required" for="<?= esc($field) ?>"><?= esc(lang('Admin.' . $label)) ?></label>
                                     <input id="<?= esc($field) ?>" type="password" name="<?= esc($field) ?>" class="form-control<?= session('password_errors.' . $field) ? ' is-invalid' : '' ?>" required autocomplete="<?= $field === 'current_password' ? 'current-password' : 'new-password' ?>"<?= $field === 'new_password' ? ' aria-describedby="new-password-hint"' : '' ?>>
                                     <?php if (session('password_errors.' . $field)): ?><div class="invalid-feedback"><?= esc(session('password_errors.' . $field)) ?></div><?php endif; ?>
                                     <?php if ($field === 'new_password'): ?><div id="new-password-hint" class="form-text"><?= esc(lang('Admin.passwordHint', [$minimumPasswordLength])) ?></div><?php endif; ?>
@@ -100,12 +100,12 @@
                     <form method="post" action="<?= route_to('admin/profile/tokens') ?>" class="row g-3 align-items-end">
                         <?= csrf_field() ?>
                         <div class="col-12 col-md-5">
-                            <label class="form-label" for="token-name"><?= esc(lang('Admin.tokenName')) ?></label>
+                            <label class="form-label required" for="token-name"><?= esc(lang('Admin.tokenName')) ?></label>
                             <input id="token-name" name="name" class="form-control<?= session('token_errors.name') ? ' is-invalid' : '' ?>" required maxlength="100">
                             <?php if (session('token_errors.name')): ?><div class="invalid-feedback"><?= esc(session('token_errors.name')) ?></div><?php endif; ?>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label" for="token-expires"><?= esc(lang('Admin.tokenExpires')) ?></label>
+                            <label class="form-label required" for="token-expires"><?= esc(lang('Admin.tokenExpires')) ?></label>
                             <input id="token-expires" type="text" name="expires" class="form-control<?= session('token_errors.expires') ? ' is-invalid' : '' ?>" data-bs-toggle="datepicker" data-bs-date-min="<?= esc(gmdate('Y-m-d')) ?>" value="<?= esc(old('expires')) ?>" placeholder="YYYY-MM-DD" autocomplete="off" required>
                             <?php if (session('token_errors.expires')): ?><div class="invalid-feedback"><?= esc(session('token_errors.expires')) ?></div><?php endif; ?>
                         </div>
