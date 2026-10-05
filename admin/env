@@ -59,8 +59,8 @@
 # SESSION
 #--------------------------------------------------------------------
 
-# session.driver = 'CodeIgniter\Session\Handlers\FileHandler'
-# session.savePath = null
+session.driver = 'CodeIgniter\Session\Handlers\RedisHandler'
+session.savePath = 'tcp://redis:6379'
 
 #--------------------------------------------------------------------
 # LOGGER

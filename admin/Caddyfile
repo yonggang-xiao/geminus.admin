@@ -2,13 +2,18 @@
 
 {
     admin off
+    frankenphp {
+        worker {
+            file public/frankenphp-worker.php
+        }
+    }
 }
 
 localhost {
     root * public
     encode zstd br gzip
     php_server {
-        try_files {path} index.php
+        try_files {path} frankenphp-worker.php
     }
     file_server
 }

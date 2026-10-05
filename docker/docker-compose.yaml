@@ -16,7 +16,22 @@ services:
     command: frankenphp run --config Caddyfile
     tty: true
     depends_on:
-      - db
+      db:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: geminus-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
   
   db:
     image: postgres:16
@@ -40,4 +55,5 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  redis_data:
     
