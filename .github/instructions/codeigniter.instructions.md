@@ -18,6 +18,11 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admi
 
 ## 项目约定
 
+### 开发环境与命令
+
+- PHP、Composer、Spark、PHPUnit 和 PHP CS Fixer 均在 Docker 的 `geminus-admin` 服务中运行；不要使用宿主机的 `php`、`composer` 或 `vendor/bin/*`。下文的 PHP 命令均指容器内命令。
+- 从仓库根目录执行命令：容器运行时用 `docker compose -f docker/docker-compose.yaml exec -T geminus-admin <命令>`；仅做不依赖其他服务的检查且容器未运行时，用 `docker compose -f docker/docker-compose.yaml run --rm --no-deps geminus-admin <命令>`。需要数据库或 Redis 的命令应先启动相关服务。
+
 ### 结构与路由
 
 - 共享应用代码放在 `admin/app/`，后台模块代码放在 `admin/geminus/Admin/`，命名空间为 `Geminus\Admin`。在 `admin/app/Config/Autoload.php` 注册新模块的命名空间；模块路由放在其 `Config/Routes.php` 中。
