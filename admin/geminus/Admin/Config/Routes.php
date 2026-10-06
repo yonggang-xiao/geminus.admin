@@ -11,6 +11,8 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
     $routes->get('settings/email', 'EmailSettings::index', ['as' => 'admin/settings/email', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email', 'EmailSettings::update', ['as' => 'admin/settings/email/update', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email/test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test', 'filter' => 'permission:admin.settings']);
+    $routes->get('settings/microsoft', 'MicrosoftSettings::index', ['as' => 'admin/settings/microsoft', 'filter' => 'permission:admin.settings']);
+    $routes->post('settings/microsoft', 'MicrosoftSettings::update', ['as' => 'admin/settings/microsoft/update', 'filter' => 'permission:admin.settings']);
     $routes->get('profile', 'Profile::index', ['as' => 'admin/profile']);
     $routes->post('profile', 'Profile::update', ['as' => 'admin/profile/update']);
     $routes->post('profile/language', 'Profile::language', ['as' => 'admin/profile/language']);

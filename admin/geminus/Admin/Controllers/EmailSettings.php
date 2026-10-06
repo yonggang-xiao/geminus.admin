@@ -70,16 +70,13 @@ class EmailSettings extends BaseController
                 'Email.SMTPCrypto' => $data['SMTPCrypto'] ?? '',
             ];
         }
-        $port = $settings['Email.SMTPPort'] ?? null;
-        unset($settings['Email.SMTPPort']);
 
         $db = db_connect(config('Settings')->database['group']);
         $db->transStart();
 
         try {
-            service('settings')->setMany($settings);
-            if ($port !== null) {
-                service('settings')->set('Email.SMTPPort', $port);
+            foreach ($settings as $key => $value) {
+                service('settings')->set($key, $value);
             }
         } finally {
             $db->transComplete();
