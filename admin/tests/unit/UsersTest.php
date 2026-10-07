@@ -1,5 +1,6 @@
 <?php
 
+use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -48,6 +49,15 @@ final class UsersTest extends CIUnitTestCase
         $export->assertOK();
         $this->assertStringContainsString('searchable@example.com', $export->response()->getBody());
         $this->assertStringNotContainsString('elsewhere@example.com', $export->response()->getBody());
+
+        $this->createUser('Mixed.Name', 'Mixed.Address@example.com');
+
+        foreach (['mixed.name', 'MIXED.ADDRESS@EXAMPLE.COM'] as $query) {
+            $page = $this->get('/en/admin/users?q=' . rawurlencode($query));
+            $page->assertSee('Mixed.Address@example.com');
+            $export = $this->get('/en/admin/users/export?q=' . rawurlencode($query));
+            $this->assertStringContainsString('Mixed.Address@example.com', $export->response()->getBody());
+        }
     }
 
     public function testUserListShowsEditActionAndProtectedAccountReason(): void
@@ -133,6 +143,40 @@ final class UsersTest extends CIUnitTestCase
         $export->assertOK();
         $csv = $export->response()->getBody();
         $this->assertLessThan(strpos($csv, 'zeta@example.com'), strpos($csv, 'alpha@example.com'));
+    }
+
+    public function testUsernameAndEmailSortingIgnoreCase(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('Zulu', 'Zoo@example.com');
+        $this->createUser('apple', 'apple@example.com');
+
+        foreach (['username', 'email'] as $sort) {
+            $page = $this->get('/en/admin/users?q=example.com&sort=' . $sort . '&direction=ASC');
+            $page->assertOK();
+            $body = $page->response()->getBody();
+            $this->assertLessThan(strpos($body, '<td>Zulu</td>'), strpos($body, '<td>apple</td>'));
+
+            $export = $this->get('/en/admin/users/export?q=example.com&sort=' . $sort . '&direction=ASC');
+            $this->assertLessThan(strpos($export->response()->getBody(), 'Zulu,Zoo@example.com'), strpos($export->response()->getBody(), 'apple,apple@example.com'));
+        }
+    }
+
+    public function testOrdinaryUsernameLookupUsesCitext(): void
+    {
+        $this->createUser('Mixed.Name', 'mixed.name@example.com');
+        $users = auth()->getProvider();
+
+        $this->assertSame('Mixed.Name', $users->where('username', 'mixed.name')->first()->username);
+        $this->assertSame('citext', $users->db->query("SELECT format_type(atttypid, atttypmod) AS type FROM pg_attribute WHERE attrelid = 'users'::regclass AND attname = 'username'")->getRow('type'));
+    }
+
+    public function testUsernameUniqueIndexRejectsDifferentCase(): void
+    {
+        $this->createUser('Mixed.Name', 'mixed.name@example.com');
+
+        $this->expectException(DatabaseException::class);
+        auth()->getProvider()->db->table(config('Auth')->tables['users'])->insert(['username' => 'mixed.name']);
     }
 
     public function testImportPostRequiresCsrf(): void
@@ -248,16 +292,16 @@ final class UsersTest extends CIUnitTestCase
         $this->assertFalse($updated->isBanned());
     }
 
-    public function testEditingUsernameDetectsLegacyCaseCollisionAfterExcludingSelf(): void
+    public function testEditingUsernameRejectsCaseInsensitiveConflictButAllowsUnchangedName(): void
     {
         $this->loginAs('superadmin');
-        $this->createUser('target', 'target@example.com');
+        $this->createUser('owner', 'target@example.com');
         $user = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
         $this->createUser('TARGET', 'legacycase@example.com');
 
         $this->post('/en/admin/users/' . $user->id . '/edit', [
             csrf_token() => csrf_hash(),
-            'username'   => 'Target',
+            'username'   => 'target',
             'email'      => 'target@example.com',
             'role'       => 'admin',
             'status'     => 'banned',
@@ -270,7 +314,7 @@ final class UsersTest extends CIUnitTestCase
 
         $this->post('/en/admin/users/' . $user->id . '/edit', [
             csrf_token() => csrf_hash(),
-            'username'   => 'target',
+            'username'   => 'owner',
             'email'      => 'target@example.com',
             'role'       => 'admin',
             'status'     => 'enabled',

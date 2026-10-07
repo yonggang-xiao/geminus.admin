@@ -182,11 +182,6 @@ final class ProfileAccessTest extends CIUnitTestCase
         ])->assertRedirect();
         $this->assertSame('PROFILEOWNER', $users->findById($user->id)->username);
 
-        $duplicate        = new AdminUser(['username' => 'profileowner']);
-        $duplicate->email = 'legacyduplicate@example.com';
-        $duplicate->setPassword('A-local-password-123!');
-        $users->save($duplicate);
-
         $this->post('/en/admin/profile', [
             csrf_token() => csrf_hash(),
             'username'   => 'PROFILEOWNER',
@@ -194,14 +189,6 @@ final class ProfileAccessTest extends CIUnitTestCase
             'timezone'   => 'Asia/Shanghai',
         ])->assertRedirect();
         $this->assertSame('zh-Hans', $users->findById($user->id)->language);
-
-        $this->post('/en/admin/profile', [
-            csrf_token() => csrf_hash(),
-            'username'   => 'ProfileOwner',
-            'language'   => 'zh-Hans',
-            'timezone'   => 'Asia/Shanghai',
-        ])->assertRedirect();
-        $this->assertSame(lang('Admin.usernameTaken'), session('profile_errors.username'));
     }
 
     public function testProfileKeepsLegacyUsernameWhenOnlyUpdatingPreferences(): void

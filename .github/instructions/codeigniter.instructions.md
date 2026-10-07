@@ -46,6 +46,7 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admi
 - 定时或周期性任务按需使用 [CodeIgniter Tasks](https://tasks.codeigniter.com/)；需要异步或延后执行的任务按需使用 [CodeIgniter Queue](https://queue.codeigniter.com/)。实际使用前先确认相应包已安装，未安装则通过 Composer 引入。
 - 可复用的服务端渲染 UI 沿用 `admin/geminus/Admin/Cells/` 中的 View Cell 模式：Cell 类与其模板放在同一目录。业务逻辑留在 Cell 外。
 - 数据库结构变更放入所属模块的 `Database/Migrations/`，不依赖手工 SQL 改库；涉及跨命名空间迁移时运行 `php spark migrate --all` 并核对结果。
+- 本项目业务数据库仅使用 PostgreSQL。需不区分大小写的独立业务标识字段（如用户名）在迁移中使用 `citext` 并建立数据库唯一约束，让 CI4 普通等值查询遵循字段语义；不要在各业务模块重复编写 `LOWER()` 查重。模糊搜索明确使用 CI4 `like(..., 'both', null, true)`（PostgreSQL `ILIKE`）。混存不同凭据类型的列（如 Shield 的 `auth_identities.secret`）不得整列改为 `citext`，只对需要不区分大小写的身份类型建立定向约束；密码哈希校验不属于数据库文本比较。
 
 ### 测试与风格
 

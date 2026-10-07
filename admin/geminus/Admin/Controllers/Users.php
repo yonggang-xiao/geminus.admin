@@ -211,17 +211,17 @@ class Users extends BaseController
         if ($search !== '') {
             $search = mb_substr($search, 0, 100);
             $users->select($userTable . '.*')->join($identities, $identities . '.user_id = ' . $userTable . '.id AND ' . $identities . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "'", 'left')
-                ->groupStart()->like($userTable . '.username', $search)->orLike($identities . '.secret', $search)->groupEnd();
+                ->groupStart()->like($userTable . '.username', $search)->orLike($identities . '.secret', $search, 'both', null, true)->groupEnd();
         }
 
+        $db        = db_connect(config('Auth')->DBGroup);
         $sortField = $userTable . '.' . $sort;
         if ($sort === 'email') {
-            $db            = db_connect(config('Auth')->DBGroup);
             $identityTable = $db->prefixTable($identities);
-            $sortField     = '(SELECT MIN(' . $identityTable . '.secret) FROM ' . $identityTable . ' WHERE ' . $identityTable . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identityTable . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')";
+            $sortField     = '(SELECT MIN(LOWER(' . $identityTable . '.secret)) FROM ' . $identityTable . ' WHERE ' . $identityTable . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identityTable . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')";
         }
 
-        return $users->orderBy($sortField, $this->direction(), $sort !== 'email')->orderBy($userTable . '.id', 'DESC');
+        return $users->orderBy($sortField, $this->direction(), $sort === 'created_at')->orderBy($userTable . '.id', 'DESC');
     }
 
     private function editableUser(int $userId): ?User
