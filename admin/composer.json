@@ -13,7 +13,8 @@
         "php": "^8.4",
         "codeigniter4/framework": "^4.7",
         "codeigniter4/shield": "^1.4",
-        "codeigniter4/translations": "^4.7"
+        "codeigniter4/translations": "^4.7",
+        "thenetworg/oauth2-azure": "^2.2"
     },
     "require-dev": {
         "codeigniter/coding-standard": "^1.9",

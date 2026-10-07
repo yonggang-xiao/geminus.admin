@@ -75,7 +75,7 @@ class Filters extends BaseFilters
             // 'honeypot',
             'csrf',
             // 'invalidchars',
-            'session' => ['except' => ['*/login*', '*/register', '*/auth/a/*', '*/logout', '__hot-reload']],
+            'session' => ['except' => ['*/login*', '*/register', '*/auth/a/*', '*/logout', '*/microsoft/start', '*/microsoft/callback', '__hot-reload']],
         ],
         'after' => [
             // 'honeypot',

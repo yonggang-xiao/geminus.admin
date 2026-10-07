@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\I18n\Time;
 use Geminus\Admin\Cells\TimezoneSelectorCell;
+use Geminus\Admin\Libraries\MicrosoftLinks;
 
 class Profile extends BaseController
 {
@@ -24,6 +25,8 @@ class Profile extends BaseController
             'tokens'                => $user->accessTokens(),
             'languages'             => config('App')->supportedLocales,
             'minimumPasswordLength' => config('Auth')->minimumPasswordLength,
+            'microsoftLinked'       => $user->getIdentity(MicrosoftLinks::IDENTITY_TYPE) !== null,
+            'microsoftEnabled'      => service('settings')->get('MicrosoftOAuth.enabled'),
         ]);
     }
 

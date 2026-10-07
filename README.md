@@ -21,14 +21,14 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 
 ### 身份与访问
 
-- 登录方式：支持 Microsoft 账号单点登录（SSO）；可按需启用本地账号密码登录。
+- 登录方式：支持 Microsoft Entra OIDC 登录（可复用 Entra 会话），并保留本地账号密码登录。
 - 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；仅在启用本地登录时提供用户创建或邀请、密码重置。
 - 个人中心：维护个人资料和 API 密钥；仅在启用本地登录时管理登录密码。
 - API 访问：使用 Access Token 认证，支持密钥有效期设置和吊销。
 
 ### 系统管理与安全
 
-- 系统设置：配置邮件发送、Microsoft 单点登录等功能。
+- 系统设置：配置邮件发送、Microsoft 登录等功能。
 - 日志与审计：记录登录和用户操作，支持按操作者、对象、时间和结果查询。
 - 安全防护：提供 CSRF 表单防护，以及登录和 API 请求的速率限制。
 
@@ -71,13 +71,15 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 	docker compose -f docker/docker-compose.yaml exec geminus-admin php spark migrate --all
 	```
 
-4. 创建首个管理员账号（将示例邮箱替换为实际邮箱）：
+4. 创建首个 `superadmin` 账号（将示例邮箱替换为实际邮箱）：
 
 	```sh
-	docker compose -f docker/docker-compose.yaml exec geminus-admin php spark shield:user create -n admin -e admin@example.com -g admin
+	docker compose -f docker/docker-compose.yaml exec geminus-admin php spark shield:user create -n admin -e admin@example.com -g superadmin
 	```
 
-	按终端提示输入并确认密码。公开注册已关闭；此命令创建的是 `admin` 角色的本地登录账号，不会自动配置 Microsoft SSO。
+	按终端提示输入并确认密码。公开注册已关闭；首个账号需要 `superadmin` 组以管理后台设置和其他管理员。此命令创建本地登录账号，不会自动配置 Microsoft 登录。
+
+Microsoft Entra 登录的配置、绑定、审批和验证方式见 [Microsoft 登录说明](docs/microsoft-login.md)。
 
 启动后访问 [https://localhost](https://localhost)，使用刚创建的账号登录。本地 HTTPS 使用自签名证书，浏览器可能提示证书不受信任。数据库管理界面位于 [http://localhost:8080](http://localhost:8080)。停止服务可运行 `docker compose -f docker/docker-compose.yaml down`。
 

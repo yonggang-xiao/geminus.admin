@@ -30,6 +30,9 @@
                                 <?php endif; ?>
                                 <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.login')) ?></button></div>
                             </form>
+                            <?php if (service('settings')->get('MicrosoftOAuth.enabled')): ?>
+                                <a href="<?= route_to('microsoft/start') ?>" class="btn btn-outline-primary w-100 mt-3"><i class="ti ti-brand-windows me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftLogin')) ?></a>
+                            <?php endif; ?>
                             <?php if (setting('Auth.allowMagicLinkLogins')): ?>
                                 <p class="text-center text-secondary mt-3 mb-0"><?= esc(lang('Auth.forgotPassword')) ?> <a href="<?= url_to('magic-link') ?>"><?= esc(lang('Auth.useMagicLink')) ?></a></p>
                             <?php endif; ?>

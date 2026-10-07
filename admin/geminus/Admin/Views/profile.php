@@ -93,6 +93,26 @@
             </div>
         <?php endif; ?>
 
+        <?php if ($microsoftEnabled): ?>
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title"><?= esc(lang('Admin.microsoftLogin')) ?></h3></div>
+                    <div class="card-body">
+                        <?php if ($microsoftLinked): ?>
+                            <span class="badge bg-success-lt"><?= esc(lang('Admin.microsoftLinked')) ?></span>
+                        <?php elseif ($localAccount): ?>
+                            <form method="post" action="<?= route_to('admin/profile/microsoft/connect') ?>">
+                                <?= csrf_field() ?>
+                                <label class="form-label required" for="microsoft-current-password"><?= esc(lang('Admin.currentPassword')) ?></label>
+                                <input id="microsoft-current-password" type="password" name="current_password" class="form-control" required autocomplete="current-password">
+                                <button type="submit" class="btn btn-outline-primary mt-3"><i class="ti ti-brand-windows me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftConnect')) ?></button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <div class="col-12">
             <div class="card">
                 <div class="card-header"><h3 class="card-title"><?= esc(lang('Admin.apiTokens')) ?></h3></div>
