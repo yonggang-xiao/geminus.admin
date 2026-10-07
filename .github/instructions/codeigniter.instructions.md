@@ -28,6 +28,7 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admi
 - 共享应用代码放在 `admin/app/`，后台模块代码放在 `admin/geminus/Admin/`，命名空间为 `Geminus\Admin`。在 `admin/app/Config/Autoload.php` 注册新模块的命名空间；模块路由放在其 `Config/Routes.php` 中。
 - 后台页面涉及 AJAX 或表单提交时，若符合资源工作流，优先使用 presenter 路由及对应的 `ResourcePresenter` 方法。REST API 使用资源路由；非资源操作沿用现有的显式路由。
 - 保持 `admin/app/Config/Routing.php` 的自动路由关闭；新路由按 HTTP 方法显式定义，不用可被 GET 访问的通用路由执行写操作。后台路由明确认证与所需权限，并用 `php spark filter:check <方法> <路径>` 核对过滤器是否生效。
+- 权限相同的相邻路由优先通过路由组统一声明 `filter`；权限不同的路由分别声明。仅因共享路径前缀分组时不改变原有权限要求；调整分组后核对路径、路由别名及实际生效的过滤器。
 - 项目使用 `en`、`zh-Hans`、`zh-Hant`；在处理本地化请求时确保 Request 与 Language 服务的 locale 一致。框架验证文案优先复用已安装的 `codeigniter4/translations`，注意包内中文目录为 `zh-CN`、`zh-TW`，需适配项目 locale，并补齐当前框架缺少的规则键。
 
 ### 接口与安全
