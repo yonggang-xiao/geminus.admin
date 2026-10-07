@@ -22,7 +22,7 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
     $routes->post('profile/avatar', 'Profile::avatar', ['as' => 'admin/profile/avatar']);
     $routes->post('profile/avatar/remove', 'Profile::removeAvatar', ['as' => 'admin/profile/avatar/remove']);
     $routes->post('profile/password', 'Profile::password', ['as' => 'admin/profile/password']);
-    $routes->post('profile/microsoft/connect', 'MicrosoftLogin::connect', ['as' => 'admin/profile/microsoft/connect', 'filter' => 'permission:admin.access']);
+    $routes->post('profile/microsoft/connect', 'MicrosoftLogin::connect', ['as' => 'admin/profile/microsoft/connect']);
     $routes->post('profile/tokens', 'Profile::createToken', ['as' => 'admin/profile/tokens']);
     $routes->post('profile/tokens/(:num)/revoke', 'Profile::revokeToken/$1', ['as' => 'admin/profile/tokens/revoke']);
 });

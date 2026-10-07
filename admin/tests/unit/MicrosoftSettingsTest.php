@@ -259,6 +259,17 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertNull(session('microsoft_flow'));
     }
 
+    public function testOrdinaryUserCanReachMicrosoftConnection(): void
+    {
+        $this->loginAs('user');
+        $this->assertFalse(auth()->user()->can('admin.access'));
+        $this->assertTrue((new MicrosoftLinks())->isEligible(auth()->user()));
+        service('settings')->set('MicrosoftOAuth.enabled', false);
+
+        $this->post('/en/admin/profile/microsoft/connect', [csrf_token() => csrf_hash(), 'current_password' => 'A-local-password-123!'])->assertRedirectTo('/en/admin/profile');
+        $this->assertSame(lang('Admin.microsoftLoginFailed'), session('alert')['message'] ?? null);
+    }
+
     public function testConnectionWithMissingClientSecretReturnsToProfile(): void
     {
         $this->loginAs('superadmin');
@@ -294,9 +305,16 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertNull(session('microsoft_flow'));
     }
 
-    public function testApprovalLinksOnlySelectedExistingAdmin(): void
+    public function testApprovalLinksSelectedExistingUserWithoutAdminAccess(): void
     {
         $this->loginAs('superadmin');
+        $target        = new AdminUser(['username' => 'microsofttarget']);
+        $target->email = 'microsofttarget@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        $target->addGroup('user');
         $links  = new MicrosoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
@@ -304,15 +322,16 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
         $this->assertNull($links->findUser($tenant, $object));
         $this->assertTrue(auth()->user()->can('users.manage-admins'));
-        $this->assertTrue(auth()->user()->can('admin.access'));
-        $this->assertFalse(auth()->user()->active);
+        $this->assertFalse($target->can('admin.access'));
+        $this->assertTrue((new MicrosoftLinks())->isEligible($target));
         $requestId = $links->pending()[0]['id'];
-        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => auth()->user()->id])->assertRedirect();
+        $this->assertStringContainsString('value="' . $target->id . '"', $this->get('/en/admin/settings/microsoft')->response()->getBody());
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertRedirect();
 
         $this->assertSame(lang('Admin.microsoftApproved'), session('alert')['message'] ?? null);
-        $this->assertSame(auth()->user()->id, $links->findUser($tenant, $object)?->id);
+        $this->assertSame($target->id, $links->findUser($tenant, $object)?->id);
         $this->assertSame([], $links->pending());
-        $this->assertFalse($links->bind(auth()->user(), $tenant, $object));
+        $this->assertFalse($links->bind($target, $tenant, $object));
     }
 
     public function testExistingMicrosoftBindingCannotBeReplacedByAnotherApproval(): void

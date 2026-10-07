@@ -15,7 +15,7 @@ class MicrosoftLinks
 
     public function isEligible(User $user): bool
     {
-        return ! $user->isBanned() && $user->can('admin.access');
+        return ! $user->isBanned();
     }
 
     public function findUser(string $tenant, string $object): ?User
