@@ -19,6 +19,12 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
     $routes->get('settings/email', 'EmailSettings::index', ['as' => 'admin/settings/email', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email', 'EmailSettings::update', ['as' => 'admin/settings/email/update', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email/test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test', 'filter' => 'permission:admin.settings']);
+    $routes->get('settings/roles', 'RoleSettings::index', ['as' => 'admin/settings/roles', 'filter' => 'group:superadmin']);
+    $routes->post('settings/roles', 'RoleSettings::createRole', ['as' => 'admin/settings/roles/create', 'filter' => 'group:superadmin']);
+    $routes->post('settings/roles/(:segment)', 'RoleSettings::updateRole/$1', ['as' => 'admin/settings/roles/update', 'filter' => 'group:superadmin']);
+    $routes->post('settings/roles/(:segment)/permissions', 'RoleSettings::permissions/$1', ['as' => 'admin/settings/roles/permissions', 'filter' => 'group:superadmin']);
+    $routes->post('settings/permissions', 'RoleSettings::createPermission', ['as' => 'admin/settings/permissions/create', 'filter' => 'group:superadmin']);
+    $routes->post('settings/permissions/(:segment)', 'RoleSettings::updatePermission/$1', ['as' => 'admin/settings/permissions/update', 'filter' => 'group:superadmin']);
     $routes->get('settings/microsoft', 'MicrosoftSettings::index', ['as' => 'admin/settings/microsoft', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/microsoft', 'MicrosoftSettings::update', ['as' => 'admin/settings/microsoft/update', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/microsoft/requests/(:num)/approve', 'MicrosoftSettings::approve/$1', ['as' => 'admin/settings/microsoft/approve', 'filter' => 'permission:users.manage-admins']);

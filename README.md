@@ -22,7 +22,7 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 ### 身份与访问
 
 - 登录方式：支持 [Microsoft Entra OIDC 登录](docs/microsoft-login.md)（可复用 Entra 会话），并保留本地账号密码登录。
-- 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；支持用户创建，邀请和密码重置仅在启用本地登录时提供。详见 [用户管理说明](docs/user-management.md)。
+- 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；支持用户创建，邀请和密码重置仅在启用本地登录时提供。详见 [用户管理说明](docs/user-management.md)和[角色与权限](docs/roles-and-permissions.md)。
 - 个人中心：维护个人资料和 API 密钥；仅在启用本地登录时管理登录密码。
 - API 访问：使用 Access Token 认证，支持密钥有效期设置和吊销。
 

@@ -22,6 +22,9 @@
             <div class="dropdown-menu<?= url_is('*/admin/settings/*') ? ' show' : '' ?>">
                 <a class="dropdown-item<?= url_is('*/admin/settings/email') ? ' active' : '' ?>" href="<?= route_to('admin/settings/email') ?>"<?= url_is('*/admin/settings/email') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.emailDelivery')) ?></a>
                 <a class="dropdown-item<?= url_is('*/admin/settings/microsoft') ? ' active' : '' ?>" href="<?= route_to('admin/settings/microsoft') ?>"<?= url_is('*/admin/settings/microsoft') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.microsoftLogin')) ?></a>
+                <?php if (auth()->user()?->inGroup('superadmin')): ?>
+                    <a class="dropdown-item<?= url_is('*/admin/settings/roles') ? ' active' : '' ?>" href="<?= route_to('admin/settings/roles') ?>"<?= url_is('*/admin/settings/roles') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.roleSettings')) ?></a>
+                <?php endif; ?>
             </div>
         </li>
     <?php endif; ?>

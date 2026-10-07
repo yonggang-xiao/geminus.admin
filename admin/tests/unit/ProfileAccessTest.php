@@ -17,6 +17,18 @@ final class ProfileAccessTest extends CIUnitTestCase
 
     protected $namespace;
 
+    public function testUserFormatsDateTimeInPreferredTimezoneWithoutMutatingSource(): void
+    {
+        $user           = new AdminUser(['timezone' => 'America/New_York']);
+        $winterDateTime = new DateTimeImmutable('2026-01-01 00:30:00 UTC');
+        $summerDateTime = new DateTimeImmutable('2026-07-01 00:30:00 UTC');
+
+        $this->assertSame('2025-12-31 19:30:00', $user->formatDateTime($winterDateTime));
+        $this->assertSame('2026-06-30 20:30', $user->formatDateTime($summerDateTime, 'Y-m-d H:i'));
+        $this->assertSame('2026-01-01 00:30:00', $winterDateTime->format('Y-m-d H:i:s'));
+        $this->assertNull($user->formatDateTime(null));
+    }
+
     public function testProfileRequiresAuthentication(): void
     {
         $result = $this->get('/en/admin/profile');

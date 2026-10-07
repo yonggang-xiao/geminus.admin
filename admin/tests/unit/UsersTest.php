@@ -60,6 +60,20 @@ final class UsersTest extends CIUnitTestCase
         }
     }
 
+    public function testUserListDisplaysCreationTimeInViewerTimezone(): void
+    {
+        $this->loginAs('superadmin');
+        $viewer           = auth()->user();
+        $viewer->timezone = 'Asia/Shanghai';
+        auth()->getProvider()->save($viewer);
+        $this->createUser('dateduser', 'dateduser@example.com');
+        $created = auth()->getProvider()->findByCredentials(['email' => 'dateduser@example.com']);
+
+        $page = $this->get('/en/admin/users?q=dateduser');
+        $page->assertOK();
+        $this->assertStringContainsString('<td>' . $viewer->formatDateTime($created->created_at) . '</td>', $page->response()->getBody());
+    }
+
     public function testUserListShowsEditActionAndProtectedAccountReason(): void
     {
         $this->loginAs('superadmin');
@@ -75,6 +89,8 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('href="' . route_to('admin/users/edit', $user->id) . '"', $body);
         $this->assertStringNotContainsString('href="' . route_to('admin/users/edit', auth()->id()) . '"', $body);
         $this->assertStringNotContainsString('href="' . route_to('admin/users/edit', $protected->id) . '"', $body);
+        $this->assertStringContainsString('data-bs-target="#user-permissions-' . $protected->id . '"', $body);
+        $this->assertStringContainsString('data-bs-target="#user-permissions-' . auth()->id() . '"', $body);
         $this->assertStringContainsString('Your account', $body);
         $this->assertStringContainsString('Protected account', $body);
         $this->assertStringContainsString('Enabled', $body);
@@ -100,6 +116,48 @@ final class UsersTest extends CIUnitTestCase
 
         $empty = $this->get('/en/admin/users?q=no-such-user');
         $this->assertStringContainsString('<tr><td colspan="6"', $empty->response()->getBody());
+    }
+
+    public function testUserListShowsEffectiveCatalogPermissions(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('grantviewer', 'grantviewer@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'grantviewer@example.com']);
+        $user->syncGroups('beta');
+        $user->addPermission('users.create');
+        $originalMatrix   = setting('AuthGroups.matrix');
+        $matrix           = $originalMatrix;
+        $matrix['beta'][] = 'admin.*';
+        $matrix['beta'][] = 'unlisted.*';
+        setting('AuthGroups.matrix', $matrix);
+
+        try {
+            $page = $this->get('/en/admin/users?q=grantviewer');
+            $page->assertOK();
+            $body = $page->response()->getBody();
+            $this->assertStringContainsString('beta.access', $body);
+            $this->assertStringContainsString('users.create', $body);
+            $this->assertStringContainsString('admin.settings', $body);
+            $this->assertStringContainsString('Permissions: 4', $body);
+            $this->assertStringNotContainsString('users.edit', $body);
+            $this->assertStringNotContainsString('unlisted.*', $body);
+            $this->assertStringContainsString('data-bs-toggle="offcanvas" data-bs-target="#user-permissions-' . $user->id . '"', $body);
+            $this->assertStringContainsString('<th scope="col" class="text-end">Actions</th>', $body);
+            $this->assertStringNotContainsString('<th scope="col">Effective permissions</th>', $body);
+            $this->assertStringContainsString('id="user-permissions-' . $user->id . '" aria-labelledby="user-permissions-title-' . $user->id . '"', $body);
+            $this->assertGreaterThan(strpos($body, '</table>'), strpos($body, 'class="offcanvas offcanvas-end"'));
+            $this->assertStringNotContainsString('<details>', $body);
+
+            $this->get('/zh-Hans/admin/users?q=grantviewer')->assertSee('有效权限');
+            $this->get('/zh-Hant/admin/users?q=grantviewer')->assertSee('有效權限');
+            $this->createUser('noaccessviewer', 'noaccessviewer@example.com');
+            $emptyPermissions = $this->get('/en/admin/users?q=noaccessviewer');
+            $emptyPermissions->assertSee('No catalog permissions');
+            $emptyUser = auth()->getProvider()->findByCredentials(['email' => 'noaccessviewer@example.com']);
+            $this->assertStringContainsString('data-bs-target="#user-permissions-' . $emptyUser->id . '"', $emptyPermissions->response()->getBody());
+        } finally {
+            setting('AuthGroups.matrix', $originalMatrix);
+        }
     }
 
     public function testUserListHeaderSortingKeepsSearchAndTogglesDirection(): void

@@ -23,28 +23,33 @@ class Users extends BaseController
         }
 
         $this->response->setHeader('Cache-Control', 'private, no-store');
-        $users      = $this->filteredUsers();
-        $pageUsers  = $users->withIdentities()->paginate(20);
-        $editStates = [];
-        $roleNames  = [];
-        $groups     = config('AuthGroups')->groups;
+        $users                = $this->filteredUsers();
+        $pageUsers            = $users->withIdentities()->withGroups()->withPermissions()->paginate(20);
+        $editStates           = [];
+        $roleNames            = [];
+        $groups               = setting('AuthGroups.groups');
+        $permissions          = array_keys(setting('AuthGroups.permissions'));
+        $effectivePermissions = [];
 
         foreach ($pageUsers as $user) {
-            $editStates[$user->id] = $this->editState($user);
-            $roleNames[$user->id]  = implode(', ', array_map(static fn (string $group): string => $groups[$group]['title'] ?? $group, $user->getGroups() ?? []));
+            $editStates[$user->id]           = $this->editState($user);
+            $userGroups                      = $user->getGroups() ?? [];
+            $roleNames[$user->id]            = implode(', ', array_map(static fn (string $group): string => $groups[$group]['title'] ?? $group, $userGroups));
+            $effectivePermissions[$user->id] = array_values(array_filter($permissions, static fn (string $permission): bool => $user->can($permission)));
         }
 
         return view('Geminus\Admin\Views\users', [
-            'me'         => auth()->user(),
-            'page_title' => lang('Admin.users'),
-            'users'      => $pageUsers,
-            'editStates' => $editStates,
-            'roleNames'  => $roleNames,
-            'pager'      => $users->pager,
-            'search'     => trim((string) $this->request->getGet('q')),
-            'sort'       => $this->sort(),
-            'direction'  => $this->direction(),
-            'report'     => session('user_import_report'),
+            'me'                   => auth()->user(),
+            'page_title'           => lang('Admin.users'),
+            'users'                => $pageUsers,
+            'editStates'           => $editStates,
+            'roleNames'            => $roleNames,
+            'effectivePermissions' => $effectivePermissions,
+            'pager'                => $users->pager,
+            'search'               => trim((string) $this->request->getGet('q')),
+            'sort'                 => $this->sort(),
+            'direction'            => $this->direction(),
+            'report'               => session('user_import_report'),
         ]);
     }
 
@@ -61,7 +66,7 @@ class Users extends BaseController
             'me'         => auth()->user(),
             'page_title' => lang('Admin.editUser'),
             'user'       => $user,
-            'role'       => $user->getGroups()[0] ?? config('AuthGroups')->defaultGroup,
+            'role'       => $user->getGroups()[0] ?? setting('AuthGroups.defaultGroup'),
             'roles'      => $this->assignableRoles(),
         ]);
     }
@@ -259,8 +264,22 @@ class Users extends BaseController
 
     private function assignableRoles(): array
     {
-        $roles = config('AuthGroups')->groups;
+        $roles = setting('AuthGroups.groups');
         unset($roles['superadmin']);
+
+        if (! auth()->user()?->inGroup('superadmin')) {
+            $matrix = setting('AuthGroups.matrix');
+
+            foreach ($roles as $name => $details) {
+                foreach ($matrix[$name] ?? [] as $grant) {
+                    if (str_contains($grant, '*') || ! auth()->user()->can($grant)) {
+                        unset($roles[$name]);
+
+                        break;
+                    }
+                }
+            }
+        }
 
         return $roles;
     }

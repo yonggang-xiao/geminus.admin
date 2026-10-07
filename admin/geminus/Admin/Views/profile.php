@@ -141,7 +141,7 @@
                                 <tr>
                                     <td><?= esc($token->name) ?></td>
                                     <td><?= esc($token->expires?->format('Y-m-d') ?? '-') ?></td>
-                                    <td><?= esc($token->last_used_at?->format('Y-m-d H:i:s') ?? '-') ?></td>
+                                    <td><?= esc($me->formatDateTime($token->last_used_at) ?? '-') ?></td>
                                     <td class="text-end">
                                         <form method="post" action="<?= route_to('admin/profile/tokens/revoke', $token->id) ?>">
                                             <?= csrf_field() ?>

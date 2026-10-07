@@ -62,15 +62,18 @@
                             <td><?= esc($user->email ?? '') ?></td>
                             <td><?= esc($roleNames[$user->id]) ?></td>
                             <td><span class="badge <?= $user->isBanned() ? 'bg-danger-lt' : 'bg-success-lt' ?>"><?= esc(lang($user->isBanned() ? 'Admin.userBanned' : 'Admin.userEnabled')) ?></span></td>
-                            <td><?= esc((string) $user->created_at) ?></td>
+                            <td><?= esc($me->formatDateTime($user->created_at) ?? '-') ?></td>
                             <td class="text-end">
-                                <?php if ($editStates[$user->id] === 'self'): ?>
-                                    <span class="text-secondary"><?= esc(lang('Admin.userSelf')) ?></span>
-                                <?php elseif ($editStates[$user->id] === 'protected'): ?>
-                                    <span class="text-secondary"><?= esc(lang('Admin.userProtected')) ?></span>
-                                <?php else: ?>
-                                    <a class="btn btn-sm btn-outline-primary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a>
-                                <?php endif; ?>
+                                <div class="btn-list justify-content-end flex-nowrap">
+                                    <?php if ($editStates[$user->id] === 'self'): ?>
+                                        <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userSelf')) ?></span>
+                                    <?php elseif ($editStates[$user->id] === 'protected'): ?>
+                                        <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
+                                    <?php else: ?>
+                                        <a class="btn btn-sm btn-outline-primary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye me-1" aria-hidden="true"></i><?= esc(lang('Admin.viewUserPermissions')) ?></button>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -83,6 +86,25 @@
                 </tbody>
             </table>
         </div>
+        <?php foreach ($users as $user): ?>
+            <div class="offcanvas offcanvas-end" tabindex="-1" id="user-permissions-<?= esc($user->id, 'attr') ?>" aria-labelledby="user-permissions-title-<?= esc($user->id, 'attr') ?>">
+                <div class="offcanvas-header">
+                    <h2 class="offcanvas-title" id="user-permissions-title-<?= esc($user->id, 'attr') ?>"><?= esc($user->username) ?> <span class="d-block text-secondary small"><?= esc(lang('Admin.userPermissions')) ?></span></h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= esc(lang('Admin.close'), 'attr') ?>"></button>
+                </div>
+                <div class="offcanvas-body">
+                    <p class="text-secondary small"><?= esc(lang('Admin.userPermissionsHint')) ?></p>
+                    <?php if ($effectivePermissions[$user->id] === []): ?>
+                        <p class="text-secondary"><?= esc(lang('Admin.noCatalogPermissions')) ?></p>
+                    <?php else: ?>
+                        <p class="text-secondary"><?= esc(sprintf(lang('Admin.userPermissionCount'), count($effectivePermissions[$user->id]))) ?></p>
+                        <ul class="list-group list-group-flush">
+                            <?php foreach ($effectivePermissions[$user->id] as $permission): ?><li class="list-group-item px-0"><code><?= esc($permission) ?></code></li><?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
             <span class="text-secondary"><?= esc(lang('Admin.userTotal')) ?>: <?= esc($pager->getTotal()) ?></span>
             <?= $pager->links() ?>
