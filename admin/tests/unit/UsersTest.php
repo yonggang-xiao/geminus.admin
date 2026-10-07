@@ -85,6 +85,23 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('Clear', $empty->response()->getBody());
     }
 
+    public function testUserListShowsConfiguredRoleTitles(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('developeruser', 'developer@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'developer@example.com']);
+        $user->syncGroups('developer');
+
+        $page = $this->get('/en/admin/users?q=developeruser');
+        $page->assertOK();
+        $body = $page->response()->getBody();
+        $this->assertStringContainsString('<th scope="col">' . lang('Admin.userRole') . '</th>', $body);
+        $this->assertStringContainsString('<td>Developer</td>', $body);
+
+        $empty = $this->get('/en/admin/users?q=no-such-user');
+        $this->assertStringContainsString('<tr><td colspan="6"', $empty->response()->getBody());
+    }
+
     public function testUserListHeaderSortingKeepsSearchAndTogglesDirection(): void
     {
         $this->loginAs('superadmin');
@@ -234,6 +251,38 @@ final class UsersTest extends CIUnitTestCase
         $this->assertTrue($updated->inGroup('admin'));
         $this->assertTrue($updated->isBanned());
         $this->get('/en/admin/users/' . auth()->id() . '/edit')->assertStatus(404);
+    }
+
+    public function testEditRolesComeFromShieldConfiguration(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('developeruser', 'developer@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'developer@example.com']);
+        $url  = '/en/admin/users/' . $user->id . '/edit';
+
+        $form = $this->get($url);
+        $form->assertOK();
+        $body = $form->response()->getBody();
+        $this->assertStringContainsString('<option value="developer">Developer</option>', $body);
+        $this->assertStringNotContainsString('<option value="superadmin"', $body);
+
+        $this->post($url, [csrf_token() => csrf_hash(), 'username' => 'developeruser', 'email' => 'developer@example.com', 'role' => 'developer', 'status' => 'enabled'])->assertRedirect();
+        $this->assertTrue(auth()->getProvider()->findById($user->id)->inGroup('developer'));
+        $this->assertStringContainsString('<option value="developer" selected>Developer</option>', $this->get($url)->response()->getBody());
+    }
+
+    public function testMultiGroupAccountCannotLoseGroupsThroughSingleRoleForm(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('multigroup', 'multigroup@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'multigroup@example.com']);
+        $user->addGroup('admin', 'beta');
+        $url = '/en/admin/users/' . $user->id . '/edit';
+
+        $this->assertStringNotContainsString('href="' . route_to('admin/users/edit', $user->id) . '"', $this->get('/en/admin/users')->response()->getBody());
+        $this->get($url)->assertStatus(404);
+        $this->post($url, [csrf_token() => csrf_hash(), 'username' => 'multigroup', 'email' => 'multigroup@example.com', 'role' => 'user', 'status' => 'enabled'])->assertStatus(404);
+        $this->assertTrue(auth()->getProvider()->findById($user->id)->inGroup('beta'));
     }
 
     public function testSuperadminCanUpdateUsernameAndEmailWithoutChangingPasswordOrMicrosoftIdentity(): void

@@ -44,6 +44,7 @@
                             <button type="submit" name="sort" value="email" class="table-sort<?= $sort === 'email' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.email')) ?></button>
                         </form>
                     </th>
+                    <th scope="col"><?= esc(lang('Admin.userRole')) ?></th>
                     <th scope="col"><?= esc(lang('Admin.userStatus')) ?></th>
                     <th scope="col" aria-sort="<?= $sort === 'created_at' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
                         <form method="get" action="<?= route_to('admin/users') ?>">
@@ -59,6 +60,7 @@
                         <tr>
                             <td><?= esc($user->username) ?></td>
                             <td><?= esc($user->email ?? '') ?></td>
+                            <td><?= esc($roleNames[$user->id]) ?></td>
                             <td><span class="badge <?= $user->isBanned() ? 'bg-danger-lt' : 'bg-success-lt' ?>"><?= esc(lang($user->isBanned() ? 'Admin.userBanned' : 'Admin.userEnabled')) ?></span></td>
                             <td><?= esc((string) $user->created_at) ?></td>
                             <td class="text-end">
@@ -73,7 +75,7 @@
                         </tr>
                     <?php endforeach; ?>
                     <?php if ($users === []): ?>
-                        <tr><td colspan="5" class="text-center py-4">
+                        <tr><td colspan="6" class="text-center py-4">
                             <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
                             <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
                         </td></tr>

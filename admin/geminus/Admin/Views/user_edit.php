@@ -23,8 +23,9 @@
             <div class="mb-3">
                 <label class="form-label" for="user-role"><?= esc(lang('Admin.userRole')) ?></label>
                 <select class="form-select<?= session('user_errors.role') ? ' is-invalid' : '' ?>" id="user-role" name="role" required>
-                    <option value="user"<?= old('role', $role) === 'user' ? ' selected' : '' ?>><?= esc(lang('Admin.userRoleUser')) ?></option>
-                    <option value="admin"<?= old('role', $role) === 'admin' ? ' selected' : '' ?>><?= esc(lang('Admin.userRoleAdmin')) ?></option>
+                    <?php foreach ($roles as $name => $details): ?>
+                        <option value="<?= esc($name) ?>"<?= old('role', $role) === $name ? ' selected' : '' ?>><?= esc($details['title']) ?></option>
+                    <?php endforeach; ?>
                 </select>
                 <?php if (session('user_errors.role')): ?><div class="invalid-feedback"><?= esc(session('user_errors.role')) ?></div><?php endif; ?>
             </div>

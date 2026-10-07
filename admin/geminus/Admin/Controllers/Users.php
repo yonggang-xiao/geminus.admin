@@ -26,9 +26,12 @@ class Users extends BaseController
         $users      = $this->filteredUsers();
         $pageUsers  = $users->withIdentities()->paginate(20);
         $editStates = [];
+        $roleNames  = [];
+        $groups     = config('AuthGroups')->groups;
 
         foreach ($pageUsers as $user) {
             $editStates[$user->id] = $this->editState($user);
+            $roleNames[$user->id]  = implode(', ', array_map(static fn (string $group): string => $groups[$group]['title'] ?? $group, $user->getGroups() ?? []));
         }
 
         return view('Geminus\Admin\Views\users', [
@@ -36,6 +39,7 @@ class Users extends BaseController
             'page_title' => lang('Admin.users'),
             'users'      => $pageUsers,
             'editStates' => $editStates,
+            'roleNames'  => $roleNames,
             'pager'      => $users->pager,
             'search'     => trim((string) $this->request->getGet('q')),
             'sort'       => $this->sort(),
@@ -57,7 +61,8 @@ class Users extends BaseController
             'me'         => auth()->user(),
             'page_title' => lang('Admin.editUser'),
             'user'       => $user,
-            'role'       => $user->inGroup('admin') ? 'admin' : 'user',
+            'role'       => $user->getGroups()[0] ?? config('AuthGroups')->defaultGroup,
+            'roles'      => $this->assignableRoles(),
         ]);
     }
 
@@ -113,7 +118,7 @@ class Users extends BaseController
         $validation->setRules([
             'username' => $usernameRules,
             'email'    => config('Auth')->emailValidationRules,
-            'role'     => 'required|in_list[user,admin]',
+            'role'     => 'required|in_list[' . implode(',', array_keys($this->assignableRoles())) . ']',
             'status'   => 'required|in_list[enabled,banned]',
         ]);
         $input = [
@@ -244,11 +249,20 @@ class Users extends BaseController
             return 'self';
         }
 
-        if ($user->inGroup('superadmin') || array_diff($user->getGroups() ?? [], ['user', 'admin']) !== []) {
+        $groups = $user->getGroups() ?? [];
+        if (count($groups) > 1 || array_diff($groups, array_keys($this->assignableRoles())) !== []) {
             return 'protected';
         }
 
         return 'editable';
+    }
+
+    private function assignableRoles(): array
+    {
+        $roles = config('AuthGroups')->groups;
+        unset($roles['superadmin']);
+
+        return $roles;
     }
 
     private function sort(): string
