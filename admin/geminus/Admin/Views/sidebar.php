@@ -5,6 +5,14 @@
             <span class="nav-link-title"> <?= lang('Admin.dashboard') ?> </span>
         </a>
     </li>
+    <?php if (auth()->user()?->can('users.manage-admins')): ?>
+        <li class="nav-item<?= url_is('*/admin/users*') ? ' active' : '' ?>">
+            <a class="nav-link<?= url_is('*/admin/users*') ? ' active' : '' ?>" href="<?= route_to('admin/users') ?>"<?= url_is('*/admin/users*') ? ' aria-current="page"' : '' ?>>
+                <i class="ti ti-users nav-link-icon icon" aria-hidden="true"></i>
+                <span class="nav-link-title"><?= esc(lang('Admin.users')) ?></span>
+            </a>
+        </li>
+    <?php endif; ?>
     <?php if (auth()->user()?->can('admin.settings')): ?>
         <li class="nav-item dropdown<?= url_is('*/admin/settings/*') ? ' active' : '' ?>">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="<?= url_is('*/admin/settings/*') ? 'true' : 'false' ?>">

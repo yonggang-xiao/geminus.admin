@@ -8,6 +8,14 @@ $routes->group('admin/files', ['namespace' => 'Geminus\Admin\Controllers'], stat
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
+    $routes->get('users', 'Users::index', ['as' => 'admin/users', 'filter' => 'permission:users.manage-admins']);
+    $routes->get('users/create', 'Users::create', ['as' => 'admin/users/create', 'filter' => 'permission:users.manage-admins']);
+    $routes->post('users/create', 'Users::store', ['as' => 'admin/users/store', 'filter' => 'permission:users.manage-admins']);
+    $routes->get('users/(:num)/edit', 'Users::edit/$1', ['as' => 'admin/users/edit', 'filter' => 'permission:users.manage-admins']);
+    $routes->post('users/(:num)/edit', 'Users::update/$1', ['as' => 'admin/users/update', 'filter' => 'permission:users.manage-admins']);
+    $routes->get('users/template', 'Users::template', ['as' => 'admin/users/template', 'filter' => 'permission:users.manage-admins']);
+    $routes->get('users/export', 'Users::export', ['as' => 'admin/users/export', 'filter' => 'permission:users.manage-admins']);
+    $routes->post('users/import', 'Users::import', ['as' => 'admin/users/import', 'filter' => 'permission:users.manage-admins']);
     $routes->get('settings/email', 'EmailSettings::index', ['as' => 'admin/settings/email', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email', 'EmailSettings::update', ['as' => 'admin/settings/email/update', 'filter' => 'permission:admin.settings']);
     $routes->post('settings/email/test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test', 'filter' => 'permission:admin.settings']);

@@ -21,8 +21,8 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 
 ### 身份与访问
 
-- 登录方式：支持 Microsoft Entra OIDC 登录（可复用 Entra 会话），并保留本地账号密码登录。
-- 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；仅在启用本地登录时提供用户创建或邀请、密码重置。
+- 登录方式：支持 [Microsoft Entra OIDC 登录](docs/microsoft-login.md)（可复用 Entra 会话），并保留本地账号密码登录。
+- 用户与权限：维护用户状态、SSO 账号映射和登录会话，基于角色分配访问权限；支持用户创建，邀请和密码重置仅在启用本地登录时提供。详见 [用户管理说明](docs/user-management.md)。
 - 个人中心：维护个人资料和 API 密钥；仅在启用本地登录时管理登录密码。
 - API 访问：使用 Access Token 认证，支持密钥有效期设置和吊销。
 
@@ -35,7 +35,7 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 ### 开发与扩展
 
 - 模块扩展：按业务模块注册路由、菜单、权限、页面和数据库迁移。
-- 通用数据管理：提供列表筛选、分页、排序、表单验证、文件上传和数据导出。
+- 通用数据管理：提供列表筛选、分页、排序、表单验证、文件导入、文件上传和数据导出。
 - 开发支持：提供模块开发示例、权限命名约定、测试样例和部署说明。
 
 ### 界面体验
@@ -78,8 +78,6 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 	```
 
 	按终端提示输入并确认密码。公开注册已关闭；首个账号需要 `superadmin` 组以管理后台设置和其他管理员。此命令创建本地登录账号，不会自动配置 Microsoft 登录。
-
-Microsoft Entra 登录的配置、绑定、审批和验证方式见 [Microsoft 登录说明](docs/microsoft-login.md)。
 
 启动后访问 [https://localhost](https://localhost)，使用刚创建的账号登录。本地 HTTPS 使用自签名证书，浏览器可能提示证书不受信任。数据库管理界面位于 [http://localhost:8080](http://localhost:8080)。停止服务可运行 `docker compose -f docker/docker-compose.yaml down`。
 
