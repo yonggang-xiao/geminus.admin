@@ -20,7 +20,7 @@ Apply only lenses relevant to the change; do not report a violation merely becau
 
 - **Ownership and layering:** Is validation, business meaning, orchestration, persistence, or database compatibility handled by its owning layer? Does a caller know an implementation detail of its dependency? Would the same defect affect other callers?
 - **SOLID:** Single responsibility and reasons to change; extension without scattered special cases; substitutability of implementations; narrow interfaces; dependencies on appropriate contracts. Look for actual consumer pressure, not a requirement to introduce interfaces or classes.
-- **Cohesion and coupling:** Are related rules together, are dependencies directed consistently, and does a change force unrelated modules to know about each other? Check duplicated policy, not incidental repeated syntax.
+- **Cohesion and coupling:** Are related rules together, are dependencies directed consistently, and does a change force unrelated modules to know about each other? For shared business concepts, identify the authoritative source and check whether consumers maintain competing definitions; consider what must change when a valid value is added. Check duplicated policy, not incidental repeated syntax.
 - **Abstraction and simplicity:** Is the proposed helper or indirection justified by current usage? Avoid speculative generalization, pattern-for-pattern's-sake, and refactoring stable code solely to satisfy a checklist (YAGNI/DRY).
 - **Contracts and failure boundaries:** Are types, validation, transactions, error handling, and observable results coherent across the boundary? Can a local workaround hide a shared failure while tests still pass?
 
