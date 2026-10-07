@@ -15,42 +15,68 @@
     <div class="card mb-3">
         <div class="card-body">
             <form method="get" action="<?= route_to('admin/users') ?>" class="row g-2 align-items-end">
-                <div class="col-12 col-md-5">
+                <div class="col-12 col-md-6">
                     <label class="form-label" for="user-search"><?= esc(lang('Admin.userSearch')) ?></label>
                     <input class="form-control" id="user-search" name="q" value="<?= esc($search) ?>" maxlength="100">
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label" for="user-sort"><?= esc(lang('Admin.userSort')) ?></label>
-                    <select class="form-select" id="user-sort" name="sort">
-                        <option value="created_at"<?= $sort === 'created_at' ? ' selected' : '' ?>><?= esc(lang('Admin.userCreated')) ?></option>
-                        <option value="username"<?= $sort === 'username' ? ' selected' : '' ?>><?= esc(lang('Admin.username')) ?></option>
-                    </select>
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label" for="user-direction"><?= esc(lang('Admin.userDirection')) ?></label>
-                    <select class="form-select" id="user-direction" name="direction">
-                        <option value="DESC"<?= $direction === 'DESC' ? ' selected' : '' ?>><?= esc(lang('Admin.userDescending')) ?></option>
-                        <option value="ASC"<?= $direction === 'ASC' ? ' selected' : '' ?>><?= esc(lang('Admin.userAscending')) ?></option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-2 btn-list">
+                <input type="hidden" name="sort" value="<?= esc($sort) ?>">
+                <input type="hidden" name="direction" value="<?= esc($direction) ?>">
+                <div class="col-12 col-md-auto btn-list">
                     <button class="btn btn-primary" type="submit"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
                     <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><?= esc(lang('Admin.userClear')) ?></a>
                 </div>
             </form>
         </div>
-    </div>
-
-    <div class="card mb-3">
         <div class="table-responsive">
             <table class="table card-table table-vcenter">
-                <thead><tr><th scope="col"><?= esc(lang('Admin.username')) ?></th><th scope="col"><?= esc(lang('Admin.email')) ?></th><th scope="col"><?= esc(lang('Admin.userCreated')) ?></th><th scope="col"></th></tr></thead>
+                <thead><tr>
+                    <th scope="col" aria-sort="<?= $sort === 'username' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
+                        <form method="get" action="<?= route_to('admin/users') ?>">
+                            <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="direction" value="<?= $sort === 'username' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
+                            <button type="submit" name="sort" value="username" class="table-sort<?= $sort === 'username' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.username')) ?></button>
+                        </form>
+                    </th>
+                    <th scope="col" aria-sort="<?= $sort === 'email' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
+                        <form method="get" action="<?= route_to('admin/users') ?>">
+                            <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="direction" value="<?= $sort === 'email' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
+                            <button type="submit" name="sort" value="email" class="table-sort<?= $sort === 'email' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.email')) ?></button>
+                        </form>
+                    </th>
+                    <th scope="col"><?= esc(lang('Admin.userStatus')) ?></th>
+                    <th scope="col" aria-sort="<?= $sort === 'created_at' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
+                        <form method="get" action="<?= route_to('admin/users') ?>">
+                            <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="direction" value="<?= $sort === 'created_at' && $direction === 'DESC' ? 'ASC' : 'DESC' ?>">
+                            <button type="submit" name="sort" value="created_at" class="table-sort<?= $sort === 'created_at' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.userCreated')) ?></button>
+                        </form>
+                    </th>
+                    <th scope="col" class="text-end"><?= esc(lang('Admin.userActions')) ?></th>
+                </tr></thead>
                 <tbody>
                     <?php foreach ($users as $user): ?>
-                        <tr><td><?= esc($user->username) ?></td><td><?= esc($user->email ?? '') ?></td><td><?= esc((string) $user->created_at) ?></td><td class="text-end"><?php if ($user->id !== $me->id && ! $user->inGroup('superadmin') && array_diff($user->getGroups() ?? [], ['user', 'admin']) === []): ?><a href="<?= route_to('admin/users/edit', $user->id) ?>"><?= esc(lang('Admin.editUser')) ?></a><?php endif; ?></td></tr>
+                        <tr>
+                            <td><?= esc($user->username) ?></td>
+                            <td><?= esc($user->email ?? '') ?></td>
+                            <td><span class="badge <?= $user->isBanned() ? 'bg-danger-lt' : 'bg-success-lt' ?>"><?= esc(lang($user->isBanned() ? 'Admin.userBanned' : 'Admin.userEnabled')) ?></span></td>
+                            <td><?= esc((string) $user->created_at) ?></td>
+                            <td class="text-end">
+                                <?php if ($editStates[$user->id] === 'self'): ?>
+                                    <span class="text-secondary"><?= esc(lang('Admin.userSelf')) ?></span>
+                                <?php elseif ($editStates[$user->id] === 'protected'): ?>
+                                    <span class="text-secondary"><?= esc(lang('Admin.userProtected')) ?></span>
+                                <?php else: ?>
+                                    <a class="btn btn-sm btn-outline-primary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
                     <?php if ($users === []): ?>
-                        <tr><td colspan="4" class="text-secondary text-center py-4"><?= esc(lang('Admin.noUsersFound')) ?></td></tr>
+                        <tr><td colspan="5" class="text-center py-4">
+                            <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
+                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
+                        </td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

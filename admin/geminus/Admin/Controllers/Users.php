@@ -23,12 +23,19 @@ class Users extends BaseController
         }
 
         $this->response->setHeader('Cache-Control', 'private, no-store');
-        $users = $this->filteredUsers();
+        $users      = $this->filteredUsers();
+        $pageUsers  = $users->withIdentities()->paginate(20);
+        $editStates = [];
+
+        foreach ($pageUsers as $user) {
+            $editStates[$user->id] = $this->editState($user);
+        }
 
         return view('Geminus\Admin\Views\users', [
             'me'         => auth()->user(),
             'page_title' => lang('Admin.users'),
-            'users'      => $users->withIdentities()->paginate(20),
+            'users'      => $pageUsers,
+            'editStates' => $editStates,
             'pager'      => $users->pager,
             'search'     => trim((string) $this->request->getGet('q')),
             'sort'       => $this->sort(),
@@ -98,21 +105,36 @@ class Users extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        $validation = service('validation');
+        $validation    = service('validation');
+        $usernameRules = config('Auth')->usernameValidationRules;
+        if ($this->request->getPost('username') === $user->username) {
+            $usernameRules['rules'] = ['required'];
+        }
         $validation->setRules([
-            'role'   => 'required|in_list[user,admin]',
-            'status' => 'required|in_list[enabled,banned]',
+            'username' => $usernameRules,
+            'email'    => config('Auth')->emailValidationRules,
+            'role'     => 'required|in_list[user,admin]',
+            'status'   => 'required|in_list[enabled,banned]',
         ]);
-        if (! $validation->run($this->request->getPost())) {
+        $input = [
+            'username' => trim((string) $this->request->getPost('username')),
+            'email'    => strtolower(trim((string) $this->request->getPost('email'))),
+            'role'     => $this->request->getPost('role'),
+            'status'   => $this->request->getPost('status'),
+        ];
+        if (! $validation->run($input)) {
             return redirect()->to(route_to('admin/users/edit', $userId))->withInput()->with('user_errors', $validation->getErrors());
         }
 
-        $data = $validation->getValidated();
-        $user->syncGroups($data['role']);
-        if ($data['status'] === 'banned' && ! $user->isBanned()) {
-            $user->ban();
-        } elseif ($data['status'] === 'enabled' && $user->isBanned()) {
-            $user->unBan();
+        $data   = $validation->getValidated();
+        $result = (new UserProvisioning())->updateAccount($user, $data['username'], $data['email'], $data['role'], $data['status']);
+        if ($result === 'username' || $result === 'duplicate') {
+            $field = $result === 'username' ? 'username' : 'email';
+
+            return redirect()->to(route_to('admin/users/edit', $userId))->withInput()->with('user_errors', [$field => lang('Admin.userReason_' . $result)]);
+        }
+        if ($result !== 'updated') {
+            return redirect()->to(route_to('admin/users/edit', $userId))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Admin.userUpdateFailed')]);
         }
 
         return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'success', 'message' => lang('Admin.userSaved')]);
@@ -182,6 +204,7 @@ class Users extends BaseController
     {
         $users      = model(get_class(auth()->getProvider()), false);
         $search     = trim((string) $this->request->getGet('q'));
+        $sort       = $this->sort();
         $userTable  = config('Auth')->tables['users'];
         $identities = config('Auth')->tables['identities'];
 
@@ -191,28 +214,48 @@ class Users extends BaseController
                 ->groupStart()->like($userTable . '.username', $search)->orLike($identities . '.secret', $search)->groupEnd();
         }
 
-        return $users->orderBy($userTable . '.' . $this->sort(), $this->direction())->orderBy($userTable . '.id', 'DESC');
+        $sortField = $userTable . '.' . $sort;
+        if ($sort === 'email') {
+            $db            = db_connect(config('Auth')->DBGroup);
+            $identityTable = $db->prefixTable($identities);
+            $sortField     = '(SELECT MIN(' . $identityTable . '.secret) FROM ' . $identityTable . ' WHERE ' . $identityTable . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identityTable . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')";
+        }
+
+        return $users->orderBy($sortField, $this->direction(), $sort !== 'email')->orderBy($userTable . '.id', 'DESC');
     }
 
     private function editableUser(int $userId): ?User
     {
-        if (! auth()->user()?->can('users.manage-admins') || auth()->id() === $userId) {
+        if (! auth()->user()?->can('users.manage-admins')) {
             return null;
         }
 
         $user = auth()->getProvider()->findById($userId);
-        if (! $user || $user->inGroup('superadmin') || array_diff($user->getGroups() ?? [], ['user', 'admin']) !== []) {
+        if (! $user || $this->editState($user) !== 'editable') {
             return null;
         }
 
         return $user;
     }
 
+    private function editState(User $user): string
+    {
+        if ($user->id === auth()->id()) {
+            return 'self';
+        }
+
+        if ($user->inGroup('superadmin') || array_diff($user->getGroups() ?? [], ['user', 'admin']) !== []) {
+            return 'protected';
+        }
+
+        return 'editable';
+    }
+
     private function sort(): string
     {
         $sort = (string) $this->request->getGet('sort');
 
-        return in_array($sort, ['username', 'created_at'], true) ? $sort : 'created_at';
+        return in_array($sort, ['username', 'email', 'created_at'], true) ? $sort : 'created_at';
     }
 
     private function direction(): string

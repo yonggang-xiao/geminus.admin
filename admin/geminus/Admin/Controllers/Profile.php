@@ -9,6 +9,7 @@ use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\I18n\Time;
 use Geminus\Admin\Cells\TimezoneSelectorCell;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\UserProvisioning;
 
 class Profile extends BaseController
 {
@@ -32,9 +33,15 @@ class Profile extends BaseController
 
     public function update(): RedirectResponse
     {
+        $user          = auth()->user();
+        $usernameRules = config('Auth')->usernameValidationRules;
+        if ($this->request->getPost('username') === $user->username) {
+            $usernameRules['rules'] = ['required'];
+        }
+
         $validation = service('validation');
         $validation->setRules([
-            'username' => ['label' => 'Admin.username', 'rules' => 'required|min_length[3]|max_length[30]|alpha_numeric_punct'],
+            'username' => $usernameRules,
             'language' => ['label' => 'Admin.language', 'rules' => 'required|max_length[20]'],
             'timezone' => ['label' => 'Admin.timezone', 'rules' => 'required|max_length[64]'],
         ]);
@@ -52,14 +59,12 @@ class Profile extends BaseController
             return redirect()->back()->withInput()->with('profile_errors', ['timezone' => lang('Admin.invalidPreference')]);
         }
 
-        $user  = auth()->user();
-        $users = auth()->getProvider();
-        if ($users->where('username', $data['username'])->where('id !=', $user->id)->first() !== null) {
+        if ($data['username'] !== $user->username && (new UserProvisioning())->usernameTaken($data['username'], $user->id)) {
             return redirect()->back()->withInput()->with('profile_errors', ['username' => lang('Admin.usernameTaken')]);
         }
 
         $user->fill($data);
-        $users->save($user);
+        auth()->getProvider()->save($user);
 
         return redirect()->to(site_url($data['language'] . '/admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.profileSaved')]);
     }

@@ -10,8 +10,9 @@
         <div class="card-body">
             <div class="mb-3">
                 <label class="form-label required" for="new-username"><?= esc(lang('Admin.username')) ?></label>
-                <input id="new-username" name="username" class="form-control<?= session('user_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username')) ?>" maxlength="30" required>
+                <input id="new-username" name="username" class="form-control<?= session('user_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username')) ?>" maxlength="30" required aria-describedby="new-username-hint">
                 <?php if (session('user_errors.username')): ?><div class="invalid-feedback"><?= esc(session('user_errors.username')) ?></div><?php endif; ?>
+                <div id="new-username-hint" class="form-text"><?= esc(lang('Admin.usernameHint')) ?></div>
             </div>
             <div class="mb-3">
                 <label class="form-label required" for="new-email"><?= esc(lang('Admin.email')) ?></label>

@@ -77,6 +77,8 @@ final class ProfileAccessTest extends CIUnitTestCase
         foreach (['profile-avatar', 'profile-username', 'profile-language', 'profile-timezone', 'current_password', 'new_password', 'confirm_password', 'token-name', 'token-expires'] as $inputId) {
             $this->assertStringContainsString('class="form-label required" for="' . $inputId . '"', $result->response()->getBody());
         }
+        $this->assertStringContainsString('aria-describedby="profile-username-hint"', $result->response()->getBody());
+        $this->assertStringContainsString('id="profile-username-hint" class="form-text">' . lang('Admin.usernameHint'), $result->response()->getBody());
         $this->assertStringContainsString('id="profile-timezone" name="timezone" class="form-select" required', $result->response()->getBody());
         $this->assertStringContainsString('class="form-label" for="profile-email"', $result->response()->getBody());
         $result->assertSee('JPEG, PNG or WebP, up to 2 MB.');
@@ -117,6 +119,111 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertSame('/zh-Hans/admin/profile', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame('zh-Hans', $users->findById($user->id)->language);
         $this->get('/zh-Hans/admin/profile')->assertSee('上传头像');
+    }
+
+    public function testProfileUsernameUsesConfiguredRules(): void
+    {
+        $user        = new AdminUser(['username' => 'profileoriginal']);
+        $user->email = 'profilerules@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'profile_invalid',
+            'language'   => 'en',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+        $this->assertArrayHasKey('username', session('profile_errors'));
+        $this->assertSame('profileoriginal', $users->findById($user->id)->username);
+
+        $result = $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'profile.valid',
+            'language'   => 'en',
+            'timezone'   => 'Asia/Shanghai',
+        ]);
+        $result->assertRedirect();
+        $this->assertSame('profile.valid', $users->findById($user->id)->username);
+    }
+
+    public function testProfileRejectsCaseInsensitiveUsernameConflictButAllowsOwnCaseChange(): void
+    {
+        $users        = auth()->getProvider();
+        $other        = new AdminUser(['username' => 'Taken.Name']);
+        $other->email = 'profiletaken@example.com';
+        $other->setPassword('A-local-password-123!');
+        $users->save($other);
+
+        $user        = new AdminUser(['username' => 'profileowner']);
+        $user->email = 'profileowner@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'taken.name',
+            'language'   => 'en',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+        $this->assertSame(lang('Admin.usernameTaken'), session('profile_errors.username'));
+        $this->assertSame('profileowner', $users->findById($user->id)->username);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'PROFILEOWNER',
+            'language'   => 'en',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+        $this->assertSame('PROFILEOWNER', $users->findById($user->id)->username);
+
+        $duplicate        = new AdminUser(['username' => 'profileowner']);
+        $duplicate->email = 'legacyduplicate@example.com';
+        $duplicate->setPassword('A-local-password-123!');
+        $users->save($duplicate);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'PROFILEOWNER',
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+        $this->assertSame('zh-Hans', $users->findById($user->id)->language);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'ProfileOwner',
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+        $this->assertSame(lang('Admin.usernameTaken'), session('profile_errors.username'));
+    }
+
+    public function testProfileKeepsLegacyUsernameWhenOnlyUpdatingPreferences(): void
+    {
+        $user        = new AdminUser(['username' => 'legacy_name']);
+        $user->email = 'legacyprofile@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $this->post('/en/admin/profile', [
+            csrf_token() => csrf_hash(),
+            'username'   => 'legacy_name',
+            'language'   => 'zh-Hans',
+            'timezone'   => 'Asia/Shanghai',
+        ])->assertRedirect();
+
+        $updated = $users->findById($user->id);
+        $this->assertSame('legacy_name', $updated->username);
+        $this->assertSame('zh-Hans', $updated->language);
     }
 
     public function testLanguageSelectorSavesPreferenceAndKeepsCurrentPage(): void

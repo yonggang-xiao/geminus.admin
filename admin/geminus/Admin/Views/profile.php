@@ -40,8 +40,9 @@
                         <?= csrf_field() ?>
                         <div class="mb-3">
                             <label class="form-label required" for="profile-username"><?= esc(lang('Admin.username')) ?></label>
-                            <input id="profile-username" name="username" class="form-control<?= session('profile_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username', $me->username)) ?>" required maxlength="30">
+                            <input id="profile-username" name="username" class="form-control<?= session('profile_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username', $me->username)) ?>" required maxlength="30" aria-describedby="profile-username-hint">
                             <?php if (session('profile_errors.username')): ?><div class="invalid-feedback"><?= esc(session('profile_errors.username')) ?></div><?php endif; ?>
+                            <div id="profile-username-hint" class="form-text"><?= esc(lang('Admin.usernameHint')) ?></div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="profile-email"><?= esc(lang('Admin.email')) ?></label>
