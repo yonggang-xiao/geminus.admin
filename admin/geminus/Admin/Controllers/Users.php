@@ -13,6 +13,7 @@ use CodeIgniter\Shield\Models\UserModel;
 use Geminus\Admin\Libraries\UserCsvImport;
 use Geminus\Admin\Libraries\UserProvisioning;
 use InvalidArgumentException;
+use Throwable;
 
 class Users extends BaseController
 {
@@ -38,6 +39,23 @@ class Users extends BaseController
             $effectivePermissions[$user->id] = array_values(array_filter($permissions, static fn (string $permission): bool => $user->can($permission)));
         }
 
+        $invitationStatuses = [];
+        if ($pageUsers !== []) {
+            $latest = db_connect()->table('email_delivery_logs')
+                ->select('MAX(id) AS id')
+                ->whereIn('invited_user_id', array_map(static fn (User $user): int => $user->id, $pageUsers))
+                ->groupBy('invited_user_id')->get()->getResultArray();
+            if ($latest !== []) {
+                $logs = db_connect()->table('email_delivery_logs')
+                    ->select('invited_user_id, status')
+                    ->whereIn('id', array_column($latest, 'id'))->get()->getResultArray();
+
+                foreach ($logs as $log) {
+                    $invitationStatuses[$log['invited_user_id']] = $log['status'];
+                }
+            }
+        }
+
         return view('Geminus\Admin\Views\users', [
             'me'                   => auth()->user(),
             'page_title'           => lang('Admin.users'),
@@ -45,6 +63,7 @@ class Users extends BaseController
             'editStates'           => $editStates,
             'roleNames'            => $roleNames,
             'effectivePermissions' => $effectivePermissions,
+            'invitationStatuses'   => $invitationStatuses,
             'pager'                => $users->pager,
             'search'               => trim((string) $this->request->getGet('q')),
             'sort'                 => $this->sort(),
@@ -148,6 +167,40 @@ class Users extends BaseController
         }
 
         return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'success', 'message' => lang('Admin.userSaved')]);
+    }
+
+    public function invite(int $userId): RedirectResponse|ResponseInterface
+    {
+        $user = $this->editableUser($userId);
+        if ($user === null) {
+            return $this->response->setStatusCode(404);
+        }
+
+        if (! setting('Auth.allowMagicLinkLogins') || ! service('settings')->get('Email.fromEmail') || ! $user->email || $user->isBanned()) {
+            return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.inviteUnavailable')]);
+        }
+
+        try {
+            $email = service('email');
+            $email->clear();
+            $email->setFrom(service('settings')->get('Email.fromEmail'), service('settings')->get('Email.fromName') ?? '');
+            $email->setTo($user->email);
+            $email->setSubject(lang('Admin.userInviteSubject'));
+            $email->setMessage(lang('Admin.userInviteBody', [$user->username, url_to('magic-link')]));
+            $email->setInvitationUserId($user->id);
+            $sent = $email->send();
+            if (! $sent) {
+                log_message('error', 'User invitation queue push failed.');
+            }
+        } catch (Throwable $exception) {
+            log_message('error', 'User invitation delivery failed: {type}', ['type' => $exception::class]);
+            $sent = false;
+        }
+
+        return redirect()->to(route_to('admin/users'))->with('alert', [
+            'type'    => $sent ? 'success' : 'danger',
+            'message' => lang($sent ? 'Admin.userInviteQueued' : 'Admin.userInviteFailed'),
+        ]);
     }
 
     public function template(): ResponseInterface

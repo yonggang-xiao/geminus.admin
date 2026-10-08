@@ -47,6 +47,59 @@ final class EmailQueueTest extends CIUnitTestCase
         $this->assertArrayNotHasKey('body', $log);
     }
 
+    public function testAuditTimestampsRemainUtcWhenDefaultTimezoneChanges(): void
+    {
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->once())->method('push')->willReturn(QueuePushResult::success(42));
+        Services::injectMock('queue', $queue);
+
+        $originalTimezone = date_default_timezone_get();
+        date_default_timezone_set('Asia/Tokyo');
+
+        try {
+            $before = gmdate('Y-m-d H:i:s');
+            $email  = service('email', null, false);
+            $email->setFrom('sender@example.com')->setTo('recipient@example.com')->setSubject('Hello');
+            $this->assertTrue($email->send());
+            $log = db_connect()->table('email_delivery_logs')->get()->getRowArray();
+
+            $transport = $this->getMockBuilder(QueuedEmail::class)->onlyMethods(['sendDirect'])->getMock();
+            $transport->expects($this->once())->method('sendDirect')->willReturn(true);
+            Services::injectMock('email', $transport);
+            (new SendEmail([
+                'audit_id' => $log['id'], 'to' => ['recipient@example.com'], 'cc' => [], 'bcc' => [],
+                'subject'  => 'Hello', 'body' => 'Private body', 'type' => 'text',
+            ]))->process();
+            $after = gmdate('Y-m-d H:i:s');
+        } finally {
+            date_default_timezone_set($originalTimezone);
+        }
+
+        $processed = db_connect()->table('email_delivery_logs')->where('id', $log['id'])->get()->getRowArray();
+        $this->assertGreaterThanOrEqual($before, $log['created_at']);
+        $this->assertLessThanOrEqual($after, $log['created_at']);
+        $this->assertGreaterThanOrEqual($before, $processed['processed_at']);
+        $this->assertLessThanOrEqual($after, $processed['processed_at']);
+    }
+
+    public function testInvitationAuditContextIsClearedBeforeReusingEmailService(): void
+    {
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->exactly(2))->method('push')->willReturnOnConsecutiveCalls(QueuePushResult::success(41), QueuePushResult::success(42));
+        Services::injectMock('queue', $queue);
+
+        $email = service('email', null, false);
+        $email->setFrom('sender@example.com')->setTo('invitee@example.com')->setSubject('Invite')->setInvitationUserId(9);
+        $this->assertTrue($email->send());
+
+        $email->setFrom('sender@example.com')->setTo('someone@example.com')->setSubject('Other');
+        $this->assertTrue($email->send());
+
+        $logs = db_connect()->table('email_delivery_logs')->orderBy('id')->get()->getResultArray();
+        $this->assertSame(9, (int) $logs[0]['invited_user_id']);
+        $this->assertNull($logs[1]['invited_user_id']);
+    }
+
     public function testQueueFailureIsRecordedAndInvalidEmailIsRejected(): void
     {
         $queue = $this->createMock(QueueInterface::class);

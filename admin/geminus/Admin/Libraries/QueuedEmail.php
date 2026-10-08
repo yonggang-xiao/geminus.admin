@@ -10,6 +10,22 @@ use Throwable;
 
 class QueuedEmail extends Email
 {
+    private ?int $invitedUserId = null;
+
+    public function setInvitationUserId(int $userId): static
+    {
+        $this->invitedUserId = $userId;
+
+        return $this;
+    }
+
+    public function clear($clearAttachments = false)
+    {
+        $this->invitedUserId = null;
+
+        return parent::clear($clearAttachments);
+    }
+
     public function send($autoClear = true)
     {
         if (($this->fromEmail === '' && ! isset($this->headers['From']))
@@ -24,11 +40,12 @@ class QueuedEmail extends Email
 
         $db      = db_connect();
         $auditId = $db->table('email_delivery_logs')->insert([
-            'recipient'  => implode(', ', $this->recipients),
-            'subject'    => $this->tmpArchive['subject'] ?? '',
-            'status'     => 'queued',
-            'attempts'   => 0,
-            'created_at' => date('Y-m-d H:i:s'),
+            'recipient'       => implode(', ', $this->recipients),
+            'subject'         => $this->tmpArchive['subject'] ?? '',
+            'invited_user_id' => $this->invitedUserId,
+            'status'          => 'queued',
+            'attempts'        => 0,
+            'created_at'      => gmdate('Y-m-d H:i:s'),
         ]) ? $db->insertID() : throw new RuntimeException('Failed to create email delivery log.');
 
         try {

@@ -46,6 +46,7 @@
                     </th>
                     <th scope="col"><?= esc(lang('Admin.userRole')) ?></th>
                     <th scope="col"><?= esc(lang('Admin.userStatus')) ?></th>
+                    <th scope="col"><?= esc(lang('Admin.userInviteStatus')) ?></th>
                     <th scope="col" aria-sort="<?= $sort === 'created_at' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
                         <form method="get" action="<?= route_to('admin/users') ?>">
                             <input type="hidden" name="q" value="<?= esc($search) ?>">
@@ -62,6 +63,11 @@
                             <td><?= esc($user->email ?? '') ?></td>
                             <td><?= esc($roleNames[$user->id]) ?></td>
                             <td><span class="badge <?= $user->isBanned() ? 'bg-danger-lt' : 'bg-success-lt' ?>"><?= esc(lang($user->isBanned() ? 'Admin.userBanned' : 'Admin.userEnabled')) ?></span></td>
+                            <td><?php if (isset($invitationStatuses[$user->id])): ?>
+                                <span class="badge <?= match ($invitationStatuses[$user->id]) {
+                                    'sent' => 'bg-success-lt', 'failed' => 'bg-danger-lt', default => 'bg-secondary-lt',
+                                } ?>"><?= esc(lang('Admin.mailStatus_' . $invitationStatuses[$user->id])) ?></span>
+                            <?php else: ?><?= esc(lang('Admin.userInviteNotSent')) ?><?php endif; ?></td>
                             <td><?= esc($me->formatDateTime($user->created_at) ?? '-') ?></td>
                             <td class="text-end">
                                 <div class="btn-list justify-content-end flex-nowrap">
@@ -71,6 +77,12 @@
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
                                     <?php else: ?>
                                         <a class="btn btn-sm btn-outline-primary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a>
+                                        <?php if (! $user->isBanned() && $user->email && setting('Auth.allowMagicLinkLogins')): ?>
+                                            <form method="post" action="<?= route_to('admin/users/invite', $user->id) ?>">
+                                                <?= csrf_field() ?>
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap"><i class="ti ti-mail-forward me-1" aria-hidden="true"></i><?= esc(lang('Admin.userInvite')) ?></button>
+                                            </form>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                     <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye me-1" aria-hidden="true"></i><?= esc(lang('Admin.viewUserPermissions')) ?></button>
                                 </div>
@@ -78,7 +90,7 @@
                         </tr>
                     <?php endforeach; ?>
                     <?php if ($users === []): ?>
-                        <tr><td colspan="6" class="text-center py-4">
+                        <tr><td colspan="7" class="text-center py-4">
                             <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
                             <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
                         </td></tr>

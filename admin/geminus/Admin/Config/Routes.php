@@ -14,12 +14,14 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->post('create', 'Users::store', ['as' => 'admin/users/store']);
         $routes->get('(:num)/edit', 'Users::edit/$1', ['as' => 'admin/users/edit']);
         $routes->post('(:num)/edit', 'Users::update/$1', ['as' => 'admin/users/update']);
+        $routes->post('(:num)/invite', 'Users::invite/$1', ['as' => 'admin/users/invite']);
         $routes->get('template', 'Users::template', ['as' => 'admin/users/template']);
         $routes->get('export', 'Users::export', ['as' => 'admin/users/export']);
         $routes->post('import', 'Users::import', ['as' => 'admin/users/import']);
     });
     $routes->group('settings/email', ['filter' => 'permission:admin.settings'], static function ($routes) {
         $routes->get('', 'EmailSettings::index', ['as' => 'admin/settings/email']);
+        $routes->get('queue', 'EmailQueue::index', ['as' => 'admin/settings/email/queue']);
         $routes->post('', 'EmailSettings::update', ['as' => 'admin/settings/email/update']);
         $routes->post('test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test']);
     });

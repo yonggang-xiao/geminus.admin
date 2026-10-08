@@ -51,7 +51,7 @@ class SendEmail extends BaseJob
         $db->table('email_delivery_logs')->where('id', $this->data['audit_id'])->update([
             'status'         => $status,
             'attempts'       => $log['attempts'] + 1,
-            'processed_at'   => date('Y-m-d H:i:s'),
+            'processed_at'   => gmdate('Y-m-d H:i:s'),
             'failure_reason' => $failureReason ?? null,
         ]);
 

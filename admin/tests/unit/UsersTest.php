@@ -1,6 +1,9 @@
 <?php
 
+use CodeIgniter\Config\Services;
 use CodeIgniter\Database\Exceptions\DatabaseException;
+use CodeIgniter\Queue\Interfaces\QueueInterface;
+use CodeIgniter\Queue\QueuePushResult;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -8,6 +11,7 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\QueuedEmail;
 
 /**
  * @internal
@@ -21,6 +25,8 @@ final class UsersTest extends CIUnitTestCase
 
     protected function tearDown(): void
     {
+        Services::resetSingle('email');
+        Services::resetSingle('queue');
         auth()->logout();
         parent::tearDown();
     }
@@ -115,7 +121,7 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('<td>Developer</td>', $body);
 
         $empty = $this->get('/en/admin/users?q=no-such-user');
-        $this->assertStringContainsString('<tr><td colspan="6"', $empty->response()->getBody());
+        $this->assertStringContainsString('<tr><td colspan="7"', $empty->response()->getBody());
     }
 
     public function testUserListShowsEffectiveCatalogPermissions(): void
@@ -503,6 +509,91 @@ final class UsersTest extends CIUnitTestCase
         $this->post('/en/admin/users/create', [csrf_token() => csrf_hash(), 'username' => 'CREATEDUSER', 'email' => 'another@example.com'])->assertRedirect();
         $this->assertSame(lang('Admin.userReason_username'), session('user_errors.username'));
         $this->assertNull(auth()->getProvider()->findByCredentials(['email' => 'another@example.com']));
+    }
+
+    public function testInviteReportsQueueAcceptanceAndOffersRetry(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        service('settings')->set('Email.fromEmail', 'sender@example.com');
+
+        $page = $this->get('/en/admin/users?q=invitee');
+        $page->assertOK();
+        $this->assertStringContainsString('action="' . route_to('admin/users/invite', $user->id) . '"', $page->response()->getBody());
+        $this->assertStringContainsString('Send invitation', $page->response()->getBody());
+
+        foreach ([true, false] as $sent) {
+            $email = $this->createMock(QueuedEmail::class);
+            $email->expects($this->once())->method('setFrom')->with('sender@example.com');
+            $email->expects($this->once())->method('setTo')->with('invitee@example.com');
+            $email->expects($this->once())->method('setSubject')->with(lang('Admin.userInviteSubject'));
+            $email->expects($this->once())->method('setMessage')->with(lang('Admin.userInviteBody', ['invitee', url_to('magic-link')]));
+            $email->expects($this->once())->method('send')->willReturn($sent);
+            $email->expects($this->never())->method('sendDirect');
+            Services::injectMock('email', $email);
+
+            $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+            $this->assertSame($sent ? 'success' : 'danger', session('alert')['type']);
+            $this->assertSame(lang($sent ? 'Admin.userInviteQueued' : 'Admin.userInviteFailed'), session('alert')['message']);
+            Services::resetSingle('email');
+        }
+    }
+
+    public function testInvitationQueueAuditShowsLatestDeliveryStatus(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        service('settings')->set('Email.fromEmail', 'sender@example.com');
+
+        $this->assertStringContainsString('Not sent', $this->get('/en/admin/users?q=invitee')->response()->getBody());
+        Services::injectMock('email', service('email', null, false));
+
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->exactly(2))->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['invitee@example.com'] && $data['subject'] === lang('Admin.userInviteSubject')))
+            ->willReturnOnConsecutiveCalls(QueuePushResult::success(41), QueuePushResult::success(42));
+        Services::injectMock('queue', $queue);
+
+        $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame(lang('Admin.userInviteQueued'), session('alert')['message']);
+        $log = db_connect()->table('email_delivery_logs')->where('invited_user_id', $user->id)->get()->getRowArray();
+        $this->assertSame('queued', $log['status']);
+        $this->assertStringContainsString('Queued', $this->get('/en/admin/users?q=invitee')->response()->getBody());
+
+        db_connect()->table('email_delivery_logs')->where('id', $log['id'])->update(['status' => 'sent']);
+        $this->assertStringContainsString('Sent', $this->get('/en/admin/users?q=invitee')->response()->getBody());
+
+        $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertStringContainsString('Queued', $this->get('/en/admin/users?q=invitee')->response()->getBody());
+        $latest = db_connect()->table('email_delivery_logs')->where('invited_user_id', $user->id)->orderBy('id', 'DESC')->get()->getRowArray();
+        db_connect()->table('email_delivery_logs')->where('id', $latest['id'])->update(['status' => 'failed']);
+        $this->assertStringContainsString('Failed', $this->get('/en/admin/users?q=invitee')->response()->getBody());
+    }
+
+    public function testInviteRejectsUnauthorizedOrUnavailableAccounts(): void
+    {
+        $this->loginAs('admin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+
+        auth()->logout();
+        $this->loginAs('superadmin');
+        $this->post('/en/admin/users/' . auth()->id() . '/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->post('/en/admin/users/999999/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
+        service('settings')->set('Email.fromEmail', '');
+        $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame(lang('Admin.inviteUnavailable'), session('alert')['message']);
+    }
+
+    public function testInviteRequiresCsrf(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        $this->expectException(SecurityException::class);
+        $this->post('/en/admin/users/' . $user->id . '/invite', []);
     }
 
     public function testImportReportDoesNotRenderMissingReasonKey(): void

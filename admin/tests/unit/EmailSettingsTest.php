@@ -28,6 +28,7 @@ final class EmailSettingsTest extends CIUnitTestCase
     public function testAnonymousUserCannotOpenEmailSettings(): void
     {
         $this->get('/en/admin/settings/email')->assertRedirect();
+        $this->get('/en/admin/settings/email/queue')->assertRedirect();
         $this->post('/en/admin/settings/email', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
     }
@@ -37,6 +38,7 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->loginAs('admin');
 
         $this->get('/en/admin/settings/email')->assertRedirect();
+        $this->get('/en/admin/settings/email/queue?view=queue')->assertRedirect();
         $this->post('/en/admin/settings/email', $this->validSettings())->assertRedirect();
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
         $this->assertSame('', service('settings')->get('Email.fromEmail'));
@@ -48,6 +50,99 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->expectException(SecurityException::class);
 
         $this->post('/en/admin/settings/email', ['fromEmail' => 'sender@example.com']);
+    }
+
+    public function testEmailQueuePageFiltersLogsAndNeverRendersQueuePayload(): void
+    {
+        $this->loginAs('superadmin');
+        $db = db_connect();
+        $db->table('queue_jobs')->insert([
+            'queue'    => 'email', 'payload' => 'Private body and smtp-secret', 'status' => 0,
+            'attempts' => 1, 'created_at' => time(), 'available_at' => time(),
+        ]);
+        $jobId = $db->insertID();
+        $db->table('email_delivery_logs')->insert([
+            'job_id'         => $jobId, 'recipient' => 'target@example.com', 'subject' => '<Private subject>',
+            'status'         => 'failed', 'attempts' => 1, 'created_at' => date('Y-m-d H:i:s'),
+            'failure_reason' => 'SMTP server rejected message (code 550).',
+        ]);
+        $db->table('email_delivery_logs')->insert([
+            'recipient' => 'other@example.com', 'subject' => 'Other', 'status' => 'sent',
+            'attempts'  => 1, 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+        $db->table('queue_jobs')->insert([
+            'queue'    => 'other', 'payload' => 'Other queue secret', 'status' => 0,
+            'attempts' => 0, 'created_at' => time(), 'available_at' => time(),
+        ]);
+
+        $logs = $this->get('/en/admin/settings/email/queue?status=failed&recipient=target');
+        $logs->assertOK();
+        $logs->assertSee('SMTP server rejected message (code 550).');
+        $this->assertStringContainsString('&lt;Private subject&gt;', $logs->response()->getBody());
+        $this->assertStringNotContainsString('other@example.com', $logs->response()->getBody());
+        $this->assertStringNotContainsString('Private body', $logs->response()->getBody());
+        $this->assertStringContainsString('private, no-store', $logs->response()->getHeaderLine('Cache-Control'));
+
+        $queue = $this->get('/en/admin/settings/email/queue?view=queue');
+        $queue->assertOK();
+        $queue->assertSee('target@example.com');
+        $this->assertStringNotContainsString('Private body', $queue->response()->getBody());
+        $this->assertStringNotContainsString('smtp-secret', $queue->response()->getBody());
+        $this->assertStringContainsString('Total: 1', $queue->response()->getBody());
+        $this->get('/zh-Hans/admin/settings/email/queue')->assertSee('邮件队列与发送审计');
+    }
+
+    public function testEmailQueueAndAuditTimesUseViewerTimezone(): void
+    {
+        $this->loginAs('superadmin');
+        $viewer           = auth()->user();
+        $viewer->timezone = 'Asia/Shanghai';
+        auth()->getProvider()->save($viewer);
+
+        $db = db_connect();
+        $db->table('queue_jobs')->insert([
+            'queue'        => 'email', 'payload' => 'Private body', 'status' => 0, 'attempts' => 0,
+            'created_at'   => strtotime('2026-01-01 00:00:00 UTC'),
+            'available_at' => strtotime('2026-01-01 01:15:00 UTC'),
+        ]);
+        $db->table('email_delivery_logs')->insert([
+            'job_id'       => $db->insertID(), 'recipient' => 'time@example.com', 'subject' => 'Timezone check',
+            'status'       => 'sent', 'attempts' => 1, 'created_at' => '2026-01-01 00:00:00',
+            'processed_at' => '2026-01-01 01:15:00',
+        ]);
+
+        $logs = $this->get('/en/admin/settings/email/queue');
+        $logs->assertOK();
+        $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 08:00:00</td>', $logs->response()->getBody());
+        $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 09:15:00</td>', $logs->response()->getBody());
+
+        $queue = $this->get('/en/admin/settings/email/queue?view=queue');
+        $queue->assertOK();
+        $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 08:00:00</td>', $queue->response()->getBody());
+        $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 09:15:00</td>', $queue->response()->getBody());
+    }
+
+    public function testEmailAuditPaginationRetainsFilters(): void
+    {
+        $this->loginAs('superadmin');
+
+        for ($index = 0; $index < 21; $index++) {
+            db_connect()->table('email_delivery_logs')->insert([
+                'recipient' => 'paging@example.com', 'subject' => 'Page ' . $index,
+                'status'    => 'failed', 'attempts' => 1, 'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $first = $this->get('/en/admin/settings/email/queue?status=failed&recipient=paging');
+        $first->assertOK();
+        $this->assertStringContainsString('page=2', $first->response()->getBody());
+        $this->assertStringContainsString('status=failed', $first->response()->getBody());
+        $this->assertStringContainsString('recipient=paging', $first->response()->getBody());
+
+        $second = $this->get('/en/admin/settings/email/queue?status=failed&recipient=paging&page=2');
+        $second->assertOK();
+        $this->assertStringContainsString('Page 0', $second->response()->getBody());
+        $this->assertStringNotContainsString('Page 20', $second->response()->getBody());
     }
 
     public function testSettingsAreSavedAndUsedByEmailService(): void
