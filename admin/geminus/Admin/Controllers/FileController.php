@@ -14,7 +14,7 @@ class FileController extends BaseController
     public function serve(string $type, string $filename): ResponseInterface
     {
         $allowedTypes = ['avatars', 'documents', 'images'];
-        if (! in_array($type, $allowedTypes, true)) {
+        if (! in_array($type, $allowedTypes, true) || $filename !== basename($filename) || $filename === '.' || $filename === '..') {
             return $this->response->setStatusCode(404);
         }
 

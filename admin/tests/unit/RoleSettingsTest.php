@@ -269,6 +269,7 @@ final class RoleSettingsTest extends CIUnitTestCase
     public function testDelegatedManagerCannotAssignMorePowerfulRole(): void
     {
         $this->loginAs('superadmin');
+        $superadminId      = auth()->id();
         $groups            = setting('AuthGroups.groups');
         $groups['manager'] = ['title' => 'Manager', 'description' => ''];
         setting('AuthGroups.groups', $groups);
@@ -298,6 +299,25 @@ final class RoleSettingsTest extends CIUnitTestCase
         ])->assertRedirect();
         $this->assertNotEmpty(session('user_errors.role'));
         $this->assertSame(['user'], $users->findById($target->id)->getGroups());
+
+        foreach (['admin', 'developer'] as $role) {
+            $protected        = new AdminUser(['username' => 'protected' . $role]);
+            $protected->email = 'protected' . $role . '@example.com';
+            $protected->setPassword('A-local-password-123!');
+            $users->save($protected);
+            $protected = $users->findById($users->getInsertID());
+            $protected->addGroup($role);
+            $this->get('/en/admin/users/' . $protected->id . '/edit')->assertStatus(404);
+            $this->post('/en/admin/users/' . $protected->id . '/edit', [csrf_token() => csrf_hash(), 'username' => 'takenover', 'email' => 'takenover@example.com', 'role' => 'user', 'status' => 'enabled'])->assertStatus(404);
+            $this->post('/en/admin/users/' . $protected->id . '/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertSame('protected' . $role . '@example.com', $users->findById($protected->id)->email);
+            $this->assertSame([$role], $users->findById($protected->id)->getGroups());
+        }
+
+        $this->get('/en/admin/users/' . $superadminId . '/edit')->assertStatus(404);
+        $this->post('/en/admin/users/' . $superadminId . '/edit', [csrf_token() => csrf_hash(), 'username' => 'takenover', 'email' => 'takenover@example.com', 'role' => 'user', 'status' => 'enabled'])->assertStatus(404);
+        $this->post('/en/admin/users/' . $superadminId . '/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->assertSame(['superadmin'], $users->findById($superadminId)->getGroups());
 
         $matrix              = setting('AuthGroups.matrix');
         $matrix['developer'] = ['internal.export'];

@@ -1,6 +1,5 @@
 <?php
 
-use CodeIgniter\Email\Email;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
@@ -113,6 +112,8 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Bad', 'body' => 'No link'])->assertRedirect();
         $this->assertSame('Go {link}', $template->get('invitation', 'zh-Hans')['body']);
         $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Secret {link}', 'body' => 'Go {link}'])->assertRedirect();
+        $this->assertSame('Hi {username}', $template->get('invitation', 'zh-Hans')['subject']);
+        $this->post($url, [csrf_token() => csrf_hash(), 'subject' => "Hi\r\nBcc: other@example.com", 'body' => 'Go {link}'])->assertRedirect();
         $this->assertSame('Hi {username}', $template->get('invitation', 'zh-Hans')['subject']);
         $this->post('/en/admin/mail/templates/email-2fa/en', [csrf_token() => csrf_hash(), 'subject' => 'Code {code}', 'body' => 'Enter {code}'])->assertRedirect();
         $this->assertSame(lang('Auth.email2FASubject'), $template->get('email-2fa', 'en')['subject']);
@@ -430,8 +431,9 @@ final class EmailSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         service('settings')->set('Email.fromEmail', '');
-        $email = $this->createMock(Email::class);
+        $email = $this->createMock(QueuedEmail::class);
         $email->expects($this->never())->method('send');
+        $email->expects($this->never())->method('sendDirect');
         Services::injectMock('email', $email);
 
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'invalid'])->assertRedirect();
@@ -448,13 +450,14 @@ final class EmailSettingsTest extends CIUnitTestCase
         service('settings')->set('Email.fromEmail', 'sender@example.com');
 
         foreach ([true, false] as $sent) {
-            $email           = $this->createMock(Email::class);
+            $email           = $this->createMock(QueuedEmail::class);
             $email->SMTPPass = 'test-secret';
             $email->SMTPUser = 'test-user';
             $email->expects($this->once())->method('setTo')->with('recipient@example.com');
             $email->expects($this->once())->method('setSubject')->with(lang('Admin.testEmailSubject'));
             $email->expects($this->once())->method('setMessage')->with(lang('Admin.testEmailBody'));
-            $email->expects($this->once())->method('send')->willReturn($sent);
+            $email->expects($this->never())->method('send');
+            $email->expects($this->once())->method('sendDirect')->willReturn($sent);
             $email->expects($sent ? $this->never() : $this->once())->method('printDebugger')->with([])
                 ->willReturn('<pre>SMTP 535 authentication failed for test-user: test-secret</pre>');
             Services::injectMock('email', $email);

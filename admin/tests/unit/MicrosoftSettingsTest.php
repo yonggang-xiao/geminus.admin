@@ -45,15 +45,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             }
         };
 
-        $provider->validateTokenClaims([
-            'aud' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-            'tid' => $tenant,
-            'oid' => 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
-            'ver' => '2.0',
-            'iss' => 'https://login.microsoftonline.com/' . $tenant . '/v2.0',
-            'nbf' => time() - 60,
-            'exp' => time() + 60,
-        ]);
+        $provider->validateTokenClaims($this->validClaims($tenant));
 
         $this->assertSame($tenant, $provider->tenant);
     }
@@ -62,22 +54,26 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $provider = new OrganizationAzure(['clientId' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'tenant' => 'organizations']);
         $this->expectException(RuntimeException::class);
-        $provider->validateTokenClaims([
-            'tid' => '9188040d-6c67-4c5b-b112-36a304b66dad',
-            'oid' => 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
-            'ver' => '2.0',
-        ]);
+        $this->expectExceptionMessage('Invalid organizational Microsoft identity.');
+        $provider->validateTokenClaims($this->validClaims('9188040d-6c67-4c5b-b112-36a304b66dad'));
     }
 
     public function testOrganizationProviderRejectsLegacyVersion(): void
     {
-        $provider = new OrganizationAzure(['clientId' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'tenant' => 'organizations']);
+        $provider      = new OrganizationAzure(['clientId' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'tenant' => 'organizations']);
+        $claims        = $this->validClaims('11111111-2222-3333-4444-555555555555');
+        $claims['ver'] = '1.0';
         $this->expectException(RuntimeException::class);
-        $provider->validateTokenClaims([
-            'tid' => '11111111-2222-3333-4444-555555555555',
-            'oid' => 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
-            'ver' => '1.0',
-        ]);
+        $this->expectExceptionMessage('Invalid organizational Microsoft identity.');
+        $provider->validateTokenClaims($claims);
+    }
+
+    public function testOrganizationProviderRejectsUnexpectedTenant(): void
+    {
+        $provider = new OrganizationAzure(['clientId' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'tenant' => '22222222-3333-4444-5555-666666666666']);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Invalid organizational Microsoft identity.');
+        $provider->validateTokenClaims($this->validClaims('11111111-2222-3333-4444-555555555555'));
     }
 
     public function testOnlyAuthorizedUsersCanAccessSettings(): void
@@ -570,6 +566,19 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             csrf_token() => csrf_hash(),
             'tenant'     => '11111111-2222-3333-4444-555555555555',
             'clientId'   => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        ];
+    }
+
+    private function validClaims(string $tenant): array
+    {
+        return [
+            'aud' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            'tid' => $tenant,
+            'oid' => 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+            'ver' => '2.0',
+            'iss' => 'https://login.microsoftonline.com/' . $tenant . '/v2.0',
+            'nbf' => time() - 60,
+            'exp' => time() + 60,
         ];
     }
 }

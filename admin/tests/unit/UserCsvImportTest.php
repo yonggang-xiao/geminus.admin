@@ -2,6 +2,7 @@
 
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
+use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\UserCsvImport;
 
 /**
@@ -56,6 +57,44 @@ final class UserCsvImportTest extends CIUnitTestCase
         } finally {
             fclose($stream);
         }
+    }
+
+    public function testInvalidHeaderDoesNotCreateAccounts(): void
+    {
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, "email,username\nfirst@example.com,first\n");
+        rewind($stream);
+
+        try {
+            (new UserCsvImport())->import($stream);
+            $this->fail('Expected an invalid CSV header.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('CSV header must be username,email.', $exception->getMessage());
+            $this->assertSame(0, auth()->getProvider()->countAllResults());
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testInvalidColumnsAndExistingAccountsAreReportedWithoutChanges(): void
+    {
+        $existing        = new AdminUser(['username' => 'existing']);
+        $existing->email = 'existing@example.com';
+        $existing->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($existing);
+
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, "username,email\nextra,extra@example.com,unexpected\nother,existing@example.com\nexisting,new@example.com\n");
+        rewind($stream);
+        $report = (new UserCsvImport())->import($stream);
+        fclose($stream);
+
+        $this->assertSame(['error', 'skipped', 'error'], array_column($report, 'result'));
+        $this->assertSame(['invalid', 'duplicate', 'username'], array_column($report, 'reason'));
+        $this->assertSame(1, $users->countAllResults());
+        $this->assertSame('existing', $users->findByCredentials(['email' => 'existing@example.com'])->username);
+        $this->assertNull($users->findByCredentials(['email' => 'new@example.com']));
     }
 
     public function testReportUsesOriginalCsvRowNumbers(): void

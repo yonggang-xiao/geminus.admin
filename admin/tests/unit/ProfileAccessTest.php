@@ -5,6 +5,8 @@ use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Composer\InstalledVersions;
+use Config\Services;
+use Geminus\Admin\Controllers\FileController;
 use Geminus\Admin\Entities\AdminUser;
 
 /**
@@ -16,6 +18,12 @@ final class ProfileAccessTest extends CIUnitTestCase
     use FeatureTestTrait;
 
     protected $namespace;
+
+    protected function tearDown(): void
+    {
+        auth()->logout();
+        parent::tearDown();
+    }
 
     public function testUserFormatsDateTimeInPreferredTimezoneWithoutMutatingSource(): void
     {
@@ -349,6 +357,57 @@ final class ProfileAccessTest extends CIUnitTestCase
         }
     }
 
+    public function testAuthenticatedFileRouteOnlyServesAllowedExistingFilename(): void
+    {
+        $directory = WRITEPATH . 'uploads/avatars/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        $filename = 'serve-test-' . bin2hex(random_bytes(8)) . '.png';
+        $filePath = $directory . $filename;
+        $content  = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', true);
+        file_put_contents($filePath, $content);
+        $sentinelName = 'serve-sentinel-' . bin2hex(random_bytes(8)) . '.txt';
+        $sentinelPath = WRITEPATH . 'uploads/' . $sentinelName;
+        $sentinel     = 'private-' . bin2hex(random_bytes(16));
+        file_put_contents($sentinelPath, $sentinel);
+        $unlistedType = 'unlisted-' . bin2hex(random_bytes(8));
+        $unlistedPath = WRITEPATH . 'uploads/' . $unlistedType;
+        mkdir($unlistedPath);
+        file_put_contents($unlistedPath . '/' . $filename, $content);
+
+        try {
+            $this->get('/admin/files/avatars/' . $filename)->assertRedirect();
+            $user        = new AdminUser(['username' => 'fileviewer']);
+            $user->email = 'fileviewer@example.com';
+            $user->setPassword('A-local-password-123!');
+            $users = auth()->getProvider();
+            $users->save($user);
+            auth()->login($users->findById($users->getInsertID()));
+
+            $response = $this->get('/admin/files/avatars/' . $filename);
+            $response->assertOK();
+            $this->assertSame('image/png', $response->response()->getHeaderLine('Content-Type'));
+            $this->assertSame($content, $response->response()->getBody());
+            $this->get('/admin/files/' . $unlistedType . '/' . $filename)->assertStatus(404);
+            $this->get('/admin/files/avatars/missing-' . $filename)->assertStatus(404);
+            $traversal = $this->get('/admin/files/avatars/%2e%2e%2f' . $sentinelName);
+            $traversal->assertStatus(404);
+            $this->assertStringNotContainsString($sentinel, $traversal->response()->getBody());
+            $controller = new FileController();
+            $controller->initController(service('request'), Services::response(null, false), service('logger'));
+            $direct = $controller->serve('avatars', '../' . $sentinelName);
+            $this->assertSame(404, $direct->getStatusCode());
+            $this->assertStringNotContainsString($sentinel, (string) $direct->getBody());
+        } finally {
+            unlink($filePath);
+            unlink($sentinelPath);
+            unlink($unlistedPath . '/' . $filename);
+            rmdir($unlistedPath);
+        }
+    }
+
     public function testAuthenticatedUserCanCreateAndRevokeToken(): void
     {
         $user        = new AdminUser(['username' => 'tokentest']);
@@ -387,8 +446,31 @@ final class ProfileAccessTest extends CIUnitTestCase
             'name'       => 'Expired key',
             'expires'    => '2020-01-01',
         ])->assertRedirect();
+        $this->assertSame(lang('Admin.futureExpiry'), session('token_errors')['expires']);
+        $this->assertSame([], $user->accessTokens());
         $result = $this->withSession($_SESSION)->get('/en/admin/profile');
         $this->assertStringContainsString('value="2020-01-01"', $result->response()->getBody());
+    }
+
+    public function testUserCannotRevokeAnotherUsersToken(): void
+    {
+        $owner        = new AdminUser(['username' => 'tokenowner']);
+        $owner->email = 'tokenowner@example.com';
+        $owner->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($owner);
+        $owner = $users->findById($users->getInsertID());
+        $token = $owner->generateAccessToken('Owner token', ['*']);
+
+        $other        = new AdminUser(['username' => 'tokenother']);
+        $other->email = 'tokenother@example.com';
+        $other->setPassword('A-local-password-123!');
+        $users->save($other);
+        auth()->login($users->findById($users->getInsertID()));
+
+        $this->post('/en/admin/profile/tokens/' . $token->id . '/revoke', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame(lang('Admin.tokenNotFound'), session('alert')['message']);
+        $this->assertCount(1, $owner->accessTokens());
     }
 
     public function testValidationErrorsUseRequestedLocale(): void
@@ -495,5 +577,53 @@ final class ProfileAccessTest extends CIUnitTestCase
 
         $result->assertRedirect();
         $this->assertTrue(service('passwords')->verify('Another-local-password-456!', $users->findById($user->id)->getPasswordHash()));
+    }
+
+    public function testRejectedPasswordChangesPreserveExistingPassword(): void
+    {
+        $user        = new AdminUser(['username' => 'passwordfailures']);
+        $user->email = 'passwordfailures@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+        $originalHash = $user->getPasswordHash();
+
+        foreach ([
+            ['current_password' => 'wrong-password', 'new_password' => 'Another-local-password-456!', 'confirm_password' => 'Another-local-password-456!', 'error' => 'current_password'],
+            ['current_password' => 'A-local-password-123!', 'new_password' => 'Another-local-password-456!', 'confirm_password' => 'not-matching', 'error' => 'confirm_password'],
+            ['current_password' => 'A-local-password-123!', 'new_password' => 'short', 'confirm_password' => 'short', 'error' => 'new_password'],
+        ] as $attempt) {
+            $this->post('/en/admin/profile/password', [
+                csrf_token()       => csrf_hash(),
+                'current_password' => $attempt['current_password'],
+                'new_password'     => $attempt['new_password'],
+                'confirm_password' => $attempt['confirm_password'],
+            ])->assertRedirect();
+
+            $this->assertNotEmpty(session('password_errors')[$attempt['error']]);
+            $this->assertSame($originalHash, $users->findById($user->id)->getPasswordHash());
+        }
+    }
+
+    public function testAccountWithoutLocalPasswordCannotChangePassword(): void
+    {
+        $user  = new AdminUser(['username' => 'microsoftonly']);
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+        $this->assertEmpty($user->getEmailIdentity()?->secret2);
+
+        $this->post('/en/admin/profile/password', [
+            csrf_token()       => csrf_hash(),
+            'current_password' => 'A-local-password-123!',
+            'new_password'     => 'Another-local-password-456!',
+            'confirm_password' => 'Another-local-password-456!',
+        ])->assertRedirect();
+
+        $this->assertSame(lang('Admin.localOnly'), session('alert')['message']);
+        $this->assertEmpty($users->findById($user->id)->getEmailIdentity()?->secret2);
     }
 }
