@@ -1,14 +1,18 @@
 <?php
 
+use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Config\Database;
+use Config\Services;
 use Geminus\Admin\Config\MicrosoftOAuth;
+use Geminus\Admin\Controllers\MicrosoftLogin;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\OrganizationAzure;
+use TheNetworg\OAuth2\Client\Token\AccessToken;
 
 /**
  * @internal
@@ -217,15 +221,144 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
     public function testMicrosoftCallbackRejectsMismatchedOrExpiredState(): void
     {
-        service('settings')->set('MicrosoftOAuth.enabled', true);
-        $this->withSession(['microsoft_flow' => ['state' => 'expected', 'mode' => 'login', 'expires' => time() + 60]])
-            ->get('/en/microsoft/callback?code=fake&state=other')->assertRedirect();
+        $response = $this->callbackWithoutExchange('login', ['state' => 'other']);
+        $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertNull(session('microsoft_flow'));
 
-        $this->withSession(['microsoft_flow' => ['state' => 'expected', 'mode' => 'login', 'locale' => 'zh-Hant', 'expires' => time() - 1]])
-            ->get('/en/microsoft/callback?code=fake&state=expected')->assertRedirectTo('/zh-Hant/login');
+        $response = $this->callbackWithoutExchange('login', ['locale' => 'zh-Hant', 'expires' => time() - 1]);
+        $this->assertSame('/zh-Hant/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertNull(session('microsoft_flow'));
         $this->assertFalse(auth()->loggedIn());
+    }
+
+    public function testMicrosoftBindingCallbackRejectsDifferentSessionUser(): void
+    {
+        $this->loginAs('superadmin');
+        $userId = auth()->id();
+
+        $response = $this->callbackWithoutExchange('bind', ['user_id' => $userId + 1]);
+        $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+
+        $this->assertNull(session('microsoft_flow'));
+        $this->assertNull(auth()->user()->getIdentity(MicrosoftLinks::IDENTITY_TYPE));
+    }
+
+    public function testMicrosoftCallbackLogsInAlreadyLinkedUser(): void
+    {
+        $user        = new AdminUser(['username' => 'callbacklinked']);
+        $user->email = 'callbacklinked@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user   = $users->findById($users->getInsertID());
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $this->assertTrue((new MicrosoftLinks())->bind($user, $tenant, $object));
+
+        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce']);
+
+        $this->assertSame('/en/admin/dashboard', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame($user->id, auth()->id());
+        $this->assertSame(1, Database::connect()->table('auth_logins')->where('identifier', strtolower($tenant . ':' . $object))->where('success', 1)->countAllResults());
+        $this->assertNull(session('microsoft_flow'));
+    }
+
+    public function testMicrosoftCallbackRejectsInvalidNonce(): void
+    {
+        $response = $this->callbackWithClaims([
+            'tid'   => '11111111-2222-3333-4444-555555555555',
+            'oid'   => 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+            'nonce' => 'wrong-nonce',
+        ]);
+
+        $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertFalse(auth()->loggedIn());
+        $this->assertSame([], (new MicrosoftLinks())->pending());
+        $this->assertNull(session('microsoft_flow'));
+    }
+
+    public function testMicrosoftCallbackRejectsTokenExchangeFailure(): void
+    {
+        $provider = $this->getMockBuilder(OrganizationAzure::class)->disableOriginalConstructor()->onlyMethods(['getAccessToken'])->getMock();
+        $provider->expects($this->once())->method('getAccessToken')->willThrowException(new RuntimeException('Invalid authorization code.'));
+
+        $response = $this->callbackWithProvider($provider);
+
+        $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertFalse(auth()->loggedIn());
+        $this->assertSame([], (new MicrosoftLinks())->pending());
+        $this->assertNull(session('microsoft_flow'));
+    }
+
+    public function testMicrosoftCallbackRejectsBannedLinkedUser(): void
+    {
+        $user        = new AdminUser(['username' => 'bannedlinked']);
+        $user->email = 'bannedlinked@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user   = $users->findById($users->getInsertID());
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $this->assertTrue((new MicrosoftLinks())->bind($user, $tenant, $object));
+        $user->ban();
+
+        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce']);
+
+        $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertFalse(auth()->loggedIn());
+        $this->assertSame([], (new MicrosoftLinks())->pending());
+    }
+
+    public function testMicrosoftCallbackCreatesPendingRequestForUnlinkedIdentity(): void
+    {
+        $tenant   = '11111111-2222-3333-4444-555555555555';
+        $object   = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce', 'preferred_username' => 'pending@example.com']);
+
+        $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame(lang('Admin.microsoftApprovalPending'), session('message'));
+        $this->assertFalse(auth()->loggedIn());
+        $pending = (new MicrosoftLinks())->pending();
+        $this->assertCount(1, $pending);
+        $this->assertSame($tenant, $pending[0]['tenant_id']);
+        $this->assertSame($object, $pending[0]['object_id']);
+        $this->assertSame('pending@example.com', $pending[0]['email']);
+    }
+
+    public function testMicrosoftBindingCallbackLinksCurrentUser(): void
+    {
+        $this->loginAs('superadmin');
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+
+        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce'], 'bind');
+
+        $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame(lang('Admin.microsoftLinked'), session('alert')['message']);
+        $this->assertSame(auth()->id(), (new MicrosoftLinks())->findUser($tenant, $object)?->id);
+    }
+
+    public function testMicrosoftBindingCallbackDoesNotTakeAnotherUsersIdentity(): void
+    {
+        $owner        = new AdminUser(['username' => 'microsoftowner']);
+        $owner->email = 'microsoftowner@example.com';
+        $owner->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($owner);
+        $owner  = $users->findById($users->getInsertID());
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $links  = new MicrosoftLinks();
+        $this->assertTrue($links->bind($owner, $tenant, $object));
+        $this->loginAs('superadmin');
+
+        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce'], 'bind');
+
+        $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+        $this->assertSame(lang('Admin.microsoftLoginFailed'), session('alert')['message']);
+        $this->assertSame($owner->id, $links->findUser($tenant, $object)?->id);
+        $this->assertNull(auth()->user()->getIdentity(MicrosoftLinks::IDENTITY_TYPE));
     }
 
     public function testLoginViewShowsMicrosoftButtonWhenEnabled(): void
@@ -580,5 +713,48 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             'nbf' => time() - 60,
             'exp' => time() + 60,
         ];
+    }
+
+    private function callbackWithClaims(array $claims, string $mode = 'login'): RedirectResponse
+    {
+        $token = $this->createStub(AccessToken::class);
+        $token->method('getIdTokenClaims')->willReturn($claims);
+        $provider = $this->getMockBuilder(OrganizationAzure::class)->disableOriginalConstructor()->onlyMethods(['getAccessToken'])->getMock();
+        $provider->expects($this->once())->method('getAccessToken')->with('authorization_code', ['code' => 'test-code'])->willReturn($token);
+
+        return $this->callbackWithProvider($provider, $mode);
+    }
+
+    private function callbackWithoutExchange(string $mode, array $flowOverrides): RedirectResponse
+    {
+        $provider = $this->getMockBuilder(OrganizationAzure::class)->disableOriginalConstructor()->onlyMethods(['getAccessToken'])->getMock();
+        $provider->expects($this->never())->method('getAccessToken');
+
+        return $this->callbackWithProvider($provider, $mode, $flowOverrides);
+    }
+
+    private function callbackWithProvider(OrganizationAzure $provider, string $mode = 'login', array $flowOverrides = []): RedirectResponse
+    {
+        $controller = new class ($provider) extends MicrosoftLogin {
+            public function __construct(private OrganizationAzure $testProvider)
+            {
+            }
+
+            protected function provider(): OrganizationAzure
+            {
+                return $this->testProvider;
+            }
+        };
+
+        service('settings')->set('MicrosoftOAuth.enabled', true);
+        session()->set('microsoft_flow', array_replace([
+            'state'   => 'expected', 'nonce' => 'expected-nonce', 'locale' => 'en', 'mode' => $mode,
+            'user_id' => $mode === 'bind' ? auth()->id() : null, 'expires' => time() + 60,
+        ], $flowOverrides));
+        $request = $this->setupRequest('GET', '/en/microsoft/callback?state=expected&code=test-code');
+        $request->setGlobal('get', ['state' => 'expected', 'code' => 'test-code']);
+        $controller->initController($request, Services::response(null, false), Services::logger());
+
+        return $controller->callback();
     }
 }

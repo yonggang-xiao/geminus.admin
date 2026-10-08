@@ -152,7 +152,7 @@ class MicrosoftLogin extends BaseController
         }
     }
 
-    private function provider(): OrganizationAzure
+    protected function provider(): OrganizationAzure
     {
         $settings = service('settings');
         $config   = config('MicrosoftOAuth');

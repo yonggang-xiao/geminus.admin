@@ -2,6 +2,10 @@
 
 use CodeIgniter\Config\Services;
 use CodeIgniter\Database\Exceptions\DatabaseException;
+use CodeIgniter\Files\File;
+use CodeIgniter\HTTP\Files\UploadedFile;
+use CodeIgniter\HTTP\IncomingRequest;
+use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Queue\Interfaces\QueueInterface;
 use CodeIgniter\Queue\QueuePushResult;
 use CodeIgniter\Security\Exceptions\SecurityException;
@@ -9,6 +13,7 @@ use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
+use Geminus\Admin\Controllers\Users;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
@@ -293,6 +298,57 @@ final class UsersTest extends CIUnitTestCase
         } finally {
             service('superglobals')->setFilesArray([]);
             unlink($filename);
+        }
+    }
+
+    public function testCsvImportProcessesValidFileAndRejectsInvalidUploadMetadata(): void
+    {
+        $this->loginAs('superadmin');
+        $filename = tempnam(sys_get_temp_dir(), 'user-csv-');
+        file_put_contents($filename, "username,email\nnewuser,newuser@example.com\n");
+        $imageFile = tempnam(sys_get_temp_dir(), 'user-image-');
+        file_put_contents($imageFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', true));
+        $badHeaderFile = tempnam(sys_get_temp_dir(), 'user-invalid-');
+        file_put_contents($badHeaderFile, "email,username\nnewuser@example.com,newuser\n");
+
+        try {
+            $this->assertContains((new File($filename))->getMimeType(), ['text/plain', 'text/csv', 'application/vnd.ms-excel']);
+            $this->assertSame('image/png', (new File($imageFile))->getMimeType());
+
+            foreach ([
+                ['users.csv', $filename, 1024 * 1024 + 1, false],
+                ['users.txt', $filename, filesize($filename), false],
+                ['users.csv', $imageFile, filesize($imageFile), false],
+                ['users.csv', $badHeaderFile, filesize($badHeaderFile), false],
+                ['users.csv', $filename, filesize($filename), true],
+            ] as [$clientName, $source, $size, $accepted]) {
+                session()->remove('alert');
+                session()->remove('user_import_report');
+                $file = $this->getMockBuilder(UploadedFile::class)
+                    ->setConstructorArgs([$source, $clientName, null, $size, UPLOAD_ERR_OK])
+                    ->onlyMethods(['isValid'])
+                    ->getMock();
+                $file->expects($this->once())->method('isValid')->willReturn(true);
+                $request = $this->getMockBuilder(IncomingRequest::class)
+                    ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                    ->onlyMethods(['getFile'])
+                    ->getMock();
+                $request->expects($this->once())->method('getFile')->with('file')->willReturn($file);
+                $controller = new Users();
+                $controller->initController($request, Services::response(null, false), Services::logger());
+                $response = $controller->import();
+
+                $this->assertSame('/en/admin/users', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+                $this->assertSame(lang($accepted ? 'Admin.importFinished' : 'Admin.invalidUserCsv'), session('alert')['message']);
+                $this->assertSame($accepted ? 1 : 0, auth()->getProvider()->countAllResults() - 1);
+                $this->assertSame($accepted ? 'created' : null, session('user_import_report')[0]['result'] ?? null);
+            }
+
+            $this->assertSame('newuser', auth()->getProvider()->findByCredentials(['email' => 'newuser@example.com'])->username);
+        } finally {
+            unlink($filename);
+            unlink($imageFile);
+            unlink($badHeaderFile);
         }
     }
 

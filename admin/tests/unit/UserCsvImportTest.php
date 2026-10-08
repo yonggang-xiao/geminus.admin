@@ -59,6 +59,22 @@ final class UserCsvImportTest extends CIUnitTestCase
         }
     }
 
+    public function testExactlyFiveHundredRowsAreAccepted(): void
+    {
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, "username,email\n" . str_repeat("valid,valid@example.com\n", 500));
+        rewind($stream);
+
+        $report = (new UserCsvImport())->import($stream);
+        fclose($stream);
+
+        $this->assertCount(500, $report);
+        $this->assertSame(501, $report[499]['row']);
+        $this->assertSame('created', $report[0]['result']);
+        $this->assertSame('skipped', $report[499]['result']);
+        $this->assertSame(1, auth()->getProvider()->countAllResults());
+    }
+
     public function testInvalidHeaderDoesNotCreateAccounts(): void
     {
         $stream = fopen('php://temp', 'w+b');
