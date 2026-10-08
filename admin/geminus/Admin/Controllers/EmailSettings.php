@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 use Config\Services;
+use Geminus\Admin\Libraries\QueuedEmail;
 use RuntimeException;
 
 class EmailSettings extends BaseController
@@ -112,7 +113,7 @@ class EmailSettings extends BaseController
         $email->setTo($validation->getValidated()['test_email']);
         $email->setSubject(lang('Admin.testEmailSubject'));
         $email->setMessage(lang('Admin.testEmailBody'));
-        $sent = $email->send();
+        $sent = $email instanceof QueuedEmail ? $email->sendDirect() : $email->send();
 
         $alert = [
             'type'    => $sent ? 'success' : 'danger',

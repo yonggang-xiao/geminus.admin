@@ -4,6 +4,7 @@ namespace Config;
 
 use CodeIgniter\Config\BaseService;
 use CodeIgniter\Email\Email as EmailService;
+use Geminus\Admin\Libraries\QueuedEmail;
 
 /**
  * Services Configuration file.
@@ -34,7 +35,7 @@ class Services extends BaseService
             }
         }
 
-        return new EmailService($config);
+        return new QueuedEmail($config);
     }
 
     /*

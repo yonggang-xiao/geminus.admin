@@ -1,0 +1,1 @@
+* * * * * root cd /app && /usr/bin/flock -n /tmp/geminus-tasks.lock /usr/local/bin/php spark tasks:run >> /proc/1/fd/1 2>&1

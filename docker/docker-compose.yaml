@@ -13,7 +13,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     working_dir: /app
-    command: frankenphp run --config Caddyfile
+    command: sh -c 'cron && exec frankenphp run --config Caddyfile'
     tty: true
     depends_on:
       db:
