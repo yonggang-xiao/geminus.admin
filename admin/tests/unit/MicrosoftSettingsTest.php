@@ -388,6 +388,86 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertNull($links->findUser($tenant, $object));
     }
 
+    public function testDelegatedAdminCannotManageSuperadminMicrosoftIdentity(): void
+    {
+        $target        = new AdminUser(['username' => 'protectedmicrosoft']);
+        $target->email = 'protectedmicrosoft@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        $target->addGroup('superadmin');
+
+        $originalMatrix    = setting('AuthGroups.matrix');
+        $matrix            = $originalMatrix;
+        $matrix['admin'][] = 'users.manage-admins';
+        $matrix['admin'][] = 'admin.settings';
+        setting('AuthGroups.matrix', $matrix);
+
+        try {
+            $this->loginAs('admin');
+            $this->assertTrue(auth()->user()->can('users.manage-admins'));
+
+            $links   = new MicrosoftLinks();
+            $tenant  = '11111111-2222-3333-4444-555555555555';
+            $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+            $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
+            $own     = 'dddddddd-eeee-ffff-0000-111111111111';
+            $this->assertTrue($links->bind($target, $tenant, $linked));
+            $this->assertTrue($links->bind(auth()->user(), $tenant, $own));
+            $this->assertTrue($links->request($tenant, $pending, null));
+            $requestId = $links->pending()[0]['id'];
+            $page      = $this->get('/en/admin/settings/microsoft');
+            $page->assertOK();
+            $this->assertStringContainsString('<option value="' . auth()->id() . '">', $page->response()->getBody());
+            $this->assertStringContainsString('/users/' . auth()->id() . '/revoke', $page->response()->getBody());
+            $this->assertStringNotContainsString('<option value="' . $target->id . '">', $page->response()->getBody());
+            $this->assertStringNotContainsString('/users/' . $target->id . '/revoke', $page->response()->getBody());
+
+            $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertStatus(404);
+            $this->assertNull($links->findUser($tenant, $pending));
+            $this->assertCount(1, $links->pending());
+
+            $this->post('/en/admin/settings/microsoft/users/' . $target->id . '/revoke', [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertSame($target->id, $links->findUser($tenant, $linked)?->id);
+        } finally {
+            setting('AuthGroups.matrix', $originalMatrix);
+        }
+    }
+
+    public function testSuperadminCannotManageAnotherSuperadminMicrosoftIdentity(): void
+    {
+        $target        = new AdminUser(['username' => 'othersuperadmin']);
+        $target->email = 'othersuperadmin@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        $target->addGroup('superadmin');
+        $this->loginAs('superadmin');
+
+        $links   = new MicrosoftLinks();
+        $tenant  = '11111111-2222-3333-4444-555555555555';
+        $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
+        $this->assertTrue($links->bind($target, $tenant, $linked));
+        $this->assertTrue($links->request($tenant, $pending, null));
+        $requestId = $links->pending()[0]['id'];
+        $own       = 'dddddddd-eeee-ffff-0000-111111111111';
+        $this->assertTrue($links->bind(auth()->user(), $tenant, $own));
+        $page = $this->get('/en/admin/settings/microsoft');
+        $page->assertOK();
+        $this->assertStringContainsString('/users/' . auth()->id() . '/revoke', $page->response()->getBody());
+        $this->assertStringNotContainsString('/users/' . $target->id . '/revoke', $page->response()->getBody());
+
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertStatus(404);
+        $this->assertNull($links->findUser($tenant, $pending));
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => auth()->id()])->assertStatus(404);
+        $this->assertCount(1, $links->pending());
+        $this->post('/en/admin/settings/microsoft/users/' . $target->id . '/revoke', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->assertSame($target->id, $links->findUser($tenant, $linked)?->id);
+    }
+
     public function testAdminCanRejectAndRevokeMicrosoftIdentity(): void
     {
         $this->loginAs('superadmin');

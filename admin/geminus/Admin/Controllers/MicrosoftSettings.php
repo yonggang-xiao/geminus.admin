@@ -27,7 +27,7 @@ class MicrosoftSettings extends BaseController
 
         foreach ($identities as $identity) {
             $user = auth()->getProvider()->findById($identity->user_id);
-            if ($user) {
+            if ($user && (! $user->inGroup('superadmin') || $user->id === auth()->id())) {
                 $bindings[] = ['user' => $user, 'identity' => $identity];
             }
         }
@@ -37,7 +37,7 @@ class MicrosoftSettings extends BaseController
             'page_title' => lang('Admin.microsoftLogin'),
             'microsoft'  => service('settings')->getMany(['MicrosoftOAuth.enabled', 'MicrosoftOAuth.tenant', 'MicrosoftOAuth.clientId']),
             'requests'   => $canApprove ? $links->pending() : [],
-            'candidates' => $canApprove ? array_values(array_filter(auth()->getProvider()->findAll(), static fn ($user) => $links->isEligible($user))) : [],
+            'candidates' => $canApprove ? array_values(array_filter(auth()->getProvider()->findAll(), static fn ($user) => $links->isEligible($user) && ! $user->inGroup('superadmin'))) : [],
             'bindings'   => $bindings,
         ]);
     }
@@ -82,6 +82,10 @@ class MicrosoftSettings extends BaseController
         }
 
         $user = auth()->getProvider()->findById($validation->getValidated()['user_id']);
+        if ($user?->inGroup('superadmin')) {
+            return $this->response->setStatusCode(404);
+        }
+
         if (! $user || ! (new MicrosoftLinks())->approve($requestId, $user)) {
             return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.microsoftApprovalFailed')]);
         }
@@ -109,7 +113,11 @@ class MicrosoftSettings extends BaseController
             return $this->response->setStatusCode(403);
         }
 
-        $user    = auth()->getProvider()->findById($userId);
+        $user = auth()->getProvider()->findById($userId);
+        if ($user?->inGroup('superadmin') && $user->id !== auth()->id()) {
+            return $this->response->setStatusCode(404);
+        }
+
         $revoked = $user && (new MicrosoftLinks())->revoke($user);
 
         return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', [
