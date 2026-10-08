@@ -45,7 +45,7 @@ services:
       - ./pgdata:/var/lib/postgresql/data
   
   adminer:
-    image: adminer
+    image: adminer:6
     container_name: geminus-adminer
     ports:
       - "8080:8080"

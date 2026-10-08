@@ -14,6 +14,12 @@
         </li>
     <?php endif; ?>
     <?php if (auth()->user()?->can('admin.settings')): ?>
+        <li class="nav-item<?= url_is('*/admin/audit') ? ' active' : '' ?>">
+            <a class="nav-link<?= url_is('*/admin/audit') ? ' active' : '' ?>" href="<?= route_to('admin/audit') ?>"<?= url_is('*/admin/audit') ? ' aria-current="page"' : '' ?>>
+                <i class="ti ti-history nav-link-icon icon" aria-hidden="true"></i>
+                <span class="nav-link-title"><?= esc(lang('Admin.operationAudit')) ?></span>
+            </a>
+        </li>
         <li class="nav-item dropdown<?= url_is('*/admin/mail/*') ? ' active' : '' ?>">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="<?= url_is('*/admin/mail/*') ? 'true' : 'false' ?>">
                 <i class="ti ti-mail nav-link-icon icon" aria-hidden="true"></i>

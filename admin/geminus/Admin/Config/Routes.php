@@ -24,6 +24,7 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->post('', 'EmailSettings::update', ['as' => 'admin/settings/email/update']);
         $routes->post('test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test']);
     });
+    $routes->get('audit', 'OperationAudit::index', ['as' => 'admin/audit', 'filter' => 'permission:admin.settings']);
     $routes->group('mail', ['filter' => 'permission:admin.settings'], static function ($routes) {
         $routes->get('deliveries', 'EmailQueue::index', ['as' => 'admin/mail/deliveries']);
         $routes->get('templates', 'EmailTemplates::index', ['as' => 'admin/mail/templates']);
