@@ -19,6 +19,7 @@ class CreateOperationAuditLogs extends Migration
             'path'        => ['type' => 'VARCHAR', 'constraint' => 512],
             'result'      => ['type' => 'VARCHAR', 'constraint' => 16],
             'ip_address'  => ['type' => 'VARCHAR', 'constraint' => 45],
+            'user_agent'  => ['type' => 'VARCHAR', 'constraint' => 512, 'null' => true],
             'created_at'  => ['type' => 'DATETIME'],
         ]);
         $this->forge->addPrimaryKey('id');

@@ -64,6 +64,7 @@ class OperationAudit implements FilterInterface
                 'path'        => mb_substr($path, 0, 512),
                 'result'      => $result,
                 'ip_address'  => $request->getIPAddress(),
+                'user_agent'  => mb_substr(preg_replace('/[\x00-\x1F\x7F]/', '', mb_scrub($request->getHeaderLine('User-Agent'), 'UTF-8')), 0, 512) ?: null,
                 'created_at'  => gmdate('Y-m-d H:i:s'),
             ]);
         } catch (Throwable $exception) {
