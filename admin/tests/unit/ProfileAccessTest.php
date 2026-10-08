@@ -1,5 +1,8 @@
 <?php
 
+use CodeIgniter\HTTP\Files\UploadedFile;
+use CodeIgniter\HTTP\IncomingRequest;
+use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
@@ -7,6 +10,7 @@ use CodeIgniter\Test\FeatureTestTrait;
 use Composer\InstalledVersions;
 use Config\Services;
 use Geminus\Admin\Controllers\FileController;
+use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
 
 /**
@@ -353,6 +357,77 @@ final class ProfileAccessTest extends CIUnitTestCase
         } finally {
             if (is_file($filePath)) {
                 unlink($filePath);
+            }
+        }
+    }
+
+    public function testAvatarUploadReplacesPreviousFileAndSavesRandomName(): void
+    {
+        $user        = new AdminUser(['username' => 'avatarreplacement']);
+        $user->email = 'avatarreplacement@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $directory = WRITEPATH . 'uploads/avatars/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+        $oldName = 'old-avatar-' . bin2hex(random_bytes(8)) . '.png';
+        file_put_contents($directory . $oldName, 'previous avatar');
+        $user->avatar = $oldName;
+        $users->save($user);
+
+        $source = tempnam(sys_get_temp_dir(), 'avatar-upload-');
+        $image  = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', true);
+        file_put_contents($source, $image);
+        $movedName = null;
+
+        try {
+            $upload = $this->getMockBuilder(UploadedFile::class)
+                ->setConstructorArgs([$source, 'avatar.png', 'image/png', filesize($source), UPLOAD_ERR_OK])
+                ->onlyMethods(['move', 'getName'])
+                ->getMock();
+            $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$movedName): bool {
+                $movedName = $name;
+                copy($source, $target . '/' . $name);
+
+                return true;
+            });
+            $upload->method('getName')->willReturnCallback(static function () use (&$movedName): string {
+                return $movedName ?? 'avatar.png';
+            });
+            $request = $this->getMockBuilder(IncomingRequest::class)
+                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                ->onlyMethods(['getFile', 'getFileMultiple'])
+                ->getMock();
+            $request->expects($this->atLeastOnce())->method('getFile')->with('avatar')->willReturn($upload);
+            $request->expects($this->atLeastOnce())->method('getFileMultiple')->with('avatar')->willReturn(null);
+            Services::injectMock('request', $request);
+            Services::resetSingle('validation');
+            $controller = new Profile();
+            $controller->initController($request, Services::response(null, false), Services::logger());
+
+            $response = $controller->avatar();
+
+            $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            $this->assertSame(lang('Admin.avatarSaved'), session('alert')['message']);
+            $this->assertNotNull($movedName);
+            $this->assertNotSame('avatar.png', $movedName);
+            $this->assertSame($movedName, $users->findById($user->id)->avatar);
+            $this->assertSame($image, file_get_contents($directory . $movedName));
+            $this->assertFileDoesNotExist($directory . $oldName);
+        } finally {
+            Services::resetSingle('request');
+            Services::resetSingle('validation');
+            unlink($source);
+            if (is_file($directory . $oldName)) {
+                unlink($directory . $oldName);
+            }
+            if ($movedName !== null && is_file($directory . $movedName)) {
+                unlink($directory . $movedName);
             }
         }
     }

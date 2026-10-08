@@ -337,6 +337,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame(lang('Admin.microsoftLinked'), session('alert')['message']);
         $this->assertSame(auth()->id(), (new MicrosoftLinks())->findUser($tenant, $object)?->id);
+        $this->assertSame(0, Database::connect()->table('auth_logins')->countAllResults());
     }
 
     public function testMicrosoftBindingCallbackDoesNotTakeAnotherUsersIdentity(): void

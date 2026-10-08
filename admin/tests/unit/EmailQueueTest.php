@@ -32,7 +32,8 @@ final class EmailQueueTest extends CIUnitTestCase
         $queue->expects($this->once())->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['recipient@example.com'] && $data['subject'] === 'Hello' && $data['body'] === 'Private body'))->willReturn(QueuePushResult::success(42));
         Services::injectMock('queue', $queue);
 
-        $email = service('email', null, false);
+        $email = $this->getMockBuilder(QueuedEmail::class)->onlyMethods(['sendDirect'])->getMock();
+        $email->expects($this->never())->method('sendDirect');
         $this->assertInstanceOf(QueuedEmail::class, $email);
         $email->setFrom('sender@example.com')->setTo('recipient@example.com')->setSubject('Hello')->setMessage('Private body');
         $this->assertTrue($email->send());
