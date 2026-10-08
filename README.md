@@ -6,6 +6,7 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 
 - `admin/app/`：CodeIgniter 4 应用入口，包含路由、配置和通用应用代码；通过自动加载配置接入后台模块。
 - `admin/geminus/Admin/`：后台管理模块，包含控制器、视图、组件、语言文件及数据库迁移等，提供仪表盘和后台页面布局。用户认证基于 CodeIgniter Shield。
+- `admin/modules/Announcements/`：与后台底座并列的[业务模块示例](docs/example-business-module.md)，展示独立的路由、权限、页面和迁移。
 - `admin/public/`：Web 入口与静态资源目录，由 FrankenPHP 提供访问。
 - `docker/`：本地运行环境，使用 Docker Compose 运行 FrankenPHP 应用、PostgreSQL 数据库和 Adminer 数据库管理工具。
 
@@ -37,7 +38,7 @@ GeminusAdmin 是面向 AI 辅助开发的后台工程底座。它的目标不是
 
 - 模块扩展：按业务模块注册路由、菜单、权限、页面和数据库迁移。
 - 通用数据管理：提供列表筛选、分页、排序、表单验证、文件导入、文件上传和数据导出。
-- 开发支持：提供模块开发示例、权限命名约定、测试样例和部署说明。
+- 开发支持：提供[模块开发示例](docs/example-business-module.md)、权限命名约定、测试样例和部署说明。
 
 ### 界面体验
 
