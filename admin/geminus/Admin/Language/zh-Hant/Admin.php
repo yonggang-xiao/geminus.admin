@@ -65,12 +65,33 @@ return [
     'userInvite'           => '寄送邀請',
     'userInviteStatus'     => '邀請狀態',
     'userInviteNotSent'    => '未寄送',
-    'userInviteSubject'    => 'GeminusAdmin 使用者邀請',
-    'userInviteBody'       => "您好，{0}：\n\n您已受邀使用 GeminusAdmin。請造訪 {1}，使用此電子郵件申請登入連結。登入連結自申請後開始計時。",
-    'userInviteQueued'     => '邀請郵件已入列，可在使用者清單查看寄送狀態。',
-    'userInviteFailed'     => '邀請郵件入列失敗，請重試。',
-    'inviteUnavailable'    => '無法寄送邀請，請檢查寄件信箱、連結登入設定及使用者狀態。',
-    'userProvisionHint'    => '新使用者加入一般使用者群組，沒有已知密碼，也不會自動綁定微軟身分。後台權限需另行授予。',
+    'userInviteSubject'    => '帳戶邀請',
+    'userInviteBody'       => <<<'HTML'
+        <p>您好，{username}：</p>
+        <p>您已收到邀請。請使用此電子郵件申請登入連結，連結自申請後開始計時。</p>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">申請登入連結</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        {microsoftLogin}
+        HTML,
+    'userInviteMicrosoftBody' => '<p>您也可以使用工作或學校帳號<a href="{microsoftLink}">透過微軟登入</a>；未綁定的帳號須先獲審核或完成綁定，才能存取。</p>',
+    'userInviteQueued'        => '邀請郵件已入列，可在使用者清單查看寄送狀態。',
+    'userInviteFailed'        => '邀請郵件入列失敗，請重試。',
+    'inviteUnavailable'       => '無法寄送邀請，請檢查寄件信箱、連結登入設定及使用者狀態。',
+    'userProvisionHint'       => '新使用者加入一般使用者群組，沒有已知密碼，也不會自動綁定微軟身分。後台權限需另行授予。',
 
     'systemSettings'              => '系統設定',
     'roleSettings'                => '角色與權限',
@@ -139,48 +160,124 @@ return [
     'microsoftConnectedAccounts'  => '已綁定的微軟帳號',
     'microsoftRequestUnavailable' => '無法提交存取申請，請聯繫管理員。',
     'emailDelivery'               => '郵件發送',
-    'emailQueue'                  => '郵件佇列與發送稽核',
-    'mailAudit'                   => '發送紀錄',
-    'mailQueueJobs'               => '佇列工作',
-    'mailRecipient'               => '收件人',
-    'mailSubject'                 => '主旨',
-    'mailStatus'                  => '狀態',
-    'mailAllStatuses'             => '全部狀態',
-    'mailStatus_queued'           => '已入列',
-    'mailStatus_sent'             => '已發送',
-    'mailStatus_failed'           => '發送失敗',
-    'mailJob_pending'             => '待處理',
-    'mailJob_reserved'            => '處理中',
-    'mailJob_unknown'             => '未知狀態',
-    'mailAttempts'                => '嘗試次數',
-    'mailCreated'                 => '建立時間',
-    'mailProcessed'               => '處理時間',
-    'mailAvailable'               => '可執行時間',
-    'mailFailureReason'           => '失敗原因',
-    'mailNoRecords'               => '暫無紀錄。',
-    'senderEmail'                 => '寄件信箱',
-    'senderName'                  => '寄件人名稱',
-    'mailProtocol'                => '發送協定',
-    'smtpSettings'                => 'SMTP 伺服器',
-    'smtpHost'                    => 'SMTP 主機',
-    'smtpUser'                    => 'SMTP 使用者名稱',
-    'smtpPort'                    => 'SMTP 連接埠',
-    'smtpCrypto'                  => 'SMTP 加密',
-    'smtpNone'                    => '無',
-    'smtpTls'                     => 'STARTTLS',
-    'smtpSsl'                     => 'SSL',
-    'smtpPasswordHint'            => 'SMTP 密碼請在伺服器環境中設定（email.SMTPPass），不會儲存在此處。',
-    'smtpHostRequired'            => '使用 SMTP 時請輸入 SMTP 主機。',
-    'saveEmailSettings'           => '儲存郵件設定',
-    'emailSettingsSaved'          => '郵件設定已儲存。',
-    'sendTestEmail'               => '發送測試郵件',
-    'sendingTestEmail'            => '正在發送測試郵件',
-    'testRecipient'               => '收件信箱',
-    'testEmailSubject'            => 'GeminusAdmin 測試郵件',
-    'testEmailBody'               => '這是一封來自 GeminusAdmin 的測試郵件。',
-    'testEmailNotConfigured'      => '請先儲存寄件信箱，再發送測試郵件。',
-    'testEmailSent'               => '測試郵件已發送。',
-    'testEmailFailed'             => '測試郵件發送失敗，請檢查郵件伺服器設定。',
+    'mail'                        => '郵件',
+    'mailDeliveries'              => '發送紀錄',
+    'mailTemplates'               => '郵件範本',
+    'mailInvitation'              => '使用者邀請',
+    'mailMagicLink'               => '登入連結',
+    'mailActivation'              => '帳戶啟用',
+    'mailEmail2fa'                => '電子郵件驗證碼',
+    'mailTemplate_magic_linkBody' => <<<'HTML'
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">登入</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>請求者資訊：</b>
+        <p>使用者名稱：{username}</p>
+        <p>IP 位址：{ipAddress}</p>
+        <p>裝置：{userAgent}</p>
+        <p>時間：{date}</p>
+        HTML,
+    'mailTemplate_activationBody' => <<<'HTML'
+        <p>您的啟用碼：</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>請求者資訊：</b>
+        <p>使用者名稱：{username}</p>
+        <p>IP 位址：{ipAddress}</p>
+        <p>裝置：{userAgent}</p>
+        <p>時間：{date}</p>
+        HTML,
+    'mailTemplate_email_2faBody' => <<<'HTML'
+        <p>您的驗證碼：</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>請求者資訊：</b>
+        <p>使用者名稱：{username}</p>
+        <p>IP 位址：{ipAddress}</p>
+        <p>裝置：{userAgent}</p>
+        <p>時間：{date}</p>
+        HTML,
+    'mailTemplateSaved'      => '郵件範本已儲存。',
+    'mailTemplateReset'      => '郵件範本已還原預設。',
+    'mailTemplateInvalid'    => '僅可使用列出的佔位符，正文須保留連結或驗證碼，主旨不可包含連結或驗證碼。',
+    'mailTemplateVariables'  => '可用佔位符',
+    'mailSubjectTokens'      => '主旨可用佔位符',
+    'mailTemplateRestore'    => '還原預設',
+    'mailTemplateSave'       => '儲存範本',
+    'mailTemplateBody'       => '正文',
+    'mailHtmlBody'           => 'HTML 正文',
+    'mailPreview'            => '預覽',
+    'emailQueue'             => '郵件佇列與發送稽核',
+    'mailAudit'              => '發送紀錄',
+    'mailQueueJobs'          => '佇列工作',
+    'mailRecipient'          => '收件人',
+    'mailSubject'            => '主旨',
+    'mailStatus'             => '狀態',
+    'mailAllStatuses'        => '全部狀態',
+    'mailStatus_queued'      => '已入列',
+    'mailStatus_sent'        => '已發送',
+    'mailStatus_failed'      => '發送失敗',
+    'mailJob_pending'        => '待處理',
+    'mailJob_reserved'       => '處理中',
+    'mailJob_unknown'        => '未知狀態',
+    'mailAttempts'           => '嘗試次數',
+    'mailCreated'            => '建立時間',
+    'mailProcessed'          => '處理時間',
+    'mailAvailable'          => '可執行時間',
+    'mailFailureReason'      => '失敗原因',
+    'mailNoRecords'          => '暫無紀錄。',
+    'senderEmail'            => '寄件信箱',
+    'senderName'             => '寄件人名稱',
+    'mailProtocol'           => '發送協定',
+    'smtpSettings'           => 'SMTP 伺服器',
+    'smtpHost'               => 'SMTP 主機',
+    'smtpUser'               => 'SMTP 使用者名稱',
+    'smtpPort'               => 'SMTP 連接埠',
+    'smtpCrypto'             => 'SMTP 加密',
+    'smtpNone'               => '無',
+    'smtpTls'                => 'STARTTLS',
+    'smtpSsl'                => 'SSL',
+    'smtpPasswordHint'       => 'SMTP 密碼請在伺服器環境中設定（email.SMTPPass），不會儲存在此處。',
+    'smtpHostRequired'       => '使用 SMTP 時請輸入 SMTP 主機。',
+    'saveEmailSettings'      => '儲存郵件設定',
+    'emailSettingsSaved'     => '郵件設定已儲存。',
+    'sendTestEmail'          => '發送測試郵件',
+    'sendingTestEmail'       => '正在發送測試郵件',
+    'testRecipient'          => '收件信箱',
+    'testEmailSubject'       => 'GeminusAdmin 測試郵件',
+    'testEmailBody'          => '這是一封來自 GeminusAdmin 的測試郵件。',
+    'testEmailNotConfigured' => '請先儲存寄件信箱，再發送測試郵件。',
+    'testEmailSent'          => '測試郵件已發送。',
+    'testEmailFailed'        => '測試郵件發送失敗，請檢查郵件伺服器設定。',
 
     'profileDetails'    => '個人資料',
     'username'          => '使用者名稱',

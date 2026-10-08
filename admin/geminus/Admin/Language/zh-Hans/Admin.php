@@ -65,12 +65,33 @@ return [
     'userInvite'           => '发送邀请',
     'userInviteStatus'     => '邀请状态',
     'userInviteNotSent'    => '未发送',
-    'userInviteSubject'    => 'GeminusAdmin 用户邀请',
-    'userInviteBody'       => "您好，{0}：\n\n您已受邀使用 GeminusAdmin。请访问 {1}，使用此邮箱申请登录链接。登录链接自申请后开始计时。",
-    'userInviteQueued'     => '邀请邮件已入队，可在用户列表查看发送状态。',
-    'userInviteFailed'     => '邀请邮件入队失败，请重试。',
-    'inviteUnavailable'    => '无法发送邀请，请检查发件邮箱、链接登录设置及用户状态。',
-    'userProvisionHint'    => '新用户进入普通用户组，没有可知的密码，也不会自动绑定微软身份。后台权限需另行授予。',
+    'userInviteSubject'    => '账户邀请',
+    'userInviteBody'       => <<<'HTML'
+        <p>您好，{username}：</p>
+        <p>您已收到邀请。请使用此邮箱申请登录链接，链接自申请后开始计时。</p>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">申请登录链接</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        {microsoftLogin}
+        HTML,
+    'userInviteMicrosoftBody' => '<p>您也可以使用工作或学校账号<a href="{microsoftLink}">通过微软登录</a>；未绑定的账号须先获审批或完成绑定，才能访问。</p>',
+    'userInviteQueued'        => '邀请邮件已入队，可在用户列表查看发送状态。',
+    'userInviteFailed'        => '邀请邮件入队失败，请重试。',
+    'inviteUnavailable'       => '无法发送邀请，请检查发件邮箱、链接登录设置及用户状态。',
+    'userProvisionHint'       => '新用户进入普通用户组，没有可知的密码，也不会自动绑定微软身份。后台权限需另行授予。',
 
     'systemSettings'              => '系统设置',
     'roleSettings'                => '角色与权限',
@@ -139,48 +160,124 @@ return [
     'microsoftConnectedAccounts'  => '已绑定的微软账号',
     'microsoftRequestUnavailable' => '无法提交访问申请，请联系管理员。',
     'emailDelivery'               => '邮件发送',
-    'emailQueue'                  => '邮件队列与发送审计',
-    'mailAudit'                   => '发送日志',
-    'mailQueueJobs'               => '队列任务',
-    'mailRecipient'               => '收件人',
-    'mailSubject'                 => '主题',
-    'mailStatus'                  => '状态',
-    'mailAllStatuses'             => '全部状态',
-    'mailStatus_queued'           => '已入队',
-    'mailStatus_sent'             => '已发送',
-    'mailStatus_failed'           => '发送失败',
-    'mailJob_pending'             => '待处理',
-    'mailJob_reserved'            => '处理中',
-    'mailJob_unknown'             => '未知状态',
-    'mailAttempts'                => '尝试次数',
-    'mailCreated'                 => '创建时间',
-    'mailProcessed'               => '处理时间',
-    'mailAvailable'               => '可执行时间',
-    'mailFailureReason'           => '失败原因',
-    'mailNoRecords'               => '暂无记录。',
-    'senderEmail'                 => '发件邮箱',
-    'senderName'                  => '发件人名称',
-    'mailProtocol'                => '发送协议',
-    'smtpSettings'                => 'SMTP 服务器',
-    'smtpHost'                    => 'SMTP 主机',
-    'smtpUser'                    => 'SMTP 用户名',
-    'smtpPort'                    => 'SMTP 端口',
-    'smtpCrypto'                  => 'SMTP 加密',
-    'smtpNone'                    => '无',
-    'smtpTls'                     => 'STARTTLS',
-    'smtpSsl'                     => 'SSL',
-    'smtpPasswordHint'            => 'SMTP 密码请在服务器环境中设置（email.SMTPPass），不会保存在此处。',
-    'smtpHostRequired'            => '使用 SMTP 时请输入 SMTP 主机。',
-    'saveEmailSettings'           => '保存邮件设置',
-    'emailSettingsSaved'          => '邮件设置已保存。',
-    'sendTestEmail'               => '发送测试邮件',
-    'sendingTestEmail'            => '正在发送测试邮件',
-    'testRecipient'               => '收件邮箱',
-    'testEmailSubject'            => 'GeminusAdmin 测试邮件',
-    'testEmailBody'               => '这是一封来自 GeminusAdmin 的测试邮件。',
-    'testEmailNotConfigured'      => '请先保存发件邮箱，再发送测试邮件。',
-    'testEmailSent'               => '测试邮件已发送。',
-    'testEmailFailed'             => '测试邮件发送失败，请检查邮件服务器设置。',
+    'mail'                        => '邮件',
+    'mailDeliveries'              => '发送记录',
+    'mailTemplates'               => '邮件模板',
+    'mailInvitation'              => '用户邀请',
+    'mailMagicLink'               => '登录链接',
+    'mailActivation'              => '账户激活',
+    'mailEmail2fa'                => '邮箱验证码',
+    'mailTemplate_magic_linkBody' => <<<'HTML'
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">登录</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>请求者信息：</b>
+        <p>用户名：{username}</p>
+        <p>IP 地址：{ipAddress}</p>
+        <p>设备：{userAgent}</p>
+        <p>时间：{date}</p>
+        HTML,
+    'mailTemplate_activationBody' => <<<'HTML'
+        <p>您的激活码：</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>请求者信息：</b>
+        <p>用户名：{username}</p>
+        <p>IP 地址：{ipAddress}</p>
+        <p>设备：{userAgent}</p>
+        <p>时间：{date}</p>
+        HTML,
+    'mailTemplate_email_2faBody' => <<<'HTML'
+        <p>您的验证码：</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>请求者信息：</b>
+        <p>用户名：{username}</p>
+        <p>IP 地址：{ipAddress}</p>
+        <p>设备：{userAgent}</p>
+        <p>时间：{date}</p>
+        HTML,
+    'mailTemplateSaved'      => '邮件模板已保存。',
+    'mailTemplateReset'      => '邮件模板已恢复默认。',
+    'mailTemplateInvalid'    => '仅可使用列出的占位符，正文须保留链接或验证码，主题不可包含链接或验证码。',
+    'mailTemplateVariables'  => '可用占位符',
+    'mailSubjectTokens'      => '主题可用占位符',
+    'mailTemplateRestore'    => '恢复默认',
+    'mailTemplateSave'       => '保存模板',
+    'mailTemplateBody'       => '正文',
+    'mailHtmlBody'           => 'HTML 正文',
+    'mailPreview'            => '预览',
+    'emailQueue'             => '邮件队列与发送审计',
+    'mailAudit'              => '发送日志',
+    'mailQueueJobs'          => '队列任务',
+    'mailRecipient'          => '收件人',
+    'mailSubject'            => '主题',
+    'mailStatus'             => '状态',
+    'mailAllStatuses'        => '全部状态',
+    'mailStatus_queued'      => '已入队',
+    'mailStatus_sent'        => '已发送',
+    'mailStatus_failed'      => '发送失败',
+    'mailJob_pending'        => '待处理',
+    'mailJob_reserved'       => '处理中',
+    'mailJob_unknown'        => '未知状态',
+    'mailAttempts'           => '尝试次数',
+    'mailCreated'            => '创建时间',
+    'mailProcessed'          => '处理时间',
+    'mailAvailable'          => '可执行时间',
+    'mailFailureReason'      => '失败原因',
+    'mailNoRecords'          => '暂无记录。',
+    'senderEmail'            => '发件邮箱',
+    'senderName'             => '发件人名称',
+    'mailProtocol'           => '发送协议',
+    'smtpSettings'           => 'SMTP 服务器',
+    'smtpHost'               => 'SMTP 主机',
+    'smtpUser'               => 'SMTP 用户名',
+    'smtpPort'               => 'SMTP 端口',
+    'smtpCrypto'             => 'SMTP 加密',
+    'smtpNone'               => '无',
+    'smtpTls'                => 'STARTTLS',
+    'smtpSsl'                => 'SSL',
+    'smtpPasswordHint'       => 'SMTP 密码请在服务器环境中设置（email.SMTPPass），不会保存在此处。',
+    'smtpHostRequired'       => '使用 SMTP 时请输入 SMTP 主机。',
+    'saveEmailSettings'      => '保存邮件设置',
+    'emailSettingsSaved'     => '邮件设置已保存。',
+    'sendTestEmail'          => '发送测试邮件',
+    'sendingTestEmail'       => '正在发送测试邮件',
+    'testRecipient'          => '收件邮箱',
+    'testEmailSubject'       => 'GeminusAdmin 测试邮件',
+    'testEmailBody'          => '这是一封来自 GeminusAdmin 的测试邮件。',
+    'testEmailNotConfigured' => '请先保存发件邮箱，再发送测试邮件。',
+    'testEmailSent'          => '测试邮件已发送。',
+    'testEmailFailed'        => '测试邮件发送失败，请检查邮件服务器设置。',
 
     'profileDetails'    => '个人资料',
     'username'          => '用户名',

@@ -51,12 +51,12 @@ class Auth extends ShieldAuth
         'layout'                      => '\Geminus\Admin\Views\layout_public',
         'action_email_2fa'            => '\Geminus\Admin\Views\auth\email_2fa_show',
         'action_email_2fa_verify'     => '\Geminus\Admin\Views\auth\email_2fa_verify',
-        'action_email_2fa_email'      => '\CodeIgniter\Shield\Views\Email\email_2fa_email',
+        'action_email_2fa_email'      => '\Geminus\Admin\Views\auth\email\mail_email_2fa',
         'action_email_activate_show'  => '\Geminus\Admin\Views\auth\email_activate_show',
-        'action_email_activate_email' => '\CodeIgniter\Shield\Views\Email\email_activate_email',
+        'action_email_activate_email' => '\Geminus\Admin\Views\auth\email\mail_activation',
         'magic-link-login'            => '\Geminus\Admin\Views\auth\magic_link_form',
         'magic-link-message'          => '\Geminus\Admin\Views\auth\magic_link_message',
-        'magic-link-email'            => '\CodeIgniter\Shield\Views\Email\magic_link_email',
+        'magic-link-email'            => '\Geminus\Admin\Views\auth\email\mail_magic_link',
     ];
 
     /**

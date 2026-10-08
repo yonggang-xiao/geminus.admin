@@ -65,12 +65,33 @@ return [
     'userInvite'           => 'Send invitation',
     'userInviteStatus'     => 'Invitation',
     'userInviteNotSent'    => 'Not sent',
-    'userInviteSubject'    => 'Invitation to GeminusAdmin',
-    'userInviteBody'       => "Hello {0},\n\nYou have been invited to GeminusAdmin. Open {1} and request a sign-in link using this email address. The sign-in link expires after it is requested.",
-    'userInviteQueued'     => 'Invitation email queued. Check the status in the user list.',
-    'userInviteFailed'     => 'Invitation email could not be queued. Please try again.',
-    'inviteUnavailable'    => 'Invitation unavailable. Check the mail sender, sign-in link settings, and account status.',
-    'userProvisionHint'    => 'New users join the user group, have no known password, and are not linked to Microsoft. Grant admin access separately.',
+    'userInviteSubject'    => 'Account invitation',
+    'userInviteBody'       => <<<'HTML'
+        <p>Hello {username},</p>
+        <p>You have been invited. Request a sign-in link using this email address. The link expires after you request it.</p>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">Request sign-in link</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        {microsoftLogin}
+        HTML,
+    'userInviteMicrosoftBody' => '<p>You can also <a href="{microsoftLink}">sign in with Microsoft</a> using a work or school account. An unlinked account requires approval or linking before access is granted.</p>',
+    'userInviteQueued'        => 'Invitation email queued. Check the status in the user list.',
+    'userInviteFailed'        => 'Invitation email could not be queued. Please try again.',
+    'inviteUnavailable'       => 'Invitation unavailable. Check the mail sender, sign-in link settings, and account status.',
+    'userProvisionHint'       => 'New users join the user group, have no known password, and are not linked to Microsoft. Grant admin access separately.',
 
     'systemSettings'              => 'System settings',
     'roleSettings'                => 'Roles and permissions',
@@ -139,48 +160,124 @@ return [
     'microsoftConnectedAccounts'  => 'Connected Microsoft accounts',
     'microsoftRequestUnavailable' => 'Unable to submit an access request. Contact an administrator.',
     'emailDelivery'               => 'Email delivery',
-    'emailQueue'                  => 'Email queue and audit',
-    'mailAudit'                   => 'Delivery log',
-    'mailQueueJobs'               => 'Queued jobs',
-    'mailRecipient'               => 'Recipient',
-    'mailSubject'                 => 'Subject',
-    'mailStatus'                  => 'Status',
-    'mailAllStatuses'             => 'All statuses',
-    'mailStatus_queued'           => 'Queued',
-    'mailStatus_sent'             => 'Sent',
-    'mailStatus_failed'           => 'Failed',
-    'mailJob_pending'             => 'Pending',
-    'mailJob_reserved'            => 'Processing',
-    'mailJob_unknown'             => 'Unknown',
-    'mailAttempts'                => 'Attempts',
-    'mailCreated'                 => 'Created',
-    'mailProcessed'               => 'Processed',
-    'mailAvailable'               => 'Available at',
-    'mailFailureReason'           => 'Failure reason',
-    'mailNoRecords'               => 'No records found.',
-    'senderEmail'                 => 'Sender email',
-    'senderName'                  => 'Sender name',
-    'mailProtocol'                => 'Delivery protocol',
-    'smtpSettings'                => 'SMTP server',
-    'smtpHost'                    => 'SMTP host',
-    'smtpUser'                    => 'SMTP username',
-    'smtpPort'                    => 'SMTP port',
-    'smtpCrypto'                  => 'SMTP encryption',
-    'smtpNone'                    => 'None',
-    'smtpTls'                     => 'STARTTLS',
-    'smtpSsl'                     => 'SSL',
-    'smtpPasswordHint'            => 'Set the SMTP password in the server environment (email.SMTPPass). It is not stored here.',
-    'smtpHostRequired'            => 'Enter an SMTP host when using SMTP.',
-    'saveEmailSettings'           => 'Save email settings',
-    'emailSettingsSaved'          => 'Email settings saved.',
-    'sendTestEmail'               => 'Send test email',
-    'sendingTestEmail'            => 'Sending test email',
-    'testRecipient'               => 'Recipient email',
-    'testEmailSubject'            => 'GeminusAdmin test email',
-    'testEmailBody'               => 'This is a test email from GeminusAdmin.',
-    'testEmailNotConfigured'      => 'Save a sender email before sending a test email.',
-    'testEmailSent'               => 'Test email sent.',
-    'testEmailFailed'             => 'Could not send the test email. Check the mail server settings.',
+    'mail'                        => 'Mail',
+    'mailDeliveries'              => 'Delivery history',
+    'mailTemplates'               => 'Email templates',
+    'mailInvitation'              => 'User invitation',
+    'mailMagicLink'               => 'Sign-in link',
+    'mailActivation'              => 'Account activation',
+    'mailEmail2fa'                => 'Email verification code',
+    'mailTemplate_magic_linkBody' => <<<'HTML'
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-radius: 6px; border-collapse: separate !important;">
+            <tbody>
+                <tr>
+                    <td style="line-height: 24px; font-size: 16px; border-radius: 6px; margin: 0;" align="center" bgcolor="#0d6efd">
+                        <a href="{link}" style="color: #ffffff; font-size: 16px; font-family: Helvetica, Arial, sans-serif; text-decoration: none; border-radius: 6px; line-height: 20px; display: inline-block; font-weight: normal; white-space: nowrap; background-color: #0d6efd; padding: 8px 12px; border: 1px solid #0d6efd;">Sign in</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>Some information about the person:</b>
+        <p>Username: {username}</p>
+        <p>IP address: {ipAddress}</p>
+        <p>Device: {userAgent}</p>
+        <p>Date: {date}</p>
+        HTML,
+    'mailTemplate_activationBody' => <<<'HTML'
+        <p>Your activation code:</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>Some information about the person:</b>
+        <p>Username: {username}</p>
+        <p>IP address: {ipAddress}</p>
+        <p>Device: {userAgent}</p>
+        <p>Date: {date}</p>
+        HTML,
+    'mailTemplate_email_2faBody' => <<<'HTML'
+        <p>Your verification code:</p>
+        <div style="text-align: center">
+            <h1>{code}</h1>
+        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%;" width="100%">
+            <tbody>
+                <tr>
+                    <td style="line-height: 20px; font-size: 20px; width: 100%; height: 20px; margin: 0;" align="left" width="100%" height="20">&#160;</td>
+                </tr>
+            </tbody>
+        </table>
+        <b>Some information about the person:</b>
+        <p>Username: {username}</p>
+        <p>IP address: {ipAddress}</p>
+        <p>Device: {userAgent}</p>
+        <p>Date: {date}</p>
+        HTML,
+    'mailTemplateSaved'      => 'Email template saved.',
+    'mailTemplateReset'      => 'Email template restored to default.',
+    'mailTemplateInvalid'    => 'Use only the listed placeholders, keep the required link or code in the message, and do not put links or codes in the subject.',
+    'mailTemplateVariables'  => 'Available placeholders',
+    'mailSubjectTokens'      => 'Subject placeholders',
+    'mailTemplateRestore'    => 'Restore default',
+    'mailTemplateSave'       => 'Save template',
+    'mailTemplateBody'       => 'Message',
+    'mailHtmlBody'           => 'HTML message',
+    'mailPreview'            => 'Preview',
+    'emailQueue'             => 'Email queue and audit',
+    'mailAudit'              => 'Delivery log',
+    'mailQueueJobs'          => 'Queued jobs',
+    'mailRecipient'          => 'Recipient',
+    'mailSubject'            => 'Subject',
+    'mailStatus'             => 'Status',
+    'mailAllStatuses'        => 'All statuses',
+    'mailStatus_queued'      => 'Queued',
+    'mailStatus_sent'        => 'Sent',
+    'mailStatus_failed'      => 'Failed',
+    'mailJob_pending'        => 'Pending',
+    'mailJob_reserved'       => 'Processing',
+    'mailJob_unknown'        => 'Unknown',
+    'mailAttempts'           => 'Attempts',
+    'mailCreated'            => 'Created',
+    'mailProcessed'          => 'Processed',
+    'mailAvailable'          => 'Available at',
+    'mailFailureReason'      => 'Failure reason',
+    'mailNoRecords'          => 'No records found.',
+    'senderEmail'            => 'Sender email',
+    'senderName'             => 'Sender name',
+    'mailProtocol'           => 'Delivery protocol',
+    'smtpSettings'           => 'SMTP server',
+    'smtpHost'               => 'SMTP host',
+    'smtpUser'               => 'SMTP username',
+    'smtpPort'               => 'SMTP port',
+    'smtpCrypto'             => 'SMTP encryption',
+    'smtpNone'               => 'None',
+    'smtpTls'                => 'STARTTLS',
+    'smtpSsl'                => 'SSL',
+    'smtpPasswordHint'       => 'Set the SMTP password in the server environment (email.SMTPPass). It is not stored here.',
+    'smtpHostRequired'       => 'Enter an SMTP host when using SMTP.',
+    'saveEmailSettings'      => 'Save email settings',
+    'emailSettingsSaved'     => 'Email settings saved.',
+    'sendTestEmail'          => 'Send test email',
+    'sendingTestEmail'       => 'Sending test email',
+    'testRecipient'          => 'Recipient email',
+    'testEmailSubject'       => 'GeminusAdmin test email',
+    'testEmailBody'          => 'This is a test email from GeminusAdmin.',
+    'testEmailNotConfigured' => 'Save a sender email before sending a test email.',
+    'testEmailSent'          => 'Test email sent.',
+    'testEmailFailed'        => 'Could not send the test email. Check the mail server settings.',
 
     'profileDetails'    => 'Personal details',
     'username'          => 'Username',

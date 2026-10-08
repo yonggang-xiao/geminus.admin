@@ -10,6 +10,7 @@ use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
 
@@ -25,6 +26,8 @@ final class UsersTest extends CIUnitTestCase
 
     protected function tearDown(): void
     {
+        service('settings')->forget(MailTemplates::settingKey('invitation', 'en', 'subject'));
+        service('settings')->forget(MailTemplates::settingKey('invitation', 'en', 'body'));
         Services::resetSingle('email');
         Services::resetSingle('queue');
         auth()->logout();
@@ -528,7 +531,11 @@ final class UsersTest extends CIUnitTestCase
             $email->expects($this->once())->method('setFrom')->with('sender@example.com');
             $email->expects($this->once())->method('setTo')->with('invitee@example.com');
             $email->expects($this->once())->method('setSubject')->with(lang('Admin.userInviteSubject'));
-            $email->expects($this->once())->method('setMessage')->with(lang('Admin.userInviteBody', ['invitee', url_to('magic-link')]));
+            $email->expects($this->once())->method('setMailType')->with('html');
+            $email->expects($this->once())->method('setMessage')->with($this->callback(static fn (string $body): bool => str_contains($body, '<!DOCTYPE html PUBLIC')
+                && str_contains($body, '<a href="' . url_to('magic-link') . '"')
+                && str_contains($body, 'Hello invitee')
+                && ! str_contains($body, 'GeminusAdmin')));
             $email->expects($this->once())->method('send')->willReturn($sent);
             $email->expects($this->never())->method('sendDirect');
             Services::injectMock('email', $email);
@@ -538,6 +545,25 @@ final class UsersTest extends CIUnitTestCase
             $this->assertSame(lang($sent ? 'Admin.userInviteQueued' : 'Admin.userInviteFailed'), session('alert')['message']);
             Services::resetSingle('email');
         }
+    }
+
+    public function testInviteUsesSavedMailTemplate(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        service('settings')->set('Email.fromEmail', 'sender@example.com');
+        service('settings')->set(MailTemplates::settingKey('invitation', 'en', 'subject'), 'Welcome {username}');
+        service('settings')->set(MailTemplates::settingKey('invitation', 'en', 'body'), 'Open {link}');
+
+        $email = $this->createMock(QueuedEmail::class);
+        $email->expects($this->once())->method('setSubject')->with('Welcome invitee');
+        $email->expects($this->once())->method('setMailType')->with('html');
+        $email->expects($this->once())->method('setMessage')->with($this->callback(static fn (string $body): bool => str_contains($body, '<body>Open ' . url_to('magic-link') . '</body>')));
+        $email->method('send')->willReturn(true);
+        Services::injectMock('email', $email);
+
+        $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
     }
 
     public function testInvitationQueueAuditShowsLatestDeliveryStatus(): void
@@ -551,7 +577,11 @@ final class UsersTest extends CIUnitTestCase
         Services::injectMock('email', service('email', null, false));
 
         $queue = $this->createMock(QueueInterface::class);
-        $queue->expects($this->exactly(2))->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['invitee@example.com'] && $data['subject'] === lang('Admin.userInviteSubject')))
+        $queue->expects($this->exactly(2))->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['invitee@example.com']
+            && $data['subject'] === lang('Admin.userInviteSubject')
+            && $data['type'] === 'html'
+            && str_contains($data['body'], '<!DOCTYPE html PUBLIC')
+            && ! str_contains($data['body'], 'GeminusAdmin')))
             ->willReturnOnConsecutiveCalls(QueuePushResult::success(41), QueuePushResult::success(42));
         Services::injectMock('queue', $queue);
 

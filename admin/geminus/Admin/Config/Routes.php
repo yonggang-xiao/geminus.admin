@@ -21,9 +21,14 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
     });
     $routes->group('settings/email', ['filter' => 'permission:admin.settings'], static function ($routes) {
         $routes->get('', 'EmailSettings::index', ['as' => 'admin/settings/email']);
-        $routes->get('queue', 'EmailQueue::index', ['as' => 'admin/settings/email/queue']);
         $routes->post('', 'EmailSettings::update', ['as' => 'admin/settings/email/update']);
         $routes->post('test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test']);
+    });
+    $routes->group('mail', ['filter' => 'permission:admin.settings'], static function ($routes) {
+        $routes->get('deliveries', 'EmailQueue::index', ['as' => 'admin/mail/deliveries']);
+        $routes->get('templates', 'EmailTemplates::index', ['as' => 'admin/mail/templates']);
+        $routes->post('templates/(:segment)/(:segment)', 'EmailTemplates::update/$1/$2', ['as' => 'admin/mail/templates/update']);
+        $routes->post('templates/(:segment)/(:segment)/reset', 'EmailTemplates::reset/$1/$2', ['as' => 'admin/mail/templates/reset']);
     });
     $routes->group('settings', ['filter' => 'group:superadmin'], static function ($routes) {
         $routes->get('roles', 'RoleSettings::index', ['as' => 'admin/settings/roles']);

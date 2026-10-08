@@ -7,6 +7,8 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Config\Services;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\MailTemplates;
+use Geminus\Admin\Libraries\QueuedEmail;
 
 /**
  * @internal
@@ -20,6 +22,12 @@ final class EmailSettingsTest extends CIUnitTestCase
 
     protected function tearDown(): void
     {
+        foreach (MailTemplates::TYPES as $type => $variables) {
+            foreach (config('App')->supportedLocales as $locale) {
+                service('settings')->forget(MailTemplates::settingKey($type, $locale, 'subject'));
+                service('settings')->forget(MailTemplates::settingKey($type, $locale, 'body'));
+            }
+        }
         Services::resetSingle('email');
         auth()->logout();
         parent::tearDown();
@@ -28,7 +36,9 @@ final class EmailSettingsTest extends CIUnitTestCase
     public function testAnonymousUserCannotOpenEmailSettings(): void
     {
         $this->get('/en/admin/settings/email')->assertRedirect();
-        $this->get('/en/admin/settings/email/queue')->assertRedirect();
+        $this->get('/en/admin/mail/deliveries')->assertRedirect();
+        $this->get('/en/admin/mail/templates')->assertRedirect();
+        $this->post('/en/admin/mail/templates/invitation/en', [csrf_token() => csrf_hash(), 'subject' => 'Hi', 'body' => '{link}'])->assertRedirect();
         $this->post('/en/admin/settings/email', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
     }
@@ -38,7 +48,9 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->loginAs('admin');
 
         $this->get('/en/admin/settings/email')->assertRedirect();
-        $this->get('/en/admin/settings/email/queue?view=queue')->assertRedirect();
+        $this->get('/en/admin/mail/deliveries')->assertRedirect();
+        $this->get('/en/admin/mail/templates')->assertRedirect();
+        $this->post('/en/admin/mail/templates/invitation/en', [csrf_token() => csrf_hash(), 'subject' => 'Hi', 'body' => '{link}'])->assertRedirect();
         $this->post('/en/admin/settings/email', $this->validSettings())->assertRedirect();
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
         $this->assertSame('', service('settings')->get('Email.fromEmail'));
@@ -50,6 +62,194 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->expectException(SecurityException::class);
 
         $this->post('/en/admin/settings/email', ['fromEmail' => 'sender@example.com']);
+    }
+
+    public function testMailNavigationAndTemplateOverview(): void
+    {
+        $this->loginAs('superadmin');
+
+        $templates = $this->get('/en/admin/mail/templates');
+        $templates->assertOK();
+        $templates->assertSee('Email templates');
+        $templates->assertSee('User invitation');
+        $templates->assertSee('Account invitation');
+        $this->assertStringContainsString('action="/en/admin/mail/templates/invitation/en"', $templates->response()->getBody());
+        $this->assertStringContainsString('id="template-preview"', $templates->response()->getBody());
+        $this->assertStringContainsString('link: ' . json_encode(url_to('magic-link', 'en'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), $templates->response()->getBody());
+        $this->assertStringNotContainsString('example.invalid', $templates->response()->getBody());
+        $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hans')->assertSee('账户邀请');
+        $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hant')->assertSee('帳戶邀請');
+        $this->get('/en/admin/mail/templates?type=magic-link')->assertSee('Sign-in link');
+        $traditional = $this->get('/en/admin/mail/templates?type=magic-link&locale=zh-Hant');
+        $this->assertStringContainsString('link: ' . json_encode(url_to('verify-magic-link', 'zh-Hant') . '?token=preview', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), $traditional->response()->getBody());
+        $this->assertStringContainsString("&lt;/table&gt;\n&lt;table", $traditional->response()->getBody());
+        $this->get('/en/admin/mail/templates?type=activation')->assertSee('Account activation');
+        $this->get('/en/admin/mail/templates?type=email-2fa')->assertSee('Email verification code');
+        $this->assertStringContainsString('href="/en/admin/mail/deliveries"', $templates->response()->getBody());
+        $this->assertStringContainsString('href="/en/admin/mail/templates" aria-current="page"', $templates->response()->getBody());
+        $this->assertStringContainsString('private, no-store', $templates->response()->getHeaderLine('Cache-Control'));
+
+        $deliveries = $this->get('/zh-Hans/admin/mail/deliveries');
+        $deliveries->assertOK();
+        $deliveries->assertSee('发送记录');
+        $this->assertStringContainsString('href="/zh-Hans/admin/mail/deliveries" aria-current="page"', $deliveries->response()->getBody());
+        $this->assertStringContainsString('href="/zh-Hans/admin/mail/templates"', $deliveries->response()->getBody());
+
+        $this->get('/en/admin/settings/email/queue')->assertStatus(404);
+    }
+
+    public function testTemplatesSaveValidateAndRestorePerLocale(): void
+    {
+        $this->loginAs('superadmin');
+        $url = '/en/admin/mail/templates/invitation/zh-Hans';
+        $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Hi {username}', 'body' => 'Go {link}'])->assertRedirect();
+        $template = new MailTemplates();
+        $this->assertSame(['subject' => 'Hi {username}', 'body' => 'Go {link}'], $template->get('invitation', 'zh-Hans'));
+        $this->assertSame('帳戶邀請', $template->get('invitation', 'zh-Hant')['subject']);
+        $this->assertSame('Go https://example.com', $template->render('invitation', 'zh-Hans', ['link' => 'https://example.com'])['body']);
+
+        $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Bad', 'body' => '{unknown}'])->assertRedirect();
+        $this->assertSame('Go {link}', $template->get('invitation', 'zh-Hans')['body']);
+        $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Bad', 'body' => 'No link'])->assertRedirect();
+        $this->assertSame('Go {link}', $template->get('invitation', 'zh-Hans')['body']);
+        $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Secret {link}', 'body' => 'Go {link}'])->assertRedirect();
+        $this->assertSame('Hi {username}', $template->get('invitation', 'zh-Hans')['subject']);
+        $this->post('/en/admin/mail/templates/email-2fa/en', [csrf_token() => csrf_hash(), 'subject' => 'Code {code}', 'body' => 'Enter {code}'])->assertRedirect();
+        $this->assertSame(lang('Auth.email2FASubject'), $template->get('email-2fa', 'en')['subject']);
+        $this->post('/en/admin/mail/templates/magic-link/en', [csrf_token() => csrf_hash(), 'subject' => 'From {userAgent}', 'body' => 'Open {link}'])->assertRedirect();
+        $this->assertSame(lang('Auth.magicLinkSubject'), $template->get('magic-link', 'en')['subject']);
+        $this->post('/en/admin/mail/templates/unknown/en', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->post('/en/admin/mail/templates/invitation/zh-Hans/reset', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame('账户邀请', $template->get('invitation', 'zh-Hans')['subject']);
+    }
+
+    public function testTemplateUpdateRequiresCsrf(): void
+    {
+        $this->loginAs('superadmin');
+        $this->expectException(SecurityException::class);
+        $this->post('/en/admin/mail/templates/invitation/en', ['subject' => 'Hi', 'body' => '{link}']);
+    }
+
+    public function testInvitationRendersHtmlWithOptionalMicrosoftInstructions(): void
+    {
+        $this->loginAs('superadmin');
+        $templates = new MailTemplates();
+        $settings  = service('settings');
+        $previous  = $settings->get('MicrosoftOAuth.enabled');
+        $settings->set(MailTemplates::settingKey('invitation', 'en', 'body'), '<p>{username}</p><a href="{link}">Open</a>{microsoftLogin}');
+
+        try {
+            $settings->set('MicrosoftOAuth.enabled', false);
+            $rendered = $templates->render('invitation', 'en', ['username' => '<user>', 'link' => 'https://example.invalid/?x=" onclick="evil']);
+            $this->assertStringContainsString('<p>&lt;user&gt;</p>', $rendered['body']);
+            $this->assertStringContainsString('&quot; onclick=&quot;', $rendered['body']);
+            $this->assertStringNotContainsString('Microsoft', $rendered['body']);
+            $this->assertStringContainsString('<meta name="viewport"', $templates->renderHtml($rendered));
+            $this->assertStringContainsString('microsoftLogin: ""', $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hant')->response()->getBody());
+
+            $settings->forget(MailTemplates::settingKey('invitation', 'en', 'body'));
+
+            foreach (config('App')->supportedLocales as $locale) {
+                $default = $templates->get('invitation', $locale);
+                $this->assertStringNotContainsString('GeminusAdmin', $default['subject'] . $default['body']);
+                $this->assertStringContainsString('<a href="{link}"', $default['body']);
+                $this->assertStringContainsString('{microsoftLogin}', $default['body']);
+                $this->assertStringContainsString("\n", $default['body']);
+            }
+
+            $settings->set('MicrosoftOAuth.enabled', true);
+
+            foreach (['en' => 'sign in with Microsoft', 'zh-Hans' => '通过微软登录', 'zh-Hant' => '透過微軟登入'] as $locale => $label) {
+                $body = $templates->render('invitation', $locale, ['link' => 'https://example.invalid'])['body'];
+                $this->assertStringContainsString('<a href="' . site_url($locale . '/microsoft/start') . '">' . $label . '</a>', $body);
+                $this->assertStringNotContainsString('<a href="/' . $locale . '/microsoft/start">', $body);
+                $this->assertStringNotContainsString('{microsoftLink}', $body);
+            }
+            $preview = $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hant')->response()->getBody();
+            $this->assertStringContainsString('microsoftLogin: ' . json_encode($templates->microsoftLoginBody('zh-Hant'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), $preview);
+        } finally {
+            $settings->set('MicrosoftOAuth.enabled', $previous);
+        }
+    }
+
+    public function testShieldMailViewsUseStoredSubjectAndEscapeDynamicValues(): void
+    {
+        $this->loginAs('superadmin');
+        $email = $this->createMock(QueuedEmail::class);
+        $email->expects($this->once())->method('setSubject')->with('Custom link');
+        Services::injectMock('email', $email);
+        service('settings')->set(MailTemplates::settingKey('magic-link', 'en', 'subject'), 'Custom link');
+        service('settings')->set(MailTemplates::settingKey('magic-link', 'en', 'body'), '<p>Hello {username}</p><a href="{link}">Sign in</a>');
+
+        $body = view(config('Auth')->views['magic-link-email'], [
+            'user'  => (object) ['username' => '<script>alert(1)</script>'],
+            'token' => 'a&b', 'ipAddress' => '127.0.0.1', 'userAgent' => 'Browser', 'date' => 'Today',
+        ]);
+        $this->assertStringContainsString('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"', $body);
+        $this->assertStringContainsString('<meta name="x-apple-disable-message-reformatting">', $body);
+        $this->assertStringContainsString('<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">', $body);
+        $this->assertStringContainsString('Custom link', $body);
+        $this->assertStringContainsString('<p>Hello &lt;script&gt;', $body);
+        $this->assertStringContainsString('<a href="', $body);
+        $this->assertStringNotContainsString('<script>', $body);
+        $this->assertStringContainsString('&lt;script&gt;', $body);
+        $this->assertStringContainsString('a%26b', $body);
+        $this->assertStringNotContainsString('token=a&b', $body);
+        service('settings')->set(MailTemplates::settingKey('magic-link', 'en', 'subject'), 'Hello {username}');
+        $rendered = (new MailTemplates())->render('magic-link', 'en', ['username' => '<user>', 'link' => 'https://example.invalid/login']);
+        $this->assertSame('Hello <user>', $rendered['subject']);
+        $this->assertStringContainsString('&lt;user&gt;', $rendered['body']);
+    }
+
+    public function testHtmlShieldTemplateCanBeSavedAndReset(): void
+    {
+        $this->loginAs('superadmin');
+        $templates = new MailTemplates();
+
+        foreach (config('App')->supportedLocales as $locale) {
+            $this->assertStringContainsString('<a href="{link}"', $templates->get('magic-link', $locale)['body']);
+            $this->assertStringContainsString('<table role="presentation"', $templates->get('magic-link', $locale)['body']);
+            $this->assertStringContainsString('<h1>{code}</h1>', $templates->get('activation', $locale)['body']);
+            $this->assertStringContainsString('<h1>{code}</h1>', $templates->get('email-2fa', $locale)['body']);
+
+            foreach (['magic-link', 'activation', 'email-2fa'] as $type) {
+                $this->assertStringContainsString("\n", $templates->get($type, $locale)['body']);
+            }
+        }
+
+        $link     = 'https://example.invalid/login?token=a%26b';
+        $rendered = $templates->render('magic-link', 'en', ['link' => $link]);
+        $this->assertStringContainsString('href="' . $link . '"', $rendered['body']);
+        $escapedLink = $templates->render('magic-link', 'en', ['link' => 'https://example.invalid/?token=" onclick="evil']);
+        $this->assertStringContainsString('&quot; onclick=&quot;', $escapedLink['body']);
+        $this->assertStringNotContainsString('onclick="evil', $escapedLink['body']);
+
+        $page = $this->get('/en/admin/mail/templates?type=magic-link');
+        $page->assertSee('HTML message');
+        $this->assertStringContainsString('id="template-preview"', $page->response()->getBody());
+        $this->assertStringContainsString('sandbox=""', $page->response()->getBody());
+
+        $html = '<p>Hello {username}</p><a href="{link}">Sign in</a>';
+        $this->post('/en/admin/mail/templates/magic-link/en', [csrf_token() => csrf_hash(), 'subject' => 'Sign in', 'body' => $html])->assertRedirect();
+        $this->assertSame($html, $templates->get('magic-link', 'en')['body']);
+
+        $this->post('/en/admin/mail/templates/magic-link/en/reset', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertStringContainsString('<a href="{link}"', $templates->get('magic-link', 'en')['body']);
+    }
+
+    public function testShieldCodeMailViewsRenderRequiredCodes(): void
+    {
+        $this->loginAs('superadmin');
+
+        foreach (['action_email_activate_email' => 'activation', 'action_email_2fa_email' => 'email-2fa'] as $view => $type) {
+            service('settings')->set(MailTemplates::settingKey($type, 'en', 'body'), 'Code: {code} for {username}');
+            $body = view(config('Auth')->views[$view], [
+                'user' => (object) ['username' => '<user>'],
+                'code' => '<123>', 'ipAddress' => '127.0.0.1', 'userAgent' => 'Browser', 'date' => 'Today',
+            ]);
+            $this->assertStringContainsString('Code: &lt;123&gt; for &lt;user&gt;', $body);
+            $this->assertStringNotContainsString('<123>', $body);
+        }
     }
 
     public function testEmailQueuePageFiltersLogsAndNeverRendersQueuePayload(): void
@@ -75,7 +275,7 @@ final class EmailSettingsTest extends CIUnitTestCase
             'attempts' => 0, 'created_at' => time(), 'available_at' => time(),
         ]);
 
-        $logs = $this->get('/en/admin/settings/email/queue?status=failed&recipient=target');
+        $logs = $this->get('/en/admin/mail/deliveries?status=failed&recipient=target');
         $logs->assertOK();
         $logs->assertSee('SMTP server rejected message (code 550).');
         $this->assertStringContainsString('&lt;Private subject&gt;', $logs->response()->getBody());
@@ -83,13 +283,13 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->assertStringNotContainsString('Private body', $logs->response()->getBody());
         $this->assertStringContainsString('private, no-store', $logs->response()->getHeaderLine('Cache-Control'));
 
-        $queue = $this->get('/en/admin/settings/email/queue?view=queue');
+        $queue = $this->get('/en/admin/mail/deliveries?view=queue');
         $queue->assertOK();
         $queue->assertSee('target@example.com');
         $this->assertStringNotContainsString('Private body', $queue->response()->getBody());
         $this->assertStringNotContainsString('smtp-secret', $queue->response()->getBody());
         $this->assertStringContainsString('Total: 1', $queue->response()->getBody());
-        $this->get('/zh-Hans/admin/settings/email/queue')->assertSee('邮件队列与发送审计');
+        $this->get('/zh-Hans/admin/mail/deliveries')->assertSee('发送记录');
     }
 
     public function testEmailQueueAndAuditTimesUseViewerTimezone(): void
@@ -111,12 +311,12 @@ final class EmailSettingsTest extends CIUnitTestCase
             'processed_at' => '2026-01-01 01:15:00',
         ]);
 
-        $logs = $this->get('/en/admin/settings/email/queue');
+        $logs = $this->get('/en/admin/mail/deliveries');
         $logs->assertOK();
         $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 08:00:00</td>', $logs->response()->getBody());
         $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 09:15:00</td>', $logs->response()->getBody());
 
-        $queue = $this->get('/en/admin/settings/email/queue?view=queue');
+        $queue = $this->get('/en/admin/mail/deliveries?view=queue');
         $queue->assertOK();
         $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 08:00:00</td>', $queue->response()->getBody());
         $this->assertStringContainsString('<td class="text-nowrap">2026-01-01 09:15:00</td>', $queue->response()->getBody());
@@ -133,13 +333,13 @@ final class EmailSettingsTest extends CIUnitTestCase
             ]);
         }
 
-        $first = $this->get('/en/admin/settings/email/queue?status=failed&recipient=paging');
+        $first = $this->get('/en/admin/mail/deliveries?status=failed&recipient=paging');
         $first->assertOK();
         $this->assertStringContainsString('page=2', $first->response()->getBody());
         $this->assertStringContainsString('status=failed', $first->response()->getBody());
         $this->assertStringContainsString('recipient=paging', $first->response()->getBody());
 
-        $second = $this->get('/en/admin/settings/email/queue?status=failed&recipient=paging&page=2');
+        $second = $this->get('/en/admin/mail/deliveries?status=failed&recipient=paging&page=2');
         $second->assertOK();
         $this->assertStringContainsString('Page 0', $second->response()->getBody());
         $this->assertStringNotContainsString('Page 20', $second->response()->getBody());

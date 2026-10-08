@@ -60,7 +60,7 @@ class EmailQueue extends BaseController
 
         return view('Geminus\Admin\Views\email_queue', [
             'me'         => auth()->user(),
-            'page_title' => lang('Admin.emailQueue'),
+            'page_title' => lang('Admin.mailDeliveries'),
             'view'       => $view,
             'rows'       => $rows,
             'total'      => $total,

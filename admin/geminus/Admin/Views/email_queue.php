@@ -6,13 +6,13 @@
 
 <?= $this->section('content') ?>
     <div class="nav nav-tabs mb-3" role="tablist" aria-label="<?= esc($page_title, 'attr') ?>">
-        <a class="nav-link<?= $view === 'logs' ? ' active' : '' ?>" href="<?= route_to('admin/settings/email/queue') ?>"<?= $view === 'logs' ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailAudit')) ?></a>
-        <a class="nav-link<?= $view === 'queue' ? ' active' : '' ?>" href="<?= route_to('admin/settings/email/queue') ?>?view=queue"<?= $view === 'queue' ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailQueueJobs')) ?></a>
+        <a class="nav-link<?= $view === 'logs' ? ' active' : '' ?>" href="<?= route_to('admin/mail/deliveries') ?>"<?= $view === 'logs' ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailAudit')) ?></a>
+        <a class="nav-link<?= $view === 'queue' ? ' active' : '' ?>" href="<?= route_to('admin/mail/deliveries') ?>?view=queue"<?= $view === 'queue' ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailQueueJobs')) ?></a>
     </div>
     <div class="card">
         <?php if ($view === 'logs'): ?>
             <div class="card-body">
-                <form method="get" action="<?= route_to('admin/settings/email/queue') ?>" class="row g-2 align-items-end">
+                <form method="get" action="<?= route_to('admin/mail/deliveries') ?>" class="row g-2 align-items-end">
                     <div class="col-12 col-sm-4 col-lg-3">
                         <label class="form-label" for="mail-status"><?= esc(lang('Admin.mailStatus')) ?></label>
                         <select class="form-select" id="mail-status" name="status">
@@ -28,7 +28,7 @@
                     </div>
                     <div class="col-12 col-sm-auto btn-list">
                         <button type="submit" class="btn btn-primary"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/settings/email/queue') ?>"><?= esc(lang('Admin.userClear')) ?></a>
+                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/mail/deliveries') ?>"><?= esc(lang('Admin.userClear')) ?></a>
                     </div>
                 </form>
             </div>
