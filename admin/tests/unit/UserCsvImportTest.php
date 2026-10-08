@@ -92,6 +92,23 @@ final class UserCsvImportTest extends CIUnitTestCase
         }
     }
 
+    public function testBackslashBeforeClosingQuoteDoesNotConsumeNextRow(): void
+    {
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, "username,email\n\"invalid\\\",invalid@example.com\nvalid,valid@example.com\n");
+        rewind($stream);
+
+        try {
+            $report = (new UserCsvImport())->import($stream);
+
+            $this->assertSame([2, 3], array_column($report, 'row'));
+            $this->assertSame(['error', 'created'], array_column($report, 'result'));
+            $this->assertSame('valid', auth()->getProvider()->findByCredentials(['email' => 'valid@example.com'])->username);
+        } finally {
+            fclose($stream);
+        }
+    }
+
     public function testInvalidColumnsAndExistingAccountsAreReportedWithoutChanges(): void
     {
         $existing        = new AdminUser(['username' => 'existing']);

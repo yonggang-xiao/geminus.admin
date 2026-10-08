@@ -15,7 +15,7 @@ class UserCsvImport
      */
     public function import($stream): array
     {
-        $header = fgetcsv($stream);
+        $header = fgetcsv($stream, escape: '');
         if (! is_array($header)) {
             throw new InvalidArgumentException('CSV header must be username,email.');
         }
@@ -28,7 +28,7 @@ class UserCsvImport
         $rows = [];
         $row  = 1;
 
-        while (($fields = fgetcsv($stream)) !== false) {
+        while (($fields = fgetcsv($stream, escape: '')) !== false) {
             $row++;
             if ($fields !== [null]) {
                 $rows[] = ['number' => $row, 'fields' => $fields];

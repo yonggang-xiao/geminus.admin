@@ -231,10 +231,10 @@ class Users extends BaseController
         }
 
         $stream = fopen('php://temp', 'w+b');
-        fputcsv($stream, ['username', 'email']);
+        fputcsv($stream, ['username', 'email'], escape: '');
 
         foreach ($users as $user) {
-            fputcsv($stream, [$this->csvValue((string) $user->username), $this->csvValue((string) $user->email)]);
+            fputcsv($stream, [$this->csvValue((string) $user->username), $this->csvValue((string) $user->email)], escape: '');
         }
 
         rewind($stream);
