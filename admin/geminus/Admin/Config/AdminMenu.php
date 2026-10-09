@@ -9,7 +9,7 @@ use CodeIgniter\Config\BaseConfig;
 class AdminMenu extends BaseConfig
 {
     /**
-     * @var list<array{permission: string, route: string, label: string, icon: string, active: string}>
+     * @var list<array{permission: list<string>|string, route: string, label: string, icon: string, active: string}>
      */
     public array $items = [];
 }

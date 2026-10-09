@@ -53,7 +53,7 @@ class AnnouncementAttachments extends BaseController
 
     public function download(int $announcementId, int $attachmentId): ResponseInterface
     {
-        if ((new AnnouncementModel())->find($announcementId) === null) {
+        if ((new AnnouncementModel())->visibleTo(auth()->user()->can('announcements.manage'))->find($announcementId) === null) {
             return $this->response->setStatusCode(404);
         }
         $service    = new Attachments();

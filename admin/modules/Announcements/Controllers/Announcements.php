@@ -7,9 +7,11 @@ namespace Modules\Announcements\Controllers;
 use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
+use CodeIgniter\I18n\Time;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\CsvImport;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
+use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
 use Modules\Announcements\Models\AnnouncementModel;
 use RuntimeException;
@@ -23,6 +25,7 @@ class Announcements extends BaseController
     {
         $query = $this->listQuery();
         $model = $this->filteredModel($query);
+        $this->response->setHeader('Cache-Control', 'private, no-store');
 
         return view('Modules\Announcements\Views\index', [
             'me'            => auth()->user(),
@@ -32,15 +35,19 @@ class Announcements extends BaseController
             'query'         => $query,
             'createdRange'  => $query->range('created', 'date'),
             'filters'       => $this->listFilters($query),
-            'filtered'      => $query->search !== '' || $query->range('created', 'date') !== ['from' => '', 'to' => ''],
+            'filtered'      => $query->search !== '' || $query->range('created', 'date') !== ['from' => '', 'to' => ''] || $this->statusFilter() !== '',
+            'canManage'     => auth()->user()->can('announcements.manage'),
+            'status'        => $this->statusFilter(),
         ]);
     }
 
     public function create(): string
     {
         return view('Modules\Announcements\Views\create', [
-            'me'         => auth()->user(),
-            'page_title' => lang('Announcements.create'),
+            'me'           => auth()->user(),
+            'page_title'   => lang('Announcements.create'),
+            'announcement' => [],
+            'formAction'   => route_to('admin/announcements/store'),
         ]);
     }
 
@@ -53,27 +60,101 @@ class Announcements extends BaseController
             return redirect()->to(route_to('admin/announcements/create'))->withInput()->with('errors', $validation->getErrors());
         }
 
-        (new AnnouncementModel())->insert($validation->getValidated());
+        $announcementId = (new AnnouncementModel())->insert($validation->getValidated() + ['status' => 'draft', 'published_at' => null]);
+        if ($announcementId === false) {
+            return redirect()->to(route_to('admin/announcements/create'))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
+        }
 
-        return redirect()->to(route_to('admin/announcements'))->with('alert', [
+        return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', [
             'type' => 'success', 'message' => lang('Announcements.saved'),
         ]);
     }
 
+    public function show(int $announcementId): ResponseInterface|string
+    {
+        $canManage    = auth()->user()->can('announcements.manage');
+        $announcement = (new AnnouncementModel())->visibleTo($canManage)->find($announcementId);
+        if ($announcement === null) {
+            return $this->response->setStatusCode(404);
+        }
+        $attachments = new AttachmentModel();
+        $this->response->setHeader('Cache-Control', 'private, no-store');
+
+        return view('Modules\Announcements\Views\show', [
+            'me'           => auth()->user(), 'page_title' => $announcement['title'],
+            'announcement' => $announcement, 'canManage' => $canManage,
+            'attachments'  => $attachments->forResource('announcement', $announcementId)->orderBy('id', 'DESC')->paginate(20),
+            'pager'        => $attachments->pager,
+        ]);
+    }
+
+    public function edit(int $announcementId): ResponseInterface|string
+    {
+        $announcement = (new AnnouncementModel())->find($announcementId);
+        if ($announcement === null) {
+            return $this->response->setStatusCode(404);
+        }
+        $this->response->setHeader('Cache-Control', 'private, no-store');
+
+        return view('Modules\Announcements\Views\create', [
+            'me'           => auth()->user(), 'page_title' => lang('Announcements.edit'),
+            'announcement' => $announcement, 'formAction' => route_to('admin/announcements/update', $announcementId),
+        ]);
+    }
+
+    public function update(int $announcementId): RedirectResponse|ResponseInterface
+    {
+        $model = new AnnouncementModel();
+        if ($model->find($announcementId) === null) {
+            return $this->response->setStatusCode(404);
+        }
+        $validation = service('validation');
+        $validation->setRules($this->rules());
+        if (! $validation->run($this->request->getPost())) {
+            return redirect()->to(route_to('admin/announcements/edit', $announcementId))->withInput()->with('errors', $validation->getErrors());
+        }
+        if (! $model->update($announcementId, $validation->getValidated())) {
+            return redirect()->to(route_to('admin/announcements/edit', $announcementId))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
+        }
+
+        return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'success', 'message' => lang('Announcements.saved')]);
+    }
+
+    public function publish(int $announcementId): RedirectResponse|ResponseInterface
+    {
+        $model        = new AnnouncementModel();
+        $announcement = $model->find($announcementId);
+        if ($announcement === null) {
+            return $this->response->setStatusCode(404);
+        }
+        if ($announcement['status'] === 'draft' && ! $model->where('status', 'draft')->update($announcementId, ['status' => 'published', 'published_at' => Time::now('UTC')->toDateTimeString()])) {
+            return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
+        }
+
+        return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'success', 'message' => lang('Announcements.published')]);
+    }
+
     private function listQuery(): ListQuery
     {
-        return new ListQuery($this->request->getGet(), [
-            'id'         => 'id',
-            'title'      => 'title',
-            'created_at' => 'created_at',
-        ], 'id', 15);
+        $canManage  = auth()->user()->can('announcements.manage');
+        $sortFields = [
+            'id'           => 'id',
+            'title'        => 'title',
+            'published_at' => 'published_at',
+        ];
+        if ($canManage) {
+            $sortFields['created_at'] = 'created_at';
+        }
+
+        return new ListQuery($this->request->getGet(), $sortFields, $canManage ? 'id' : 'published_at', 15);
     }
 
     private function filteredModel(ListQuery $query): AnnouncementModel
     {
-        $model = new AnnouncementModel();
-        $query->apply($model, ['title', 'body'], ranges: [
-            'created' => ['field' => 'created_at', 'type' => 'date'],
+        $canManage = auth()->user()->can('announcements.manage');
+        $model     = (new AnnouncementModel())->visibleTo($canManage);
+        $query->apply($model, ['title', 'body'], $canManage ? ['status' => ['field' => 'status', 'values' => ['draft', 'published']]] : [], ranges: [
+            'created' => ['field' => $canManage ? 'created_at' : 'published_at', 'type' => 'date'],
         ]);
 
         return $model;
@@ -103,7 +184,7 @@ class Announcements extends BaseController
 
         try {
             $report = (new CsvImport())->import($stream, self::CSV_COLUMNS, static function (array $data): array {
-                if ((new AnnouncementModel())->insert($data) === false) {
+                if ((new AnnouncementModel())->insert($data + ['status' => 'draft', 'published_at' => null]) === false) {
                     throw new RuntimeException('Could not save announcement.');
                 }
 
@@ -159,8 +240,19 @@ class Announcements extends BaseController
 
     private function listFilters(ListQuery $query): array
     {
-        $range = $query->range('created', 'date');
+        $range   = $query->range('created', 'date');
+        $filters = ['q' => $query->search, 'created_from' => $range['from'], 'created_to' => $range['to']];
+        if (auth()->user()->can('announcements.manage')) {
+            $filters['status'] = $this->statusFilter();
+        }
 
-        return ['q' => $query->search, 'created_from' => $range['from'], 'created_to' => $range['to']];
+        return $filters;
+    }
+
+    private function statusFilter(): string
+    {
+        $status = $this->request->getGet('status');
+
+        return auth()->user()->can('announcements.manage') && is_string($status) && in_array($status, ['draft', 'published'], true) ? $status : '';
     }
 }

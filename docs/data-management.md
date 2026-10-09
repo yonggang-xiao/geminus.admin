@@ -46,7 +46,7 @@ $rows = $model->paginate($query->perPage);
 
 用户模块继续限制上传文件为 CSV、最大 1 MB、最多 500 条数据；导出最多 10000 人，超过上限返回 HTTP 413。权限检查、文件扩展名和实际 MIME 检查、下载响应头均由控制器负责。
 
-公告模块采用相同的文件及行数限制，固定表头为 `title,body`，复用新建表单的标题与正文校验规则；每个有效行创建一条公告，无效行报告错误并继续处理。标题不要求唯一，因此重复导入会创建新记录，不更新或跳过同名公告。导出最多 10000 条，复用列表的关键词、UTC 创建日期区间和排序，不受当前分页限制；CSV 的公式防护及重新导入语义与上述组件一致。
+公告模块采用相同的文件及行数限制，固定表头为 `title,body`，复用新建表单的标题与正文校验规则；每个有效行创建一条草稿，不自动发布，无效行报告错误并继续处理。标题不要求唯一，因此重复导入会创建新草稿，不更新或跳过同名公告。CSV 仅为管理者的次要工具，不包含发布状态、发布时间或附件；导出最多 10000 条，复用管理列表的关键词、状态、UTC 创建日期区间和排序，不受当前分页限制。CSV 的公式防护及重新导入语义与上述组件一致。
 
 `CsvImport::import($stream, $columns, $process, $maxRows = 500, $rules = [])` 提供字段映射、可选 CI4 验证、逐行执行和统一报告。处理器接收字段数组；配置验证规则时只接收 `getValidated()` 的字段。返回 `['result' => 'created|skipped|error', 'reason' => '业务原因码']`。统一报告包含 `row`、`data`、`result`、`reason`、`errors`，列数或验证失败不调用处理器；处理器异常记日志，并返回 `processing` 后继续下一行，不泄露异常内容。
 
@@ -72,7 +72,7 @@ $rows = $model->paginate($query->perPage);
 
 ## 运行约束
 
-公告附件关联使用 `resource_type = announcement`，所有页面与接口沿用 `announcements.manage` 权限，路径为 `{locale}/admin/announcements/{announcementId}/attachments`。模块先确认公告存在，下载及移除再核对资源类型、公告 ID 与附件 ID；跨公告、跨资源类型或缺失文件返回 404。上传与移除为 POST 并受全局 CSRF 保护，下载使用私有缓存与 `nosniff`；文件策略复用 `Attachments`，不另建存储目录或附件表。示例没有公告删除流程，扩展删除时须由模块处理附件清理。
+公告附件关联使用 `resource_type = announcement`，路径为 `{locale}/admin/announcements/{announcementId}/attachments`。管理页面、上传及移除需要 `announcements.manage`；详情及下载需要 `announcements.access` 或 `announcements.manage`，仅有阅读权限的用户只能读取已发布公告及其附件，草稿仅供管理者查看。权限通过模块既有迁移登记，不预制角色授权；授予和撤销由“角色与权限”操作。仅有 `admin.access` 不能读取公告；单独具有公告管理权限的角色同样能读取公告及下载，不自动获得其他后台权限。模块先检查公告存在及读取可见性，下载及移除再核对资源类型、公告 ID 与附件 ID；不可见草稿、跨公告、跨资源类型或缺失文件返回 404。上传与移除为 POST 并受全局 CSRF 保护，下载使用私有缓存与 `nosniff`；文件策略复用 `Attachments`，不另建存储目录或附件表。附件可选，创建后进入详情而非强制上传；示例没有公告删除流程，扩展删除时须由模块处理附件清理。
 
 部署前在仓库根目录运行数据库迁移，创建附件元数据表：
 

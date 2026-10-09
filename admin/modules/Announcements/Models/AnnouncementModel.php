@@ -10,7 +10,16 @@ class AnnouncementModel extends Model
 {
     protected $table         = 'example_announcements';
     protected $primaryKey    = 'id';
-    protected $allowedFields = ['title', 'body'];
+    protected $allowedFields = ['title', 'body', 'status', 'published_at'];
     protected $useTimestamps = true;
     protected $returnType    = 'array';
+
+    public function visibleTo(bool $canManage): self
+    {
+        if (! $canManage) {
+            $this->where('status', 'published');
+        }
+
+        return $this;
+    }
 }

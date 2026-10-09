@@ -9,7 +9,7 @@ class Registrar
     public static function AdminMenu(): array
     {
         return ['items' => [[
-            'permission' => 'announcements.manage',
+            'permission' => ['announcements.access', 'announcements.manage'],
             'route'      => 'admin/announcements',
             'label'      => 'Announcements.title',
             'icon'       => 'ti-speakerphone',

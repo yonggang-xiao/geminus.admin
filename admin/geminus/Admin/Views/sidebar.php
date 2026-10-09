@@ -19,7 +19,7 @@ use Geminus\Admin\Config\AdminMenu;
         </li>
     <?php endif; ?>
     <?php foreach (config(AdminMenu::class)->items as $item): ?>
-        <?php if (auth()->user()?->can($item['permission'])): ?>
+        <?php if (array_any((array) $item['permission'], static fn (string $permission): bool => auth()->user()?->can($permission) ?? false)): ?>
             <li class="nav-item<?= url_is($item['active']) ? ' active' : '' ?>">
                 <a class="nav-link<?= url_is($item['active']) ? ' active' : '' ?>" href="<?= route_to($item['route']) ?>"<?= url_is($item['active']) ? ' aria-current="page"' : '' ?>>
                     <i class="ti <?= esc($item['icon'], 'attr') ?> nav-link-icon icon" aria-hidden="true"></i>
