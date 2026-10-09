@@ -94,6 +94,8 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertStringContainsString('src="/static/js/form-submission.js"', $result->response()->getBody());
         $this->assertStringContainsString('href="/static/css/theme.css"', $result->response()->getBody());
         $result->assertSee('profile@example.com');
+        $result->assertSee(lang('Admin.noTokens'), 'h3');
+        $this->assertStringNotContainsString('class="empty-action"', $result->response()->getBody());
         $result->assertSee('English', 'option');
         $result->assertSee('简体中文', 'option');
         $result->assertSee('繁體中文', 'option');
@@ -122,6 +124,13 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->get('/zh-Hant/admin/profile')->assertSee('至少 8 個字元，最多 255 個字元');
         $this->get('/zh-Hans/admin/profile')->assertSee('上传头像');
         $this->get('/zh-Hant/admin/profile')->assertSee('上傳頭像');
+
+        foreach (['zh-Hans', 'zh-Hant'] as $locale) {
+            $localized = $this->get('/' . $locale . '/admin/profile');
+            $localized->assertOK();
+            $localized->assertSee(lang('Admin.noTokens'), 'h3');
+            $this->assertStringNotContainsString('class="empty-action"', $localized->response()->getBody());
+        }
     }
 
     public function testProfileLanguagePreferenceChangesRedirectLocale(): void

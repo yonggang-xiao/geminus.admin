@@ -148,7 +148,9 @@
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if ($tokens === []): ?><tr><td colspan="4" class="text-secondary text-center py-4"><?= esc(lang('Admin.noTokens')) ?></td></tr><?php endif; ?>
+                            <?php if ($tokens === []): ?><tr><td colspan="4" class="text-center py-4">
+                                <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.noTokens')]) ?>
+                            </td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

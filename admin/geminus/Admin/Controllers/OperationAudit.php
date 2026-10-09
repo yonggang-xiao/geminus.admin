@@ -94,24 +94,41 @@ class OperationAudit extends BaseController
             }
         }
 
+        $actorOptions = ['' => lang('Admin.auditAllActors')];
+
+        foreach ($actors as $actor) {
+            $actorOptions[$actor['actor_id']] = $userNames[$actor['actor_id']] ?? lang('Admin.auditDeletedUser') . ' #' . $actor['actor_id'];
+        }
+
+        $objectOptions = ['' => lang('Admin.auditAllObjects')];
+
+        foreach ($objects as $item) {
+            $objectOptions[$item['target_type'] . '|'] = $item['target_type'];
+            if ($item['target_id'] !== null) {
+                $objectOptions[$item['target_type'] . '|' . $item['target_id']] = $item['target_type'] . " \u{00B7} " . ($item['target_type'] === 'users' ? ($userNames[$item['target_id']] ?? lang('Admin.auditDeletedUser') . ' #' . $item['target_id']) : $item['target_id']);
+            }
+        }
+
         return view('Geminus\Admin\Views\operation_audit', [
-            'me'         => auth()->user(),
-            'page_title' => lang('Admin.operationAudit'),
-            'rows'       => $rows,
-            'total'      => $total,
-            'pager'      => Services::pager(null, null, false)->makeLinks($page, 20, $total),
-            'actorId'    => $actorId,
-            'targetId'   => $targetId,
-            'type'       => $type,
-            'object'     => $object !== '' ? $object : ($type !== '' ? $type . '|' . $targetId : ''),
-            'actors'     => $actors,
-            'objects'    => $objects,
-            'userNames'  => $userNames,
-            'result'     => $result,
-            'from'       => $from,
-            'to'         => $to,
-            'sort'       => $sort,
-            'direction'  => $direction,
+            'me'            => auth()->user(),
+            'page_title'    => lang('Admin.operationAudit'),
+            'rows'          => $rows,
+            'total'         => $total,
+            'currentPage'   => $page,
+            'perPage'       => 20,
+            'pager'         => Services::pager(null, null, false)->makeLinks($page, 20, $total),
+            'actorId'       => $actorId,
+            'targetId'      => $targetId,
+            'type'          => $type,
+            'object'        => $object !== '' ? $object : ($type !== '' ? $type . '|' . $targetId : ''),
+            'actorOptions'  => $actorOptions,
+            'objectOptions' => $objectOptions,
+            'userNames'     => $userNames,
+            'result'        => $result,
+            'from'          => $from,
+            'to'            => $to,
+            'sort'          => $sort,
+            'direction'     => $direction,
         ]);
     }
 }

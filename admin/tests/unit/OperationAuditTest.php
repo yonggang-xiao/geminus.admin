@@ -288,6 +288,7 @@ final class OperationAuditTest extends CIUnitTestCase
         $this->assertStringContainsString('new tabler.Datepicker', $page->response()->getBody());
         $this->assertStringContainsString('value="2026-10-08"', $page->response()->getBody());
         $this->assertStringContainsString(lang('Admin.userTotal') . ': 1', $page->response()->getBody());
+        $page->assertSee('Total: 1 (1 - 1)');
         $this->assertStringContainsString('private, no-store', $page->response()->getHeaderLine('Cache-Control'));
 
         $simplified = $this->get('/zh-Hans/admin/audit');
@@ -300,6 +301,42 @@ final class OperationAuditTest extends CIUnitTestCase
         $selected = $this->get('/en/admin/audit?object=users%7C42');
         $this->assertStringContainsString('users · ' . lang('Admin.auditDeletedUser') . ' #42</td>', $selected->response()->getBody());
         $this->assertStringNotContainsString('users · ' . lang('Admin.auditDeletedUser') . ' #43</td>', $selected->response()->getBody());
+    }
+
+    public function testAuditEmptyStatesReuseUiCells(): void
+    {
+        $user        = new AdminUser(['username' => 'auditempty']);
+        $user->email = 'auditempty@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+
+        foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
+            $empty = $this->get('/' . $locale . '/admin/audit');
+            $empty->assertOK();
+            $empty->assertSee(lang('Admin.mailNoRecords'), 'h3');
+            $this->assertStringNotContainsString('class="empty-action"', $empty->response()->getBody());
+            $this->assertStringNotContainsString('(1 - 0)', $empty->response()->getBody());
+
+            $filtered = $this->get('/' . $locale . '/admin/audit?object=roles%7Ceditor&from=2026-10-01&to=2026-10-09&result=failed&sort=path&direction=ASC');
+            $filtered->assertOK();
+            $document = new DOMDocument();
+            $document->loadHTML($filtered->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//div[@class="empty-action"]/a[@href="/' . $locale . '/admin/audit"]')->length);
+            $this->assertSame('2026-10-01', $xpath->query('//input[@id="audit-from" and @data-bs-toggle="datepicker"]')->item(0)->getAttribute('value'));
+            $this->assertSame('2026-10-09', $xpath->query('//input[@id="audit-to" and @data-bs-toggle="datepicker"]')->item(0)->getAttribute('value'));
+            $this->assertSame('failed', $xpath->query('//select[@id="audit-result"]/option[@selected]')->item(0)->getAttribute('value'));
+            $filtered->assertSee(lang('Admin.userClear'), 'a');
+
+            $legacy = $this->get('/' . $locale . '/admin/audit?target=42');
+            $legacy->assertOK();
+            $document->loadHTML($legacy->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $this->assertSame(1, $xpath->query('//div[@class="empty-action"]/a[@href="/' . $locale . '/admin/audit"]')->length);
+        }
     }
 
     public function testEachAuditFilterCanExcludeRecordsIndependently(): void
@@ -445,10 +482,12 @@ final class OperationAuditTest extends CIUnitTestCase
         $first = $this->get('/en/admin/audit?page=0');
         $first->assertSee('audit-record-21');
         $first->assertDontSee('audit-record-1</td>');
+        $first->assertSee('Total: 21 (1 - 20)');
         $last = $this->get('/en/admin/audit?page=999');
         $last->assertSee('audit-record-1');
         $last->assertDontSee('audit-record-21</td>');
         $this->assertStringContainsString(lang('Admin.userTotal') . ': 21', $last->response()->getBody());
+        $last->assertSee('Total: 21 (21 - 21)');
 
         $invalid = $this->get('/en/admin/audit?result=other&from=2026-02-30&to=2026-02-30');
         $invalid->assertSee('audit-record-21');
@@ -524,7 +563,6 @@ final class OperationAuditTest extends CIUnitTestCase
         $filtered = $this->get('/en/admin/audit?actor=' . $actors['a']->id . '&object=roles%7C1&from=2026-10-01&to=2026-10-01&result=failed&sort=actor&direction=ASC');
         $filtered->assertSee('d-sort-path-a');
         $filtered->assertDontSee('c-sort-path-z');
-        $this->assertStringContainsString('name="object" value="' . esc('roles|1', 'attr') . '"', $filtered->response()->getBody());
         $this->assertStringContainsString('name="actor" value="' . $actors['a']->id . '"', $filtered->response()->getBody());
 
         foreach (['from' => '2026-10-01', 'to' => '2026-10-01', 'result' => 'failed'] as $name => $value) {
@@ -532,6 +570,19 @@ final class OperationAuditTest extends CIUnitTestCase
         }
         $this->assertStringContainsString('name="direction" value="DESC"', $filtered->response()->getBody());
         $this->assertStringContainsString('name="sort" value="actor"', $filtered->response()->getBody());
+        $document = new DOMDocument();
+        $document->loadHTML($filtered->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+
+        foreach ($xpath->query('//thead/tr/th/form') as $form) {
+            foreach (['actor' => (string) $actors['a']->id, 'object' => 'roles|1', 'from' => '2026-10-01', 'to' => '2026-10-01', 'result' => 'failed'] as $name => $value) {
+                $this->assertSame($value, $xpath->query('input[@name="' . $name . '"]', $form)->item(0)->getAttribute('value'));
+            }
+            $sortField = $xpath->query('button[@name="sort"]', $form)->item(0)->getAttribute('value');
+            $this->assertSame($sortField === 'actor' ? 'DESC' : 'ASC', $xpath->query('input[@name="direction"]', $form)->item(0)->getAttribute('value'));
+            $this->assertSame(0, $xpath->query('input[@name="page"]', $form)->length);
+        }
+        $this->assertSame(8, $xpath->query('//thead/tr/th/form')->length);
 
         $default = $this->get('/en/admin/audit?sort=invalid&direction=invalid');
         preg_match_all('/[a-d]-sort-path-([azmb])<\/td>/', $default->response()->getBody(), $matches);
@@ -657,7 +708,10 @@ final class OperationAuditTest extends CIUnitTestCase
 
         $selected = $this->get('/en/admin/audit?object=users%7C' . $user->id);
         $selected->assertOK();
-        $this->assertStringContainsString('value="users&#x7C;' . $user->id . '" selected', $selected->response()->getBody());
+        $document = new DOMDocument();
+        $document->loadHTML($selected->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $this->assertSame('users|' . $user->id, $xpath->query('//select[@id="audit-target"]/option[@selected]')->item(0)->getAttribute('value'));
         $this->assertStringContainsString('users · auditobject</td>', $selected->response()->getBody());
         $this->assertStringContainsString(lang('Admin.userTotal') . ': 1', $selected->response()->getBody());
     }

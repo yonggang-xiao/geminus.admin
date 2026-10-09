@@ -283,13 +283,16 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->assertStringNotContainsString('other@example.com', $logs->response()->getBody());
         $this->assertStringNotContainsString('Private body', $logs->response()->getBody());
         $this->assertStringContainsString('private, no-store', $logs->response()->getHeaderLine('Cache-Control'));
+        $logs->assertSee('Total: 1 (1 - 1)');
+        $this->assertStringContainsString('<option value="failed" selected>', $logs->response()->getBody());
+        $this->assertStringContainsString('name="recipient" value="target" maxlength="254"', $logs->response()->getBody());
 
         $queue = $this->get('/en/admin/mail/deliveries?view=queue');
         $queue->assertOK();
         $queue->assertSee('target@example.com');
         $this->assertStringNotContainsString('Private body', $queue->response()->getBody());
         $this->assertStringNotContainsString('smtp-secret', $queue->response()->getBody());
-        $this->assertStringContainsString('Total: 1', $queue->response()->getBody());
+        $this->assertStringContainsString('Total: 1 (1 - 1)', $queue->response()->getBody());
         $this->get('/zh-Hans/admin/mail/deliveries')->assertSee('发送记录');
     }
 
@@ -339,11 +342,40 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->assertStringContainsString('page=2', $first->response()->getBody());
         $this->assertStringContainsString('status=failed', $first->response()->getBody());
         $this->assertStringContainsString('recipient=paging', $first->response()->getBody());
+        $first->assertSee('Total: 21 (1 - 20)');
 
         $second = $this->get('/en/admin/mail/deliveries?status=failed&recipient=paging&page=2');
         $second->assertOK();
         $this->assertStringContainsString('Page 0', $second->response()->getBody());
         $this->assertStringNotContainsString('Page 20', $second->response()->getBody());
+        $second->assertSee('Total: 21 (21 - 21)');
+    }
+
+    public function testEmailQueueEmptyStatesReuseUiCells(): void
+    {
+        $this->loginAs('superadmin');
+
+        foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
+            $empty = $this->get('/' . $locale . '/admin/mail/deliveries');
+            $empty->assertOK();
+            $empty->assertSee(lang('Admin.mailNoRecords'), 'h3');
+            $this->assertStringNotContainsString('class="empty-action"', $empty->response()->getBody());
+            $this->assertStringNotContainsString('(1 - 0)', $empty->response()->getBody());
+
+            $filtered = $this->get('/' . $locale . '/admin/mail/deliveries?status=failed&recipient=missing');
+            $filtered->assertOK();
+            $filtered->assertSee(lang('Admin.userClear'), 'a');
+            $document = new DOMDocument();
+            $document->loadHTML($filtered->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//div[@class="empty-action"]/a[@href="/' . $locale . '/admin/mail/deliveries"]')->length);
+
+            $queue = $this->get('/' . $locale . '/admin/mail/deliveries?view=queue');
+            $queue->assertOK();
+            $queue->assertSee(lang('Admin.mailNoRecords'), 'h3');
+            $this->assertStringNotContainsString('id="mail-recipient"', $queue->response()->getBody());
+            $this->assertStringNotContainsString('class="empty-action"', $queue->response()->getBody());
+        }
     }
 
     public function testSettingsAreSavedAndUsedByEmailService(): void

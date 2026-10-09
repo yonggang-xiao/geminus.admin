@@ -12,25 +12,14 @@
     <div class="card">
         <?php if ($view === 'logs'): ?>
             <div class="card-body">
-                <form method="get" action="<?= route_to('admin/mail/deliveries') ?>" class="row g-2 align-items-end">
-                    <div class="col-12 col-sm-4 col-lg-3">
-                        <label class="form-label" for="mail-status"><?= esc(lang('Admin.mailStatus')) ?></label>
-                        <select class="form-select" id="mail-status" name="status">
-                            <option value=""><?= esc(lang('Admin.mailAllStatuses')) ?></option>
-                            <?php foreach ($statuses as $option): ?>
-                                <option value="<?= $option ?>"<?= $status === $option ? ' selected' : '' ?>><?= esc(lang('Admin.mailStatus_' . $option)) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-12 col-sm-5 col-lg-4">
-                        <label class="form-label" for="mail-recipient"><?= esc(lang('Admin.mailRecipient')) ?></label>
-                        <input class="form-control" id="mail-recipient" name="recipient" value="<?= esc($recipient, 'attr') ?>" maxlength="254">
-                    </div>
-                    <div class="col-12 col-sm-auto btn-list">
-                        <button type="submit" class="btn btn-primary"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/mail/deliveries') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.userClear')) ?></a>
-                    </div>
-                </form>
+                <?= view_cell('Geminus\Admin\Cells\FilterBarCell', [
+                    'action'      => route_to('admin/mail/deliveries'), 'clearUrl' => route_to('admin/mail/deliveries'),
+                    'submitLabel' => lang('Admin.userFilter'), 'clearLabel' => lang('Admin.userClear'),
+                    'fields'      => [
+                        ['type' => 'select', 'id' => 'mail-status', 'name' => 'status', 'label' => lang('Admin.mailStatus'), 'value' => $status, 'class' => 'col-12 col-sm-4 col-lg-3', 'options' => ['' => lang('Admin.mailAllStatuses')] + array_combine($statuses, array_map(static fn (string $option): string => lang('Admin.mailStatus_' . $option), $statuses))],
+                        ['id' => 'mail-recipient', 'name' => 'recipient', 'label' => lang('Admin.mailRecipient'), 'value' => $recipient, 'maxlength' => 254, 'class' => 'col-12 col-sm-5 col-lg-4'],
+                    ],
+                ]) ?>
             </div>
         <?php endif; ?>
         <div class="table-responsive">
@@ -52,7 +41,9 @@
                                 <td class="text-wrap"><?= esc($row['failure_reason'] ?? '-') ?></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if ($rows === []): ?><tr><td colspan="8" class="text-center text-secondary py-4"><?= esc(lang('Admin.mailNoRecords')) ?></td></tr><?php endif; ?>
+                        <?php if ($rows === []): ?><tr><td colspan="8" class="text-center py-4">
+                            <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.mailNoRecords'), 'filtered' => $status !== '' || $recipient !== '', 'clearUrl' => route_to('admin/mail/deliveries'), 'clearLabel' => lang('Admin.userClear')]) ?>
+                        </td></tr><?php endif; ?>
                     </tbody>
                 <?php else: ?>
                     <thead><tr><th scope="col">#</th><th scope="col"><?= esc(lang('Admin.mailRecipient')) ?></th><th scope="col"><?= esc(lang('Admin.mailSubject')) ?></th><th scope="col"><?= esc(lang('Admin.mailStatus')) ?></th><th scope="col"><?= esc(lang('Admin.mailAttempts')) ?></th><th scope="col"><?= esc(lang('Admin.mailCreated')) ?></th><th scope="col"><?= esc(lang('Admin.mailAvailable')) ?></th></tr></thead>
@@ -70,14 +61,15 @@
                                 <td class="text-nowrap"><?= esc($me->formatDateTime($row['available_at'])) ?></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if ($rows === []): ?><tr><td colspan="7" class="text-center text-secondary py-4"><?= esc(lang('Admin.mailNoRecords')) ?></td></tr><?php endif; ?>
+                        <?php if ($rows === []): ?><tr><td colspan="7" class="text-center py-4">
+                            <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.mailNoRecords')]) ?>
+                        </td></tr><?php endif; ?>
                     </tbody>
                 <?php endif; ?>
             </table>
         </div>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="text-secondary"><?= esc(lang('Admin.userTotal')) ?>: <?= esc($total) ?></span>
-            <?= $pager ?>
+            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager, 'total' => $total, 'currentPage' => $currentPage, 'perPage' => $perPage, 'totalLabel' => lang('Admin.userTotal')]) ?>
         </div>
     </div>
 <?= $this->endSection() ?>

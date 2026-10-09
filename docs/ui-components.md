@@ -4,7 +4,7 @@
 
 - 业务模块可以复用筛选栏、排序表头、列表空态、分页摘要、日期控件、附件区域和导入报告，减少重复模板并保持一致的 Tabler 界面。
 - 采用开发者配置式，使用 CI4 受控 View Cells 封装具有参数或展示逻辑的界面片段；不提供在线配置、整页 CRUD、任意 HTML 插槽或业务回调。
-- 当前已接入用户列表、用户附件、用户 CSV 导入和个人中心；公告示例模块复用列表空态与分页，尚未接入通用数据管理的筛选、导入或附件能力。
+- 当前已接入用户列表、用户附件、用户 CSV 导入、个人中心、邮件队列与投递记录、操作审计；公告示例模块复用列表空态与分页，尚未接入通用数据管理的筛选、导入或附件能力。
 - 资源权限、字段规则和业务写入仍由接入模块负责；隐藏操作按钮不代替服务端权限检查。
 
 ## 实现设计
@@ -21,7 +21,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 列表筛选与排序
 
-`FilterBarCell` 和 `SortHeaderCell` 已接入用户列表。`FilterBarCell` 接收 `action`、`clearUrl`、`submitLabel`、`clearLabel`、`hidden` 和 `fields`。表单固定使用 GET，不沿用分页参数；`hidden` 只传需要保留的标量参数，例如排序字段与方向，不直接传整个请求。
+`FilterBarCell` 已接入用户列表、邮件投递记录和操作审计，`SortHeaderCell` 已接入用户列表和操作审计。审计的操作者与对象选项由 Controller 准备，保留对象类型、具体对象及已删除用户的显示方式。`FilterBarCell` 接收 `action`、`clearUrl`、`submitLabel`、`clearLabel`、`hidden` 和 `fields`。表单固定使用 GET，不沿用分页参数；`hidden` 只传需要保留的标量参数，例如排序字段与方向，不直接传整个请求。
 
 每个字段提供 `id`、`name`、`label`、`value`，可选 `class` 指定 Bootstrap 网格宽度。支持的 `type` 为 `text`（默认）、`select`、`date`、`number`；不支持的类型抛出异常。文本可指定 `maxlength`，枚举通过 `options` 传入值到文案的映射。区间通过两个独立字段表达，名称与后端筛选规则保持一致；数字允许小数，日期提交格式为 `YYYY-MM-DD`。字段配置来自开发者，值由 Controller 归一化。
 
@@ -42,7 +42,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 列表空态与分页
 
-`EmptyStateCell` 和 `PaginationCell` 已用于用户列表、用户附件与公告示例。
+`EmptyStateCell` 和 `PaginationCell` 已用于用户列表、用户附件、邮件队列与投递记录、操作审计和公告示例。个人中心的密钥列表复用空态，不增加新建入口或分页；邮件与审计的筛选无结果时提供清除筛选入口，无记录且未筛选时仅显示提示。
 
 `EmptyStateCell` 接收 `message` 和 `filtered`；未筛选时选择 `createUrl` / `createLabel` / `createIcon`（默认 `plus`），筛选时选择 `clearUrl` / `clearLabel`。没有相应链接或文案时不输出按钮。表格内由调用方提供 `<tr><td colspan="...">`，组件不决定列数。调用方根据授权决定是否提供新建入口。
 
@@ -62,7 +62,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 日期控件
 
-`DateFieldCell` 已用于用户筛选和个人中心密钥有效期。组件接收 `inputId`、`name`、`label`、`value`，可选 `required`、`min`、`max`、`hint`、`error`。错误通过 `aria-invalid` 和 `aria-describedby` 关联到输入，图标在左侧，错误反馈在包装器外显式显示。`value` 和 `error` 由调用方使用 `old()`、字段错误或已有数据准备，Cell 不依赖 session 错误键。
+`DateFieldCell` 已用于用户筛选、操作审计筛选和个人中心密钥有效期。组件接收 `inputId`、`name`、`label`、`value`，可选 `required`、`min`、`max`、`hint`、`error`。错误通过 `aria-invalid` 和 `aria-describedby` 关联到输入，图标在左侧，错误反馈在包装器外显式显示。`value` 和 `error` 由调用方使用 `old()`、字段错误或已有数据准备，Cell 不依赖 session 错误键。
 
 控件只输出标记，不重复加载资源或注入脚本。页面在 `head` section 按需加载与 Tabler Core 一致的 Vanilla Calendar Pro，并在 `javascript` section 初始化 `tabler.Datepicker`，通过 `dateFormat` 保持 `YYYY-MM-DD`。同页多个控件必须使用不同的 `inputId`。参考用户列表和个人中心的现有初始化。
 
@@ -93,7 +93,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 在仓库根目录运行组件与接入页面测试，使用已配置的独立测试数据库：
 
 ```sh
-docker compose -f docker/docker-compose.yaml exec -T geminus-admin vendor/bin/phpunit --no-coverage tests/unit/UiCellsTest.php tests/unit/UsersTest.php tests/unit/UserCsvImportTest.php tests/unit/ProfileAccessTest.php tests/unit/AnnouncementsTest.php
+docker compose -f docker/docker-compose.yaml exec -T geminus-admin vendor/bin/phpunit --no-coverage tests/unit/UiCellsTest.php tests/unit/UsersTest.php tests/unit/UserCsvImportTest.php tests/unit/ProfileAccessTest.php tests/unit/EmailSettingsTest.php tests/unit/OperationAuditTest.php tests/unit/AnnouncementsTest.php
 ```
 
 组件测试覆盖参数复显与转义、排序状态、枚举与区间控件、日期错误关联、空态操作、分页范围、导入报告计数以及附件路由和 POST / CSRF 标记；页面测试继续检查原有查询、权限和写入行为。

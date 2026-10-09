@@ -59,15 +59,17 @@ class EmailQueue extends BaseController
         }
 
         return view('Geminus\Admin\Views\email_queue', [
-            'me'         => auth()->user(),
-            'page_title' => lang('Admin.mailDeliveries'),
-            'view'       => $view,
-            'rows'       => $rows,
-            'total'      => $total,
-            'pager'      => Services::pager(null, null, false)->makeLinks($page, 20, $total),
-            'statuses'   => $statuses,
-            'status'     => $status,
-            'recipient'  => $view === 'logs' ? trim((string) $this->request->getGet('recipient')) : '',
+            'me'          => auth()->user(),
+            'page_title'  => lang('Admin.mailDeliveries'),
+            'view'        => $view,
+            'rows'        => $rows,
+            'total'       => $total,
+            'currentPage' => $page,
+            'perPage'     => 20,
+            'pager'       => Services::pager(null, null, false)->makeLinks($page, 20, $total),
+            'statuses'    => $statuses,
+            'status'      => $status,
+            'recipient'   => $view === 'logs' ? trim((string) $this->request->getGet('recipient')) : '',
         ]);
     }
 }
