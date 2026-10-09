@@ -1,6 +1,6 @@
 ---
 description: 'Geminus 后台应用的 CodeIgniter 4 项目约定'
-applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admin/public/**/*.php, admin/*.php'
+applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/modules/**/*.php, admin/tests/**/*.php, admin/public/**/*.php, admin/*.php'
 ---
 
 # CodeIgniter 项目约定
@@ -25,7 +25,9 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admi
 
 ### 结构与路由
 
-- 共享应用代码放在 `admin/app/`，后台模块代码放在 `admin/geminus/Admin/`，命名空间为 `Geminus\Admin`。在 `admin/app/Config/Autoload.php` 注册新模块的命名空间；模块路由放在其 `Config/Routes.php` 中。
+- 共享应用代码放在 `admin/app/`，后台底座代码放在 `admin/geminus/Admin/`，命名空间为 `Geminus\Admin`；独立业务模块放在 `admin/modules/{ModuleName}/`，命名空间为 `Modules\{ModuleName}`（例如 `Modules\Announcements`）。业务模块复用后台底座的布局与通用组件，不把具体业务逻辑放进底座。
+- 在 `admin/app/Config/Autoload.php` 注册业务模块的命名空间；模块自己的控制器、模型、视图、语言文件及数据库迁移放在所属模块目录，路由放在其 `Config/Routes.php` 中。接入方式参考 [公告业务模块示例](../../docs/example-business-module.md)。
+- 业务模块通过自己的 `Config/Registrar.php` 向 `Geminus\Admin\Config\AdminMenu` 追加菜单，不在后台底座中写死业务入口；菜单可见性不能替代路由授权。业务权限通过模块迁移加入 Settings 的 `AuthGroups.permissions` 目录及所需授权矩阵，不在 Registrar 或 `AuthGroups` 配置默认值中声明，也不覆盖管理员已有设置。
 - 后台页面涉及 AJAX 或表单提交时，若符合资源工作流，优先使用 presenter 路由及对应的 `ResourcePresenter` 方法。REST API 使用资源路由；非资源操作沿用现有的显式路由。
 - 保持 `admin/app/Config/Routing.php` 的自动路由关闭；新路由按 HTTP 方法显式定义，不用可被 GET 访问的通用路由执行写操作。后台路由明确认证与所需权限，并用 `php spark filter:check <方法> <路径>` 核对过滤器是否生效。
 - 权限相同的相邻路由优先通过路由组统一声明 `filter`；权限不同的路由分别声明。仅因共享路径前缀分组时不改变原有权限要求；调整分组后核对路径、路由别名及实际生效的过滤器。
@@ -51,7 +53,7 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/tests/**/*.php, admi
 
 ### 测试与风格
 
-- 新增或修改后端行为时，按行为在 `admin/tests/` 中补充 PHPUnit 单元、功能或数据库测试并运行相关测试；`admin/phpunit.xml.dist` 已将 `app/` 与 `geminus/Admin/` 纳入覆盖率统计范围，但仅列入范围不代表已有测试覆盖。
+- 新增或修改后端行为时（包括 `admin/modules/` 中的业务模块），按行为在 `admin/tests/` 中补充 PHPUnit 单元、功能或数据库测试并运行相关测试；`admin/phpunit.xml.dist` 已将 `app/`、`geminus/Admin/` 与 `modules/` 纳入覆盖率统计范围，并排除视图及路由文件，但仅列入范围不代表已有测试覆盖。
 - 新增和修改的 PHP 代码遵循 CodeIgniter Coding Standard；使用项目现有的 `admin/.php-cs-fixer.dist.php` 配置，从 `admin/` 目录运行 `vendor/bin/php-cs-fixer fix --dry-run --diff <改动文件路径>` 检查改动文件。
 
 当项目附近的代码与通用示例不同时，以项目现有写法为准；框架 API 和语法查阅对应的官方指南章节。
