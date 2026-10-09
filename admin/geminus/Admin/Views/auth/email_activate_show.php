@@ -16,7 +16,7 @@
                         <label class="form-label required" for="activate-token"><?= esc(lang('Auth.token')) ?></label>
                         <input id="activate-token" name="token" class="form-control" value="<?= esc(old('token')) ?>" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" required>
                     </div>
-                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.send')) ?></button></div>
+                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><i class="ti ti-send me-1" aria-hidden="true"></i><?= esc(lang('Auth.send')) ?></button></div>
                 </form>
             </div>
         </div>

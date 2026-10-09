@@ -66,7 +66,7 @@
                             ]) ?>
                             <?php if (session('profile_errors.timezone')): ?><div class="invalid-feedback"><?= esc(session('profile_errors.timezone')) ?></div><?php endif; ?>
                         </div>
-                        <button type="submit" class="btn btn-primary"><?= esc(lang('Admin.saveProfile')) ?></button>
+                        <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveProfile')) ?></button>
                     </form>
                 </div>
             </div>
@@ -87,7 +87,7 @@
                                     <?php if ($field === 'new_password'): ?><div id="new-password-hint" class="form-text"><?= esc(lang('Admin.passwordHint', [$minimumPasswordLength])) ?></div><?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
-                            <button type="submit" class="btn btn-primary"><?= esc(lang('Admin.savePassword')) ?></button>
+                            <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.savePassword')) ?></button>
                         </form>
                     </div>
                 </div>
@@ -127,10 +127,13 @@
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label required" for="token-expires"><?= esc(lang('Admin.tokenExpires')) ?></label>
-                            <input id="token-expires" type="text" name="expires" class="form-control<?= session('token_errors.expires') ? ' is-invalid' : '' ?>" data-bs-toggle="datepicker" data-bs-date-min="<?= esc(gmdate('Y-m-d')) ?>" value="<?= esc(old('expires')) ?>" placeholder="YYYY-MM-DD" autocomplete="off" required>
-                            <?php if (session('token_errors.expires')): ?><div class="invalid-feedback"><?= esc(session('token_errors.expires')) ?></div><?php endif; ?>
+                            <div class="input-icon">
+                                <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
+                                <input id="token-expires" type="text" name="expires" class="form-control<?= session('token_errors.expires') ? ' is-invalid' : '' ?>" data-bs-toggle="datepicker" data-bs-date-min="<?= esc(gmdate('Y-m-d')) ?>" value="<?= esc(old('expires')) ?>" placeholder="YYYY-MM-DD" autocomplete="off" required>
+                            </div>
+                            <?php if (session('token_errors.expires')): ?><div class="invalid-feedback d-block"><?= esc(session('token_errors.expires')) ?></div><?php endif; ?>
                         </div>
-                        <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary"><?= esc(lang('Admin.createToken')) ?></button></div>
+                        <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary"><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createToken')) ?></button></div>
                     </form>
                 </div>
                 <div class="table-responsive">
@@ -145,7 +148,7 @@
                                     <td class="text-end">
                                         <form method="post" action="<?= route_to('admin/profile/tokens/revoke', $token->id) ?>">
                                             <?= csrf_field() ?>
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><?= esc(lang('Admin.revokeToken')) ?></button>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><i class="ti ti-trash me-1" aria-hidden="true"></i><?= esc(lang('Admin.revokeToken')) ?></button>
                                         </form>
                                     </td>
                                 </tr>

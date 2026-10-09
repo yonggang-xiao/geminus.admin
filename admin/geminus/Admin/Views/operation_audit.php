@@ -40,11 +40,17 @@
                 </div>
                 <div class="col-6 col-lg-2">
                     <label class="form-label" for="audit-from"><?= esc(lang('Admin.auditFrom')) ?> (UTC)</label>
-                    <input class="form-control" type="text" id="audit-from" name="from" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($from, 'attr') ?>">
+                    <div class="input-icon">
+                        <input class="form-control" type="text" id="audit-from" name="from" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($from, 'attr') ?>">
+                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
+                    </div>
                 </div>
                 <div class="col-6 col-lg-2">
                     <label class="form-label" for="audit-to"><?= esc(lang('Admin.auditTo')) ?> (UTC)</label>
-                    <input class="form-control" type="text" id="audit-to" name="to" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($to, 'attr') ?>">
+                    <div class="input-icon">
+                        <input class="form-control" type="text" id="audit-to" name="to" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($to, 'attr') ?>">
+                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
+                    </div>
                 </div>
                 <div class="col-6 col-lg-2">
                     <label class="form-label" for="audit-result"><?= esc(lang('Admin.auditResult')) ?></label>
@@ -59,7 +65,7 @@
                 <input type="hidden" name="direction" value="<?= esc($direction, 'attr') ?>">
                 <div class="col-12 col-lg-auto btn-list">
                     <button type="submit" class="btn btn-primary"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                    <a class="btn btn-outline-secondary" href="<?= route_to('admin/audit') ?>"><?= esc(lang('Admin.userClear')) ?></a>
+                    <a class="btn btn-outline-secondary" href="<?= route_to('admin/audit') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.userClear')) ?></a>
                 </div>
             </form>
         </div>

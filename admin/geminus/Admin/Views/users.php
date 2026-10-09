@@ -1,5 +1,9 @@
 <?= $this->extend('Geminus\Admin\Views\layout_main') ?>
 
+<?= $this->section('head') ?>
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/libs/vanilla-calendar-pro/index.js"></script>
+<?= $this->endSection() ?>
+
 <?= $this->section('header') ?>
     <div class="row g-2 align-items-center">
         <div class="col"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
@@ -23,15 +27,21 @@
                 <input type="hidden" name="direction" value="<?= esc($direction) ?>">
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="created-from"><?= esc(lang('Admin.createdFrom')) ?></label>
-                    <input type="date" id="created-from" name="created_from" class="form-control" value="<?= esc($createdRange['from']) ?>">
+                    <div class="input-icon">
+                        <input type="text" id="created-from" name="created_from" class="form-control" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($createdRange['from'], 'attr') ?>">
+                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
+                    </div>
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="created-to"><?= esc(lang('Admin.createdTo')) ?></label>
-                    <input type="date" id="created-to" name="created_to" class="form-control" value="<?= esc($createdRange['to']) ?>">
+                    <div class="input-icon">
+                        <input type="text" id="created-to" name="created_to" class="form-control" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($createdRange['to'], 'attr') ?>">
+                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
+                    </div>
                 </div>
                 <div class="col-12 col-md-auto btn-list">
                     <button class="btn btn-primary" type="submit"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                    <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><?= esc(lang('Admin.userClear')) ?></a>
+                    <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.userClear')) ?></a>
                 </div>
             </form>
         </div>
@@ -90,16 +100,18 @@
                                     <?php elseif ($editStates[$user->id] === 'protected'): ?>
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
                                     <?php else: ?>
-                                        <a class="btn btn-sm btn-outline-primary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.editUser'), 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
                                         <?php if (! $user->isBanned() && $user->email && setting('Auth.allowMagicLinkLogins')): ?>
                                             <form method="post" action="<?= route_to('admin/users/invite', $user->id) ?>">
                                                 <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap"><i class="ti ti-mail-forward me-1" aria-hidden="true"></i><?= esc(lang('Admin.userInvite')) ?></button>
+                                                <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" aria-label="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.userInvite'), 'attr') ?>"><i class="ti ti-mail-forward" aria-hidden="true"></i></button>
                                             </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
-                                    <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>" data-bs-toggle="tooltip"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye me-1" aria-hidden="true"></i><?= esc(lang('Admin.viewUserPermissions')) ?></button>
+                                    <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
+                                    <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.viewUserPermissions'), 'attr') ?>">
+                                        <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></button>
+                                    </span>
                                 </div>
                             </td>
                         </tr>
@@ -107,7 +119,7 @@
                     <?php if ($users === []): ?>
                         <tr><td colspan="7" class="text-center py-4">
                             <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
-                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
+                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><i class="ti ti-<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'x' : 'user-plus' ?> me-1" aria-hidden="true"></i><?= esc(lang($search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
                         </td></tr>
                     <?php endif; ?>
                 </tbody>
@@ -164,4 +176,19 @@
             </div>
         </div>
     <?php endif; ?>
+<?= $this->endSection() ?>
+
+<?= $this->section('javascript') ?>
+    <script>
+        for (const field of ['created-from', 'created-to']) {
+            new tabler.Datepicker(document.getElementById(field), {
+                locale: document.documentElement.lang,
+                dateFormat: (date) => [
+                    date.getFullYear(),
+                    String(date.getMonth() + 1).padStart(2, '0'),
+                    String(date.getDate()).padStart(2, '0'),
+                ].join('-'),
+            });
+        }
+    </script>
 <?= $this->endSection() ?>

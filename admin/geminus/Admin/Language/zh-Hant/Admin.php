@@ -299,6 +299,7 @@ return [
     'username'           => '使用者名稱',
     'email'              => '電子郵件',
     'language'           => '語言',
+    'toggleNavigation'   => '展開或收起導覽',
     'timezone'           => '時區',
     'saveProfile'        => '儲存資料',
     'profileSaved'       => '個人資料已更新。',

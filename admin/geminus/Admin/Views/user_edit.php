@@ -44,7 +44,7 @@
         </div>
         <div class="card-footer btn-list">
             <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveProfile')) ?></button>
-            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><?= esc(lang('Admin.userBack')) ?></a>
+            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a>
         </div>
     </form>
 <?= $this->endSection() ?>

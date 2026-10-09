@@ -17,9 +17,11 @@
         <!-- Sidebar -->
         <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
             <div class="container-fluid">
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+                <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-expanded="false" aria-label="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                </span>
                 <h1 class="navbar-brand">
                     <a href="#">
                         <img src="/static/logo-white.png" width="110" height="32" alt="Admin" class="navbar-brand-image" />
@@ -69,6 +71,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler.min.js" integrity="sha384-1yCHfhyU8+V33urXkAlLLpNYd9jdzXkxdafCg0+auIIEtYFnOuM/DwJQgk5sXY98" crossorigin="anonymous"></script>
     <?= $this->renderSection('javascript') ?>
+    <script src="/static/js/button-tooltips.js"></script>
     <script src="/static/js/form-submission.js"></script>
 </body>
 

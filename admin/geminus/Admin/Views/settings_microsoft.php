@@ -55,11 +55,11 @@
                                                 <option value="<?= esc($candidate->id) ?>"><?= esc($candidate->username . ' (' . $candidate->email . ')') ?></option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <button type="submit" class="btn btn-primary" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><?= esc(lang('Admin.microsoftApprove')) ?></button>
+                                        <button type="submit" class="btn btn-primary" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><i class="ti ti-check me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftApprove')) ?></button>
                                     </form>
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/reject', $request['id']) ?>" class="mt-2">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"><?= esc(lang('Admin.microsoftReject')) ?></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftReject')) ?></button>
                                     </form>
                                 </td>
                             </tr>
@@ -83,7 +83,7 @@
                                 <td class="text-end">
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/revoke', $binding['user']->id) ?>">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><?= esc(lang('Admin.microsoftRevoke')) ?></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><i class="ti ti-unlink me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftRevoke')) ?></button>
                                     </form>
                                 </td>
                             </tr>

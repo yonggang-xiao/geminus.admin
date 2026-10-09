@@ -54,7 +54,7 @@ use Geminus\Admin\Libraries\MailTemplates;
             </form>
             <form method="post" action="<?= route_to('admin/mail/templates/reset', $type, $locale) ?>" class="card-footer">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-outline-secondary"><?= esc(lang('Admin.mailTemplateRestore')) ?></button>
+                <button type="submit" class="btn btn-outline-secondary"><i class="ti ti-restore me-1" aria-hidden="true"></i><?= esc(lang('Admin.mailTemplateRestore')) ?></button>
             </form>
         </div>
     <?= $this->endSection() ?>

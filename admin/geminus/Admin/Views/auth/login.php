@@ -28,7 +28,7 @@
                                         <span class="form-check-label"><?= esc(lang('Auth.rememberMe')) ?></span>
                                     </label>
                                 <?php endif; ?>
-                                <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.login')) ?></button></div>
+                                <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><i class="ti ti-login me-1" aria-hidden="true"></i><?= esc(lang('Auth.login')) ?></button></div>
                             </form>
                             <?php if (service('settings')->get('MicrosoftOAuth.enabled')): ?>
                                 <a href="<?= route_to('microsoft/start') ?>" class="btn btn-outline-primary w-100 mt-3"><i class="ti ti-brand-windows me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftLogin')) ?></a>

@@ -67,7 +67,7 @@
                     </div>
                     <div class="card-footer btn-list">
                         <button type="submit" class="btn btn-primary"><i class="ti ti-<?= $editingPermission === null ? 'plus' : 'device-floppy' ?> me-1" aria-hidden="true"></i><?= esc(lang($editingPermission === null ? 'Admin.createPermission' : 'Admin.savePermission')) ?></button>
-                        <?php if ($editingPermission !== null): ?><a class="btn btn-outline-secondary" href="<?= route_to('admin/settings/roles') . '?view=permissions&role=' . rawurlencode($selectedRole) ?>"><?= esc(lang('Admin.cancel')) ?></a><?php endif; ?>
+                        <?php if ($editingPermission !== null): ?><a class="btn btn-outline-secondary" href="<?= route_to('admin/settings/roles') . '?view=permissions&role=' . rawurlencode($selectedRole) ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.cancel')) ?></a><?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -131,7 +131,7 @@
                         </div>
                         <div class="card-footer btn-list">
                             <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveRole')) ?></button>
-                            <a class="btn btn-outline-secondary" href="<?= route_to('admin/settings/roles') . '?role=' . rawurlencode($selectedRole) ?>"><?= esc(lang('Admin.cancel')) ?></a>
+                            <a class="btn btn-outline-secondary" href="<?= route_to('admin/settings/roles') . '?role=' . rawurlencode($selectedRole) ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.cancel')) ?></a>
                         </div>
                     </form>
                 <?php else: ?>

@@ -16,7 +16,7 @@
                         <label class="form-label required" for="auth-email"><?= esc(lang('Auth.email')) ?></label>
                         <input id="auth-email" name="email" type="email" class="form-control" value="<?= esc(old('email', $user->email)) ?>" inputmode="email" autocomplete="email" required>
                     </div>
-                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.send')) ?></button></div>
+                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><i class="ti ti-send me-1" aria-hidden="true"></i><?= esc(lang('Auth.send')) ?></button></div>
                 </form>
             </div>
         </div>

@@ -27,7 +27,7 @@
                         <label class="form-label required" for="register-password-confirm"><?= esc(lang('Auth.passwordConfirm')) ?></label>
                         <input id="register-password-confirm" name="password_confirm" type="password" class="form-control" autocomplete="new-password" required>
                     </div>
-                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.register')) ?></button></div>
+                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><i class="ti ti-user-plus me-1" aria-hidden="true"></i><?= esc(lang('Auth.register')) ?></button></div>
                 </form>
                 <p class="text-center text-secondary mt-3 mb-0"><?= esc(lang('Auth.haveAccount')) ?> <a href="<?= url_to('login') ?>"><?= esc(lang('Auth.login')) ?></a></p>
             </div>

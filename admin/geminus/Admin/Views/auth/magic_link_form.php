@@ -15,7 +15,7 @@
                         <label class="form-label required" for="magic-link-email"><?= esc(lang('Auth.email')) ?></label>
                         <input id="magic-link-email" name="email" type="email" class="form-control" value="<?= esc(old('email', auth()->user()->email ?? null)) ?>" autocomplete="email" required>
                     </div>
-                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><?= esc(lang('Auth.send')) ?></button></div>
+                    <div class="form-footer"><button type="submit" class="btn btn-primary w-100"><i class="ti ti-send me-1" aria-hidden="true"></i><?= esc(lang('Auth.send')) ?></button></div>
                 </form>
                 <p class="text-center mt-3 mb-0"><a href="<?= url_to('login') ?>"><?= esc(lang('Auth.backToLogin')) ?></a></p>
             </div>

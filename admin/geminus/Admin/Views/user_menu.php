@@ -7,8 +7,8 @@
     </a>
     <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
         <div class="d-lg-none">
-            <a href="?theme=dark" class="dropdown-item hide-theme-dark"><?= lang('Admin.darkMode') ?></a>
-            <a href="?theme=light" class="dropdown-item hide-theme-light"><?= lang('Admin.lightMode') ?></a>
+            <a href="?theme=dark" class="dropdown-item hide-theme-dark"><i class="ti ti-moon me-2" aria-hidden="true"></i><?= lang('Admin.darkMode') ?></a>
+            <a href="?theme=light" class="dropdown-item hide-theme-light"><i class="ti ti-sun me-2" aria-hidden="true"></i><?= lang('Admin.lightMode') ?></a>
             <div class="dropdown-divider"></div>
             <div class="dropdown-header"><?= esc(lang('Admin.language')) ?></div>
             <?php foreach (config('App')->supportedLocales as $locale): ?>
@@ -17,13 +17,14 @@
                     <input type="hidden" name="language" value="<?= esc($locale) ?>">
                     <input type="hidden" name="return" value="<?= esc(service('request')->getUri()->getPath()) ?>">
                     <button type="submit" class="dropdown-item <?= service('request')->getLocale() === $locale ? 'active' : '' ?>" <?= service('request')->getLocale() === $locale ? 'aria-current="true"' : '' ?>>
+                        <i class="ti ti-language me-2" aria-hidden="true"></i>
                         <?= esc(lang('Admin.localeName', [], $locale)) ?>
                     </button>
                 </form>
             <?php endforeach ?>
             <div class="dropdown-divider"></div>
         </div>
-        <a href="<?= route_to('admin/profile') ?>" class="dropdown-item"><?= lang('Admin.accountSettings') ?></a>
-        <a href="<?= route_to('logout') ?>" class="dropdown-item"><?= lang('Admin.logout') ?></a>
+        <a href="<?= route_to('admin/profile') ?>" class="dropdown-item"><i class="ti ti-settings me-2" aria-hidden="true"></i><?= lang('Admin.accountSettings') ?></a>
+        <a href="<?= route_to('logout') ?>" class="dropdown-item"><i class="ti ti-logout me-2" aria-hidden="true"></i><?= lang('Admin.logout') ?></a>
     </div>
 </div>

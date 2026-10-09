@@ -28,7 +28,7 @@
                     </div>
                     <div class="col-12 col-sm-auto btn-list">
                         <button type="submit" class="btn btn-primary"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/mail/deliveries') ?>"><?= esc(lang('Admin.userClear')) ?></a>
+                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/mail/deliveries') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.userClear')) ?></a>
                     </div>
                 </form>
             </div>

@@ -21,7 +21,7 @@
         </div>
         <div class="card-footer d-flex gap-2">
             <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Announcements.save')) ?></button>
-            <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements') ?>"><?= esc(lang('Announcements.cancel')) ?></a>
+            <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Announcements.cancel')) ?></a>
         </div>
     </form>
 <?= $this->endSection() ?>

@@ -299,6 +299,7 @@ return [
     'username'           => 'Username',
     'email'              => 'Email',
     'language'           => 'Language',
+    'toggleNavigation'   => 'Toggle navigation',
     'timezone'           => 'Time zone',
     'saveProfile'        => 'Save changes',
     'profileSaved'       => 'Profile updated.',
