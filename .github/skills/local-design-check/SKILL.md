@@ -14,6 +14,13 @@ Check whether a small change belongs where it was made, before the coding task i
 3. State the change's intended behavior and the suspected design boundary before judging it. Distinguish observed behavior and code evidence from assumptions; use a small targeted check when that would settle a disputed claim.
 4. Do not change files, stage, commit, create a PR, or run destructive commands as part of this check. A separately requested fix is a separate task. Preserve other worktree changes.
 
+## Engineering standards
+
+- Read the applicable project instructions and check their concrete rules alongside the design lenses below. For Libraries, check ownership, HTTP and presentation boundaries, business contracts, explicit dependencies and service lifetime under `.github/instructions/codeigniter.instructions.md`.
+- Treat violations introduced or worsened by the change, and required alignment within materially changed responsibilities, as delivery findings even when behavior works and tests pass. Cite the specific rule, code evidence and smallest correction; a runtime defect is not required to establish a standards violation.
+- Distinguish mandatory rules from recommendations. For a deviation from a recommendation, verify its concrete justification, such as a framework integration contract, and report an unjustified deviation when it is in scope. Existing code style alone is not an exception to an explicit rule; do not impose interfaces, extra layers or dependency wrappers unless the project standard or current behavior requires them.
+- Leave untouched historical debt outside the delivery gate. Align only the responsibilities materially changed, not every method in a touched file. For an explicitly requested refactoring assessment, identify candidates in the named scope and distinguish standards violations from optional improvements; do not apply that wider scope to routine change reviews.
+
 ## Design lenses
 
 Apply only lenses relevant to the change; do not report a violation merely because a principle can be named.
@@ -28,6 +35,6 @@ For this project, use `.github/instructions/codeigniter.instructions.md` and nea
 
 ## Verdict
 
-Report only actionable findings, ordered by impact. For each finding include the location, observed evidence, affected design principle, why this layer is wrong, the smallest viable correction and its tradeoff. Prefer one concrete cause over multiple overlapping principle labels. Mark uncertain claims as needing verification and say what check would resolve them.
+Report only actionable findings, ordered by impact. For each finding include the location, observed evidence, applicable engineering rule or affected design principle, why the code violates that rule or responsibility boundary, the smallest viable correction and its tradeoff. In-scope standards violations are blockers; optional cleanup is not. Prefer one concrete cause over multiple overlapping principle labels. Explain justified deviations from recommendations, and mark uncertain claims as needing verification with the check that would resolve them.
 
-If no consequential design issue is found, say so explicitly in one sentence and mention any important unverified assumption. Do not present passing tests as proof of sound design, or claim a design rule is enforceable by static checks when it requires contextual judgment. Keep the response brief enough that the user can act on it without reading an exhaustive review.
+If no in-scope design issue or engineering standards violation is found, say so explicitly in one sentence and mention any important unverified assumption or standard. Do not present passing tests as proof of sound design or standards compliance, or claim a design rule is enforceable by static checks when it requires contextual judgment. Keep the response brief enough that the user can act on it without reading an exhaustive review.

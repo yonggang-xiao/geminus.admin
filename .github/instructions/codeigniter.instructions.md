@@ -33,6 +33,16 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/modules/**/*.php, ad
 - 权限相同的相邻路由优先通过路由组统一声明 `filter`；权限不同的路由分别声明。仅因共享路径前缀分组时不改变原有权限要求；调整分组后核对路径、路由别名及实际生效的过滤器。
 - 项目使用 `en`、`zh-Hans`、`zh-Hant`；在处理本地化请求时确保 Request 与 Language 服务的 locale 一致。框架验证文案优先复用已安装的 `codeigniter4/translations`，注意包内中文目录为 `zh-CN`、`zh-TW`，需适配项目 locale，并补齐当前框架缺少的规则键。
 
+### Libraries 与职责边界
+
+- `Libraries` 用于组织非 HTTP、非展示层的业务流程、策略和技术组件，不仅用于工具类。应用级共享能力放在 `admin/app/Libraries/`，后台底座能力放在 `admin/geminus/Admin/Libraries/`，具体业务能力放在 `admin/modules/{ModuleName}/Libraries/`；可复用不等于必须归入后台底座。
+- 每个类表达一个明确能力，使用 `UserProvisioning`、`UserManagementPolicy`、`Csv` 等具体名称，避免 `Common`、`Utils`、`Manager` 等泛化容器；同类能力较多时按主题建立子目录。类的命名空间、目录和文件名遵循 PSR-4，并保持大小写一致。
+- Controller 负责读取请求、调用业务能力及映射 HTTP 状态与响应；Library 接收明确参数，返回结果或抛出明确异常，不读取全局请求、不重定向，也不生成页面或 JSON 响应。
+- Library 可以编排多个 Model、执行业务验证并管理完整业务操作的事务；Model 负责查询与持久化，Entity 负责实体状态与行为，Cell/View 负责展示。Controller 可以先验证请求格式，但可复用的业务约束不能只放在 Controller 中。
+- 新增或实质调整的 Library 优先显式传入依赖：持续使用的协作对象通过构造函数注入，单次操作的数据和上下文通过方法参数传入。避免在业务类内部通过 `service()`、`model()`、`auth()` 隐式获取依赖，由调用方或工厂负责装配；不为简单的 PHP 内置函数创建依赖包装，也不要求每个类都配接口。
+- `Config\Services` 负责实例创建，不是业务逻辑的存放位置；只有需要统一装配、替换实现或共享实例时才注册服务，不把所有 Library 都注册为共享服务。绑定当前用户或含可变状态的对象不要默认共享。参考官方 [自动加载](https://codeigniter.com/user_guide/concepts/autoloader.html)与 [Services](https://codeigniter.com/user_guide/concepts/services.html) 文档。
+- 保留现有 `Libraries` 组织方式，现有类在相关功能修改时逐步对齐；不为遵循这些约定而批量搬迁目录或进行无关的依赖注入重构。
+
 ### 接口与安全
 
 - JSON 表单接口成功时返回 `{ message, data }`，失败时返回 `{ message, errors }`，并使用相应的 HTTP 状态码。
@@ -54,6 +64,7 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/modules/**/*.php, ad
 ### 测试与风格
 
 - 新增或修改后端行为时（包括 `admin/modules/` 中的业务模块），按行为在 `admin/tests/` 中补充 PHPUnit 单元、功能或数据库测试并运行相关测试；`admin/phpunit.xml.dist` 已将 `app/`、`geminus/Admin/` 与 `modules/` 纳入覆盖率统计范围，并排除视图及路由文件，但仅列入范围不代表已有测试覆盖。
+- 按能力选择测试：纯计算和策略优先使用单元测试，涉及数据库与事务的流程使用数据库测试，HTTP 行为使用功能测试；以可观察的结果、失败路径及相关边界为断言目标，不仅验证方法调用。
 - 新增和修改的 PHP 代码遵循 CodeIgniter Coding Standard；使用项目现有的 `admin/.php-cs-fixer.dist.php` 配置，从 `admin/` 目录运行 `vendor/bin/php-cs-fixer fix --dry-run --diff <改动文件路径>` 检查改动文件。
 
 当项目附近的代码与通用示例不同时，以项目现有写法为准；框架 API 和语法查阅对应的官方指南章节。
