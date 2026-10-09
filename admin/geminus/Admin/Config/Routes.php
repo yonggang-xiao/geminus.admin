@@ -8,20 +8,26 @@ $routes->group('admin/avatars', ['namespace' => 'Geminus\Admin\Controllers', 'fi
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
-    $routes->group('users', ['filter' => 'permission:users.manage-admins'], static function ($routes) {
-        $routes->get('', 'Users::index', ['as' => 'admin/users']);
-        $routes->get('create', 'Users::create', ['as' => 'admin/users/create']);
-        $routes->post('create', 'Users::store', ['as' => 'admin/users/store']);
-        $routes->get('(:num)/edit', 'Users::edit/$1', ['as' => 'admin/users/edit']);
-        $routes->post('(:num)/edit', 'Users::update/$1', ['as' => 'admin/users/update']);
-        $routes->post('(:num)/invite', 'Users::invite/$1', ['as' => 'admin/users/invite']);
-        $routes->get('template', 'Users::template', ['as' => 'admin/users/template']);
-        $routes->get('export', 'Users::export', ['as' => 'admin/users/export']);
-        $routes->post('import', 'Users::import', ['as' => 'admin/users/import']);
-        $routes->get('(:num)/attachments', 'Users::attachments/$1', ['as' => 'admin/users/attachments']);
-        $routes->post('(:num)/attachments', 'Users::uploadAttachment/$1', ['as' => 'admin/users/attachments/upload']);
-        $routes->get('(:num)/attachments/(:num)', 'Users::downloadAttachment/$1/$2', ['as' => 'admin/users/attachments/download']);
-        $routes->post('(:num)/attachments/(:num)/remove', 'Users::removeAttachment/$1/$2', ['as' => 'admin/users/attachments/remove']);
+    $routes->group('users', static function ($routes) {
+        $routes->group('', ['filter' => 'permission:users.view'], static function ($routes) {
+            $routes->get('', 'Users::index', ['as' => 'admin/users']);
+            $routes->get('export', 'Users::export', ['as' => 'admin/users/export']);
+            $routes->get('(:num)/attachments', 'Users::attachments/$1', ['as' => 'admin/users/attachments']);
+            $routes->get('(:num)/attachments/(:num)', 'Users::downloadAttachment/$1/$2', ['as' => 'admin/users/attachments/download']);
+        });
+        $routes->group('', ['filter' => 'permission:users.create'], static function ($routes) {
+            $routes->get('create', 'Users::create', ['as' => 'admin/users/create']);
+            $routes->post('create', 'Users::store', ['as' => 'admin/users/store']);
+            $routes->get('template', 'Users::template', ['as' => 'admin/users/template']);
+            $routes->post('import', 'Users::import', ['as' => 'admin/users/import']);
+        });
+        $routes->group('', ['filter' => 'permission:users.edit'], static function ($routes) {
+            $routes->get('(:num)/edit', 'Users::edit/$1', ['as' => 'admin/users/edit']);
+            $routes->post('(:num)/edit', 'Users::update/$1', ['as' => 'admin/users/update']);
+            $routes->post('(:num)/invite', 'Users::invite/$1', ['as' => 'admin/users/invite']);
+            $routes->post('(:num)/attachments', 'Users::uploadAttachment/$1', ['as' => 'admin/users/attachments/upload']);
+            $routes->post('(:num)/attachments/(:num)/remove', 'Users::removeAttachment/$1/$2', ['as' => 'admin/users/attachments/remove']);
+        });
     });
     $routes->group('settings/email', ['filter' => 'permission:email-settings.manage'], static function ($routes) {
         $routes->get('', 'EmailSettings::index', ['as' => 'admin/settings/email']);
@@ -47,9 +53,9 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->get('', 'MicrosoftSettings::index', ['as' => 'admin/settings/microsoft']);
         $routes->post('', 'MicrosoftSettings::update', ['as' => 'admin/settings/microsoft/update']);
     });
-    $routes->post('settings/microsoft/requests/(:num)/approve', 'MicrosoftSettings::approve/$1', ['as' => 'admin/settings/microsoft/approve', 'filter' => 'permission:users.manage-admins']);
-    $routes->post('settings/microsoft/requests/(:num)/reject', 'MicrosoftSettings::reject/$1', ['as' => 'admin/settings/microsoft/reject', 'filter' => 'permission:users.manage-admins']);
-    $routes->post('settings/microsoft/users/(:num)/revoke', 'MicrosoftSettings::revoke/$1', ['as' => 'admin/settings/microsoft/revoke', 'filter' => 'permission:users.manage-admins']);
+    $routes->post('settings/microsoft/requests/(:num)/approve', 'MicrosoftSettings::approve/$1', ['as' => 'admin/settings/microsoft/approve', 'filter' => 'permission:users.edit']);
+    $routes->post('settings/microsoft/requests/(:num)/reject', 'MicrosoftSettings::reject/$1', ['as' => 'admin/settings/microsoft/reject', 'filter' => 'permission:users.edit']);
+    $routes->post('settings/microsoft/users/(:num)/revoke', 'MicrosoftSettings::revoke/$1', ['as' => 'admin/settings/microsoft/revoke', 'filter' => 'permission:users.edit']);
     $routes->group('profile', static function ($routes) {
         $routes->get('', 'Profile::index', ['as' => 'admin/profile']);
         $routes->post('', 'Profile::update', ['as' => 'admin/profile/update']);

@@ -22,6 +22,7 @@ use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Models\AttachmentModel;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * @internal
@@ -43,7 +44,7 @@ final class UsersTest extends CIUnitTestCase
         parent::tearDown();
     }
 
-    public function testUserListAndExportRequireManagementPermission(): void
+    public function testUserListAndExportRequireViewPermission(): void
     {
         $this->get('/en/admin/users')->assertRedirect();
         $this->get('/en/admin/users/export')->assertRedirect();
@@ -52,11 +53,249 @@ final class UsersTest extends CIUnitTestCase
         $this->get('/en/admin/users/export')->assertRedirect();
     }
 
-    public function testAttachmentsRequireManagementPermission(): void
+    public function testEditingOrdinaryUsersDoesNotRequireManagingAdmins(): void
+    {
+        $this->loginAs('admin');
+        auth()->user()->addPermission('users.edit');
+        $this->createUser('ordinarytarget', 'ordinarytarget@example.com');
+        $ordinary = auth()->getProvider()->findByCredentials(['email' => 'ordinarytarget@example.com']);
+        $this->createUser('admintarget', 'admintarget@example.com');
+        $administrator = auth()->getProvider()->findByCredentials(['email' => 'admintarget@example.com']);
+        $administrator->addGroup('admin');
+        $this->get('/en/admin/users/' . $ordinary->id . '/edit')->assertOK();
+        $this->get('/en/admin/users/' . $administrator->id . '/edit')->assertStatus(404);
+        $before = db_connect()->table(config('Auth')->tables['users'])->where('id', $administrator->id)->get()->getRowArray();
+        $this->post('/en/admin/users/' . $administrator->id . '/edit', [
+            csrf_token() => csrf_hash(), 'username' => 'takeover', 'email' => 'takeover@example.com', 'role' => 'user', 'status' => 'banned',
+        ])->assertStatus(404);
+        $this->assertSame($before, db_connect()->table(config('Auth')->tables['users'])->where('id', $administrator->id)->get()->getRowArray());
+        $this->assertSame('admintarget@example.com', auth()->getProvider()->findById($administrator->id)->email);
+        $this->post('/en/admin/users/' . $ordinary->id . '/edit', [
+            csrf_token() => csrf_hash(), 'username' => 'ordinarytarget', 'email' => 'ordinarytarget@example.com', 'role' => 'admin', 'status' => 'enabled',
+        ])->assertRedirect();
+        $this->assertArrayHasKey('role', session('user_errors'));
+        $this->assertFalse(auth()->getProvider()->findById($ordinary->id)->inGroup('admin'));
+    }
+
+    #[DataProvider('provideUserOperationPermissionsAreIndependent')]
+    public function testUserOperationPermissionsAreIndependent(string $permission): void
+    {
+        $this->loginAs('user');
+        auth()->user()->addPermission($permission);
+        $this->createUser('permissiontarget', 'permissiontarget@example.com');
+        $target = auth()->getProvider()->findByCredentials(['email' => 'permissiontarget@example.com']);
+        $target->addGroup('user');
+        $denied = config('Auth')->permissionDeniedRedirect();
+
+        foreach (['users.view' => '/en/admin/users', 'users.create' => '/en/admin/users/create', 'users.edit' => '/en/admin/users/' . $target->id . '/edit'] as $required => $route) {
+            $result = $this->get($route);
+            if ($permission === $required) {
+                $result->assertOK();
+            } else {
+                $result->assertRedirectTo($denied);
+            }
+        }
+
+        foreach (['users.view' => '/en/admin/users/export', 'users.create' => '/en/admin/users/template'] as $required => $route) {
+            $result = $this->get($route);
+            if ($permission === $required) {
+                $result->assertStatus(200);
+            } else {
+                $result->assertRedirectTo($denied);
+            }
+        }
+        $beforeCount = auth()->getProvider()->countAllResults();
+        $import      = $this->post('/en/admin/users/import', [csrf_token() => csrf_hash()]);
+        if ($permission === 'users.create') {
+            $import->assertRedirectTo('/en/admin/users/create');
+            $this->assertSame(lang('Admin.invalidUserCsv'), session('alert')['message']);
+        } else {
+            $import->assertRedirectTo($denied);
+        }
+        $this->assertSame($beforeCount, auth()->getProvider()->countAllResults());
+
+        $this->createUser('permissioninvite', 'permissioninvite@example.com');
+        $invited  = auth()->getProvider()->findByCredentials(['email' => 'permissioninvite@example.com']);
+        $settings = service('settings')->getMany(['Email.fromEmail', 'Auth.allowMagicLinkLogins']);
+        service('settings')->setMany(['Email.fromEmail' => 'sender@example.com', 'Auth.allowMagicLinkLogins' => true]);
+        $email = $this->createMock(QueuedEmail::class);
+        if ($permission === 'users.edit') {
+            $email->expects($this->once())->method('setInvitationUserId')->with($invited->id);
+            $email->expects($this->once())->method('send')->willReturn(true);
+        } else {
+            $email->expects($this->never())->method('setInvitationUserId');
+            $email->expects($this->never())->method('send');
+        }
+        Services::injectMock('email', $email);
+
+        try {
+            $result = $this->post('/en/admin/users/' . $invited->id . '/invite', [csrf_token() => csrf_hash()]);
+            if ($permission === 'users.edit') {
+                $result->assertRedirectTo('/en/admin/users/' . $invited->id . '/edit');
+                $this->assertSame(lang('Admin.userInviteQueued'), session('alert')['message']);
+            } else {
+                $result->assertRedirectTo($denied);
+            }
+        } finally {
+            service('settings')->setMany($settings);
+            Services::resetSingle('email');
+        }
+
+        $created = $this->post('/en/admin/users/create', [csrf_token() => csrf_hash(), 'username' => 'permissioncreated', 'email' => 'permissioncreated@example.com']);
+        if ($permission === 'users.create') {
+            $created->assertRedirectTo('/en/admin/users/create');
+            $this->assertSame(['user'], auth()->getProvider()->findByCredentials(['email' => 'permissioncreated@example.com'])->getGroups());
+        } else {
+            $created->assertRedirectTo($denied);
+            $this->assertNull(auth()->getProvider()->findByCredentials(['email' => 'permissioncreated@example.com']));
+        }
+
+        $updated = $this->post('/en/admin/users/' . $target->id . '/edit', [csrf_token() => csrf_hash(), 'username' => 'updatedtarget', 'email' => 'permissiontarget@example.com', 'role' => 'user', 'status' => 'banned']);
+        if ($permission === 'users.edit') {
+            $updated->assertRedirectTo('/en/admin/users/' . $target->id . '/edit');
+            $this->assertSame('updatedtarget', auth()->getProvider()->findById($target->id)->username);
+            $this->assertTrue(auth()->getProvider()->findById($target->id)->isBanned());
+        } else {
+            $updated->assertRedirectTo($denied);
+            $this->assertSame('permissiontarget', auth()->getProvider()->findById($target->id)->username);
+            $this->assertFalse(auth()->getProvider()->findById($target->id)->isBanned());
+        }
+    }
+
+    public static function provideUserOperationPermissionsAreIndependent(): iterable
+    {
+        return [['users.view'], ['users.create'], ['users.edit'], ['users.manage-admins']];
+    }
+
+    public function testOnlyAdminRoleNeedsAdditionalManagementPermission(): void
+    {
+        $originalMatrix      = setting('AuthGroups.matrix');
+        $matrix              = $originalMatrix;
+        $matrix['admin']     = ['users.edit'];
+        $matrix['developer'] = ['users.edit'];
+        setting('AuthGroups.matrix', $matrix);
+
+        try {
+            $this->loginAs('admin');
+
+            foreach (['admin', 'developer'] as $role) {
+                $this->createUser('target' . $role, 'target' . $role . '@example.com');
+                $target = auth()->getProvider()->findByCredentials(['email' => 'target' . $role . '@example.com']);
+                $target->addGroup($role);
+                $route = '/en/admin/users/' . $target->id . '/edit';
+                if ($role === 'admin') {
+                    $this->get($route)->assertStatus(404);
+                    auth()->user()->addPermission('users.manage-admins');
+                    $this->createUser('promotedordinary', 'promotedordinary@example.com');
+                    $promoted = auth()->getProvider()->findByCredentials(['email' => 'promotedordinary@example.com']);
+                    $promoted->addGroup('user');
+                    $this->post('/en/admin/users/' . $promoted->id . '/edit', [csrf_token() => csrf_hash(), 'username' => 'promotedordinary', 'email' => 'promotedordinary@example.com', 'role' => 'admin', 'status' => 'enabled'])->assertRedirectTo('/en/admin/users/' . $promoted->id . '/edit');
+                    $this->assertSame(['admin'], auth()->getProvider()->findById($promoted->id)->getGroups());
+                }
+                $page = $this->get($route);
+                $page->assertOK();
+                $this->post($route, [csrf_token() => csrf_hash(), 'username' => 'changed' . $role, 'email' => 'target' . $role . '@example.com', 'role' => $role, 'status' => 'enabled'])->assertRedirect();
+                $this->assertSame('changed' . $role, auth()->getProvider()->findById($target->id)->username);
+                if ($role === 'admin') {
+                    auth()->user()->removePermission('users.manage-admins');
+                }
+            }
+        } finally {
+            setting('AuthGroups.matrix', $originalMatrix);
+        }
+    }
+
+    public function testReadOnlyUserCannotChangeAttachmentsOrSeeWriteActions(): void
+    {
+        $this->loginAs('user');
+        auth()->user()->addPermission('users.view');
+        $this->createUser('readonlytarget', 'readonlytarget@example.com');
+        $target    = auth()->getProvider()->findByCredentials(['email' => 'readonlytarget@example.com']);
+        $filename  = bin2hex(random_bytes(16)) . '.txt';
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+        file_put_contents($directory . $filename, 'content');
+        $model        = new AttachmentModel();
+        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $target->id, 'filename' => $filename, 'original_name' => 'readonly.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
+        $route        = '/en/admin/users/' . $target->id . '/attachments';
+
+        try {
+            $page = $this->get('/en/admin/users');
+            $page->assertOK();
+            $this->assertStringNotContainsString('href="/en/admin/users/create"', $page->response()->getBody());
+            $this->assertStringNotContainsString('action="/en/admin/users/import"', $page->response()->getBody());
+            $this->assertStringNotContainsString('href="/en/admin/users/' . $target->id . '/edit"', $page->response()->getBody());
+            $attachments = $this->get($route);
+            $attachments->assertOK();
+            $this->assertStringNotContainsString('enctype="multipart/form-data"', $attachments->response()->getBody());
+            $this->assertStringNotContainsString($route . '/' . $attachmentId . '/remove', $attachments->response()->getBody());
+            $this->get($route . '/' . $attachmentId)->assertStatus(200);
+            $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
+            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
+            $this->assertNotNull($model->find($attachmentId));
+            $this->assertSame('content', file_get_contents($directory . $filename));
+
+            $target->addGroup('admin');
+            $this->get($route)->assertStatus(404);
+            $this->get($route . '/' . $attachmentId)->assertStatus(404);
+            auth()->user()->addPermission('users.edit');
+            $beforeCount = $model->countAllResults();
+            $this->post($route, [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertSame($beforeCount, $model->countAllResults());
+            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertNotNull($model->find($attachmentId));
+            $this->assertFileExists($directory . $filename);
+            auth()->user()->addPermission('users.manage-admins');
+            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
+            $this->assertNull($model->find($attachmentId));
+            $this->assertFileDoesNotExist($directory . $filename);
+        } finally {
+            if (is_file($directory . $filename)) {
+                unlink($directory . $filename);
+            }
+        }
+    }
+
+    public function testDelegatedUserManagerCannotAccessOtherSuperadminAttachments(): void
+    {
+        $this->loginAs('admin');
+        auth()->user()->addPermission('users.view', 'users.edit', 'users.manage-admins');
+        $this->createUser('superattachmenttarget', 'superattachmenttarget@example.com');
+        $target = auth()->getProvider()->findByCredentials(['email' => 'superattachmenttarget@example.com']);
+        $target->addGroup('superadmin');
+        $filename  = bin2hex(random_bytes(16)) . '.txt';
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+        file_put_contents($directory . $filename, 'protected content');
+        $model        = new AttachmentModel();
+        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $target->id, 'filename' => $filename, 'original_name' => 'protected.txt', 'mime_type' => 'text/plain', 'size_bytes' => 17, 'uploaded_by' => auth()->id()]);
+        $route        = '/en/admin/users/' . $target->id . '/attachments';
+
+        try {
+            $page = $this->get('/en/admin/users');
+            $page->assertOK();
+            $this->assertStringNotContainsString('href="' . $route . '"', $page->response()->getBody());
+            $this->get($route)->assertStatus(404);
+            $this->get($route . '/' . $attachmentId)->assertStatus(404);
+            $this->post($route, [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertSame(1, $model->countAllResults());
+            $this->assertNotNull($model->find($attachmentId));
+            $this->assertSame('protected content', file_get_contents($directory . $filename));
+        } finally {
+            unlink($directory . $filename);
+        }
+    }
+
+    public function testAttachmentsRequireReadAndWritePermissions(): void
     {
         $this->get('/en/admin/users/1/attachments')->assertRedirect();
         $this->post('/en/admin/users/1/attachments', [csrf_token() => csrf_hash()])->assertRedirect();
-        $this->loginAs('admin');
+        $this->loginAs('user');
         $this->get('/en/admin/users/1/attachments')->assertRedirect();
         $this->get('/en/admin/users/1/attachments/1')->assertRedirect();
         $this->post('/en/admin/users/1/attachments/1/remove', [csrf_token() => csrf_hash()])->assertRedirect();
@@ -855,12 +1094,13 @@ final class UsersTest extends CIUnitTestCase
         $this->assertFalse($updated->isBanned());
     }
 
-    public function testOrdinaryAdminCannotEditUsersAndInvalidRoleCannotBeAssigned(): void
+    public function testOrdinaryAdminCannotPromoteUsersAndInvalidRoleCannotBeAssigned(): void
     {
         $this->loginAs('admin');
         $this->createUser('targetuser', 'target@example.com');
         $user = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
-        $this->post('/en/admin/users/' . $user->id . '/edit', [csrf_token() => csrf_hash(), 'role' => 'admin', 'status' => 'enabled'])->assertRedirect();
+        $this->post('/en/admin/users/' . $user->id . '/edit', [csrf_token() => csrf_hash(), 'username' => 'targetuser', 'email' => 'target@example.com', 'role' => 'admin', 'status' => 'enabled'])->assertRedirect();
+        $this->assertArrayHasKey('role', session('user_errors'));
         $this->assertFalse(auth()->getProvider()->findById($user->id)->inGroup('admin'));
 
         auth()->logout();
@@ -909,7 +1149,7 @@ final class UsersTest extends CIUnitTestCase
         $page = $this->get('/en/admin/users?q=invitee');
         $page->assertOK();
         $this->assertStringContainsString('action="' . route_to('admin/users/invite', $user->id) . '"', $page->response()->getBody());
-        $this->assertStringContainsString('Send invitation', $page->response()->getBody());
+        $this->assertStringContainsString('aria-label="' . esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') . '"', $page->response()->getBody());
 
         foreach ([true, false] as $sent) {
             $email = $this->createMock(QueuedEmail::class);

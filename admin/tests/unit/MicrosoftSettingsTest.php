@@ -12,6 +12,7 @@ use Geminus\Admin\Controllers\MicrosoftLogin;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\OrganizationAzure;
+use PHPUnit\Framework\Attributes\DataProvider;
 use TheNetworg\OAuth2\Client\Token\AccessToken;
 
 /**
@@ -513,9 +514,144 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $links->request($tenant, $object, null);
 
-        $this->post('/en/admin/settings/microsoft/requests/' . $links->pending()[0]['id'] . '/approve', [csrf_token() => csrf_hash(), 'user_id' => auth()->user()->id])->assertRedirect();
+        $this->post('/en/admin/settings/microsoft/requests/' . $links->pending()[0]['id'] . '/approve', [csrf_token() => csrf_hash(), 'user_id' => auth()->user()->id])->assertStatus(404);
 
         $this->assertNull($links->findUser($tenant, $object));
+    }
+
+    public function testUserEditorsNeedAdditionalPermissionOnlyForAdminBindings(): void
+    {
+        $this->loginAs('developer');
+        auth()->user()->addPermission('users.edit', 'microsoft-settings.manage');
+        $users  = auth()->getProvider();
+        $links  = new MicrosoftLinks();
+        $tenant = '11111111-2222-3333-4444-555555555555';
+
+        foreach (['user', 'developer', 'admin'] as $index => $role) {
+            $target        = new AdminUser(['username' => 'binding' . $role]);
+            $target->email = 'binding' . $role . '@example.com';
+            $target->setPassword('A-local-password-123!');
+            $users->save($target);
+            $target = $users->findById($users->getInsertID());
+            $target->addGroup($role);
+            $object = sprintf('bbbbbbbb-cccc-dddd-eeee-%012x', $index);
+            $this->assertTrue($links->request($tenant, $object, null));
+            $requestId = $links->pending()[0]['id'];
+            $route     = '/en/admin/settings/microsoft/requests/' . $requestId . '/approve';
+            $page      = $this->get('/en/admin/settings/microsoft');
+            $page->assertOK();
+
+            if ($role === 'admin') {
+                $this->assertStringNotContainsString('<option value="' . $target->id . '">', $page->response()->getBody());
+                $requests = $links->pending();
+                $this->post($route, [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertStatus(404);
+                $this->assertSame($requests, $links->pending());
+                $this->assertNull($links->findUser($tenant, $object));
+                $linked = 'cccccccc-dddd-eeee-ffff-000000000000';
+                $this->assertTrue($links->bind($target, $tenant, $linked));
+                $revoke = '/en/admin/settings/microsoft/users/' . $target->id . '/revoke';
+                $this->post($revoke, [csrf_token() => csrf_hash()])->assertStatus(404);
+                $this->assertSame($target->id, $links->findUser($tenant, $linked)?->id);
+                auth()->user()->addPermission('users.manage-admins', 'users.delete');
+                $this->post($revoke, [csrf_token() => csrf_hash()])->assertRedirect();
+                $this->assertNull($links->findUser($tenant, $linked));
+            } else {
+                $this->assertStringContainsString('<option value="' . $target->id . '">', $page->response()->getBody());
+            }
+
+            $this->post($route, [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertRedirect();
+            $this->assertSame($target->id, $links->findUser($tenant, $object)?->id);
+            $this->assertSame([], $links->pending());
+            $this->post('/en/admin/settings/microsoft/users/' . $target->id . '/revoke', [csrf_token() => csrf_hash()])->assertRedirect();
+            $this->assertNull($links->findUser($tenant, $object));
+        }
+    }
+
+    #[DataProvider('provideBindingEditorsCannotManageMorePrivilegedAccounts')]
+    public function testBindingEditorsCannotManageMorePrivilegedAccounts(string $kind): void
+    {
+        $this->loginAs('user');
+        auth()->user()->addPermission('users.edit', 'users.manage-admins', 'microsoft-settings.manage', 'beta.access');
+        $users         = auth()->getProvider();
+        $target        = new AdminUser(['username' => 'privilegedbinding']);
+        $target->email = 'privilegedbinding@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        if ($kind === 'role') {
+            $target->addGroup('developer');
+        } elseif ($kind === 'multiple') {
+            $target->addGroup('user', 'beta');
+        } else {
+            $target->addGroup('user');
+            $target->addPermission('operation-audit.view');
+        }
+        $links   = new MicrosoftLinks();
+        $tenant  = '11111111-2222-3333-4444-555555555555';
+        $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
+        $this->assertTrue($links->bind($target, $tenant, $linked));
+        $this->assertTrue($links->request($tenant, $pending, null));
+        $requests  = $links->pending();
+        $requestId = $requests[0]['id'];
+        $page      = $this->get('/en/admin/settings/microsoft');
+        $page->assertOK();
+        $this->assertStringNotContainsString('<option value="' . $target->id . '">', $page->response()->getBody());
+        $this->assertStringNotContainsString('/users/' . $target->id . '/revoke', $page->response()->getBody());
+        $this->get('/en/admin/users/' . $target->id . '/edit')->assertStatus(404);
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertStatus(404);
+        $this->post('/en/admin/settings/microsoft/users/' . $target->id . '/revoke', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->assertSame($requests, $links->pending());
+        $this->assertNull($links->findUser($tenant, $pending));
+        $this->assertSame($target->id, $links->findUser($tenant, $linked)?->id);
+    }
+
+    public static function provideBindingEditorsCannotManageMorePrivilegedAccounts(): iterable
+    {
+        return [['role'], ['multiple'], ['direct']];
+    }
+
+    public function testBindingActionsUseEditingPermissionNotConfigurationPermission(): void
+    {
+        $this->loginAs('user');
+        auth()->user()->addPermission('users.edit');
+        $this->assertFalse(auth()->user()->can('microsoft-settings.manage'));
+        $this->assertFalse(auth()->user()->can('users.manage-admins'));
+        $this->get('/en/admin/settings/microsoft')->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
+        $users         = auth()->getProvider();
+        $target        = new AdminUser(['username' => 'ordinarybinding']);
+        $target->email = 'ordinarybinding@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        $target->addGroup('user');
+        $links  = new MicrosoftLinks();
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $this->assertTrue($links->request($tenant, $object, null));
+        $requestId = $links->pending()[0]['id'];
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertRedirect();
+        $this->assertSame($target->id, $links->findUser($tenant, $object)?->id);
+        $this->post('/en/admin/settings/microsoft/users/' . $target->id . '/revoke', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertNull($links->findUser($tenant, $object));
+        $this->assertTrue($links->request($tenant, 'cccccccc-dddd-eeee-ffff-000000000000', null));
+        $requestId = $links->pending()[0]['id'];
+        $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/reject', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame([], $links->pending());
+
+        $pending = 'dddddddd-eeee-ffff-0000-111111111111';
+        $this->assertTrue($links->bind($target, $tenant, $object));
+        $this->assertTrue($links->request($tenant, $pending, null));
+        $requests  = $links->pending();
+        $requestId = $requests[0]['id'];
+        auth()->user()->removePermission('users.edit');
+
+        foreach (['/requests/' . $requestId . '/approve', '/requests/' . $requestId . '/reject', '/users/' . $target->id . '/revoke'] as $action) {
+            $this->post('/en/admin/settings/microsoft' . $action, [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
+            $this->assertSame($requests, $links->pending());
+            $this->assertNull($links->findUser($tenant, $pending));
+            $this->assertSame($target->id, $links->findUser($tenant, $object)?->id);
+        }
     }
 
     public function testDelegatedAdminCannotManageSuperadminMicrosoftIdentity(): void
@@ -678,7 +814,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $this->assertTrue($links->bind(auth()->user(), $tenant, $object));
-        $this->post('/en/admin/settings/microsoft/users/' . auth()->user()->id . '/revoke', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->post('/en/admin/settings/microsoft/users/' . auth()->user()->id . '/revoke', [csrf_token() => csrf_hash()])->assertStatus(404);
         $this->assertSame(auth()->user()->id, $links->findUser($tenant, $object)?->id);
     }
 

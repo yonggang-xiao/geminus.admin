@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Shield\Authorization\PermissionMatcher;
+use Geminus\Admin\Libraries\SuperadminGrants;
 
 class RoleSettings extends BaseController
 {
@@ -200,9 +201,7 @@ class RoleSettings extends BaseController
 
         $permissions[$data['name']] = $data['description'];
         $matrix                     = setting('AuthGroups.matrix');
-        if (! PermissionMatcher::matches($data['name'], $matrix['superadmin'] ?? [])) {
-            $matrix['superadmin'][] = $data['name'];
-        }
+        $matrix['superadmin']       = SuperadminGrants::withPermissions($matrix['superadmin'] ?? [], [$data['name']]);
         service('settings')->setMany(['AuthGroups.permissions' => $permissions, 'AuthGroups.matrix' => $matrix]);
 
         $returnRole = $this->request->getGet('role');

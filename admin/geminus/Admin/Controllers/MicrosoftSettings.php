@@ -9,6 +9,7 @@ use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\UserManagementPolicy;
 
 class MicrosoftSettings extends BaseController
 {
@@ -20,14 +21,15 @@ class MicrosoftSettings extends BaseController
 
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
-        $canApprove = auth()->user()->can('users.manage-admins');
+        $canApprove = auth()->user()->can('users.edit');
         $links      = new MicrosoftLinks();
+        $policy     = new UserManagementPolicy(auth()->user());
         $identities = $canApprove ? model(UserIdentityModel::class)->where('type', MicrosoftLinks::IDENTITY_TYPE)->findAll() : [];
         $bindings   = [];
 
         foreach ($identities as $identity) {
             $user = auth()->getProvider()->findById($identity->user_id);
-            if ($user && (! $user->inGroup('superadmin') || $user->id === auth()->id())) {
+            if ($user && ($policy->canManage($user) || ($user->inGroup('superadmin') && $user->id === auth()->id()))) {
                 $bindings[] = ['user' => $user, 'identity' => $identity];
             }
         }
@@ -37,7 +39,7 @@ class MicrosoftSettings extends BaseController
             'page_title' => lang('Admin.microsoftLogin'),
             'microsoft'  => service('settings')->getMany(['MicrosoftOAuth.enabled', 'MicrosoftOAuth.tenant', 'MicrosoftOAuth.clientId']),
             'requests'   => $canApprove ? $links->pending() : [],
-            'candidates' => $canApprove ? array_values(array_filter(auth()->getProvider()->findAll(), static fn ($user) => $links->isEligible($user) && ! $user->inGroup('superadmin'))) : [],
+            'candidates' => $canApprove ? array_values(array_filter(auth()->getProvider()->findAll(), static fn ($user) => $links->isEligible($user) && $policy->canManage($user))) : [],
             'bindings'   => $bindings,
         ]);
     }
@@ -71,7 +73,7 @@ class MicrosoftSettings extends BaseController
 
     public function approve(int $requestId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.edit')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -82,7 +84,7 @@ class MicrosoftSettings extends BaseController
         }
 
         $user = auth()->getProvider()->findById($validation->getValidated()['user_id']);
-        if ($user?->inGroup('superadmin')) {
+        if ($user && ! (new UserManagementPolicy(auth()->user()))->canManage($user)) {
             return $this->response->setStatusCode(404);
         }
 
@@ -95,7 +97,7 @@ class MicrosoftSettings extends BaseController
 
     public function reject(int $requestId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.edit')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -109,12 +111,12 @@ class MicrosoftSettings extends BaseController
 
     public function revoke(int $userId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.edit')) {
             return $this->response->setStatusCode(403);
         }
 
         $user = auth()->getProvider()->findById($userId);
-        if ($user?->inGroup('superadmin') && $user->id !== auth()->id()) {
+        if ($user && ! ($user->inGroup('superadmin') && $user->id === auth()->id()) && ! (new UserManagementPolicy(auth()->user()))->canManage($user)) {
             return $this->response->setStatusCode(404);
         }
 

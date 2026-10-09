@@ -23,7 +23,7 @@
         </div>
         <div class="card-footer btn-list">
             <button class="btn btn-primary" type="submit"><i class="ti ti-user-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createUser')) ?></button>
-            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a>
+            <a class="btn btn-outline-secondary" href="<?= route_to($me->can('users.view') ? 'admin/users' : 'admin/dashboard') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a>
         </div>
     </form>
 <?= $this->endSection() ?>

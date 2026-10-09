@@ -10,6 +10,7 @@ use Geminus\Admin\Database\Migrations\RegisterAdminFeaturePermissions;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\SuperadminGrants;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -35,6 +36,9 @@ final class RoleSettingsTest extends CIUnitTestCase
         $permissions                          = $originalPermissions;
         $permissions['email-settings.manage'] = 'Custom email settings';
         setting('AuthGroups.permissions', $permissions);
+        $existingMatrix               = $originalMatrix;
+        $existingMatrix['superadmin'] = ['admin.*', 'users.create', 'email-settings.manage', 'legacy.export'];
+        setting('AuthGroups.matrix', $existingMatrix);
 
         try {
             $migration = new RegisterAdminFeaturePermissions();
@@ -45,10 +49,13 @@ final class RoleSettingsTest extends CIUnitTestCase
             $updated = setting('AuthGroups.permissions');
             $matrix  = setting('AuthGroups.matrix');
             $this->assertSame('Custom email settings', $updated['email-settings.manage']);
+            $this->assertSame(['admin.*', 'users.*', 'email-settings.*', 'legacy.*', 'email-deliveries.*', 'email-templates.*', 'operation-audit.*', 'microsoft-settings.*'], $matrix['superadmin']);
 
-            foreach (['email-settings.manage', 'email-deliveries.view', 'email-templates.manage', 'operation-audit.view', 'microsoft-settings.manage'] as $permission) {
+            foreach (['users.view', 'email-settings.manage', 'email-deliveries.view', 'email-templates.manage', 'operation-audit.view', 'microsoft-settings.manage'] as $permission) {
                 $this->assertArrayHasKey($permission, $updated);
                 $this->assertTrue(PermissionMatcher::matches($permission, $matrix['superadmin']));
+                $this->assertContains(explode('.', $permission, 2)[0] . '.*', $matrix['superadmin']);
+                $this->assertNotContains($permission, $matrix['superadmin']);
             }
 
             foreach ($originalPermissions as $permission => $description) {
@@ -57,12 +64,12 @@ final class RoleSettingsTest extends CIUnitTestCase
                 }
             }
 
-            foreach ($originalMatrix as $role => $grants) {
+            foreach ($existingMatrix as $role => $grants) {
                 if ($role !== 'superadmin') {
                     $this->assertSame($grants, $matrix[$role]);
                 } else {
                     foreach ($grants as $grant) {
-                        $this->assertContains($grant, $matrix[$role]);
+                        $this->assertContains(explode('.', $grant, 2)[0] . '.*', $matrix[$role]);
                     }
                 }
             }
@@ -70,6 +77,20 @@ final class RoleSettingsTest extends CIUnitTestCase
         } finally {
             service('settings')->setMany(['AuthGroups.permissions' => $originalPermissions, 'AuthGroups.matrix' => $originalMatrix]);
         }
+    }
+
+    public function testSuperadminDomainGrantsCoverFutureAbilitiesWithoutChangingInvalidGrants(): void
+    {
+        $grants = SuperadminGrants::withPermissions(['reports.view', 'reports.*', 'legacy.export', 'invalid', '*.manage', 'broken..view'], ['reports.edit', 'announcements.access']);
+        $this->assertSame(['reports.*', 'legacy.*', 'invalid', '*.manage', 'broken..view', 'announcements.*'], $grants);
+        $this->assertTrue(PermissionMatcher::matches('reports.publish', $grants));
+        $this->assertFalse(PermissionMatcher::matches('users.create', $grants));
+        $this->assertSame($grants, SuperadminGrants::withPermissions($grants, ['reports.view']));
+        $this->assertSame(['announcements.*'], SuperadminGrants::withPermissions([], ['announcements.access', 'announcements.manage']));
+        $invalid = ['Reports.view', "reports.view\n", 'reports.view.extra', 'reports.*.x', '1reports.view'];
+        $this->assertSame($invalid, SuperadminGrants::withPermissions($invalid, []));
+        $this->assertSame($invalid, SuperadminGrants::withPermissions([], $invalid));
+        $this->assertFalse(PermissionMatcher::matches('reports.publish', $invalid));
     }
 
     public function testOnlySuperadminCanManageRolesAndPermissions(): void
@@ -150,7 +171,7 @@ final class RoleSettingsTest extends CIUnitTestCase
     public static function provideRoleGrantOnlyOpensItsOwnFeature(): iterable
     {
         return [
-            ['users.manage-admins', '/en/admin/users'],
+            ['users.view', '/en/admin/users'],
             ['email-settings.manage', '/en/admin/settings/email'],
             ['email-deliveries.view', '/en/admin/mail/deliveries'],
             ['email-templates.manage', '/en/admin/mail/templates'],
@@ -355,6 +376,28 @@ final class RoleSettingsTest extends CIUnitTestCase
         $this->post('/en/admin/settings/roles/developer', ['title' => 'Changed']);
     }
 
+    public function testCreatingPermissionsNormalizesOnlySuperadminGrants(): void
+    {
+        $this->loginAs('superadmin');
+        $originalPermissions  = setting('AuthGroups.permissions');
+        $originalMatrix       = setting('AuthGroups.matrix');
+        $matrix               = $originalMatrix;
+        $matrix['superadmin'] = ['legacy.export'];
+        $matrix['developer']  = ['users.edit'];
+        setting('AuthGroups.matrix', $matrix);
+
+        try {
+            foreach (['reports.view', 'reports.edit'] as $permission) {
+                $this->post('/en/admin/settings/permissions', [csrf_token() => csrf_hash(), 'name' => $permission, 'description' => 'Report capability'])->assertRedirectTo('/en/admin/settings/roles?view=permissions');
+                $matrix['superadmin'] = ['legacy.*', 'reports.*'];
+                $this->assertSame($matrix, setting('AuthGroups.matrix'));
+                $this->assertSame('Report capability', setting('AuthGroups.permissions')[$permission]);
+            }
+        } finally {
+            service('settings')->setMany(['AuthGroups.permissions' => $originalPermissions, 'AuthGroups.matrix' => $originalMatrix]);
+        }
+    }
+
     public function testNewRoleAndPermissionCanBeAssigned(): void
     {
         $this->loginAs('superadmin');
@@ -390,6 +433,10 @@ final class RoleSettingsTest extends CIUnitTestCase
         $this->assertStringEndsWith('/en/admin/settings/roles?view=permissions&role=developer', $contextRedirect->response()->getHeaderLine('Location'));
         $this->assertSame('Operator', setting('AuthGroups.groups')['operator']['title']);
         $this->assertSame('View reports', setting('AuthGroups.permissions')['reports.view']);
+        $this->assertContains('reports.*', setting('AuthGroups.matrix')['superadmin']);
+        $this->assertNotContains('reports.view', setting('AuthGroups.matrix')['superadmin']);
+        $this->assertNotContains('reports.edit', setting('AuthGroups.matrix')['superadmin']);
+        $this->assertCount(1, array_keys(setting('AuthGroups.matrix')['superadmin'], 'reports.*', true));
         $this->assertTrue(auth()->user()->can('reports.view'));
 
         $saved = $this->post('/en/admin/settings/roles/operator/permissions', [csrf_token() => csrf_hash(), 'permissions' => ['reports.view']]);
@@ -469,7 +516,7 @@ final class RoleSettingsTest extends CIUnitTestCase
         $groups['manager'] = ['title' => 'Manager', 'description' => ''];
         setting('AuthGroups.groups', $groups);
         $matrix            = setting('AuthGroups.matrix');
-        $matrix['manager'] = ['admin.access', 'users.manage-admins'];
+        $matrix['manager'] = ['admin.access', 'users.edit', 'users.manage-admins'];
         setting('AuthGroups.matrix', $matrix);
 
         $target        = new AdminUser(['username' => 'manageduser']);

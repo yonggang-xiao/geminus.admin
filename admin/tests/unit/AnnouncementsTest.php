@@ -6,6 +6,7 @@ use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Shield\Authorization\PermissionMatcher;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -71,7 +72,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertContains(Registrar::AdminMenu()['items'][0], config(AdminMenu::class)->items);
     }
 
-    public function testMigrationRegistersPermissionsWithoutGrantingRoles(): void
+    public function testMigrationRegistersPermissionsAndGrantsOnlySuperadminDomain(): void
     {
         Services::resetSingle('settings');
         $original             = setting('AuthGroups.matrix');
@@ -92,8 +93,11 @@ final class AnnouncementsTest extends CIUnitTestCase
             $migration->up();
 
             Services::resetSingle('settings');
-            $updated = setting('AuthGroups.matrix');
-            $this->assertSame($matrix, $updated);
+            $updated                = setting('AuthGroups.matrix');
+            $expected               = $matrix;
+            $expected['superadmin'] = ['admin.*', 'users.*', 'announcements.*'];
+            $this->assertSame($expected, $updated);
+            $this->assertTrue(PermissionMatcher::matches('announcements.publish', $updated['superadmin']));
             $this->assertSame('Can read published announcements', setting('AuthGroups.permissions')['announcements.access']);
             $this->assertSame('Can manage example announcements', setting('AuthGroups.permissions')['announcements.manage']);
             $this->assertSame(1, db_connect($settings['group'])->table($settings['table'])->where('class', AuthGroups::class)->where('key', 'permissions')->countAllResults());
@@ -107,7 +111,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             Services::resetSingle('settings');
             $this->assertSame('Custom description', setting('AuthGroups.permissions')['announcements.manage']);
             $this->assertSame('Custom reader description', setting('AuthGroups.permissions')['announcements.access']);
-            $this->assertSame($matrix, setting('AuthGroups.matrix'));
+            $this->assertSame($expected, setting('AuthGroups.matrix'));
         } finally {
             setting('AuthGroups.matrix', $original);
             setting('AuthGroups.permissions', $originalPermissions);
@@ -977,7 +981,23 @@ final class AnnouncementsTest extends CIUnitTestCase
 
     public static function provideDefaultRolesHaveNoAnnouncementPermissions(): iterable
     {
-        return [['superadmin'], ['admin'], ['developer'], ['user']];
+        return [['admin'], ['developer'], ['user']];
+    }
+
+    public function testSuperadminHasAnnouncementDomainPermissionByDefault(): void
+    {
+        $draftId = (new AnnouncementModel())->insert(['title' => 'Superadmin draft', 'body' => 'Private content']);
+        $this->loginAs('superadmin');
+        $this->assertSame([], auth()->user()->getPermissions());
+        $this->assertContains('announcements.*', setting('AuthGroups.matrix')['superadmin']);
+        $this->assertTrue(auth()->user()->can('announcements.access'));
+        $this->assertTrue(auth()->user()->can('announcements.manage'));
+        $this->get('/en/admin/announcements')->assertSee('Superadmin draft');
+        $this->get('/en/admin/announcements/' . $draftId)->assertSee('Private content');
+        $this->get('/en/admin/announcements/create')->assertOK();
+        $dashboard = $this->get('/en/admin/dashboard');
+        $this->assertStringContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
+        $this->get('/en/admin/settings/roles?role=superadmin')->assertSee('announcements.*');
     }
 
     public function testAnnouncementPermissionsAreAssignedAndRevokedThroughRoleSettings(): void
@@ -992,7 +1012,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         auth()->logout();
         $this->loginAs('superadmin');
         $operatorId = auth()->id();
-        $this->assertFalse(auth()->user()->can('announcements.manage'));
+        $this->assertTrue(auth()->user()->can('announcements.manage'));
         $roles = $this->get('/en/admin/settings/roles?role=user');
         $roles->assertOK();
         $this->assertStringContainsString('announcements.access', $roles->response()->getBody());

@@ -5,7 +5,7 @@
 - 公告示例展示独立业务模块如何接入后台底座的通用数据管理和界面组件，业务代码与后台底座分开维护。
 - 获管理授权的用户可创建草稿、编辑和发布公告；获阅读授权的用户只能查看已发布公告详情及可选附件。
 - 附件按需添加，CSV 仅作为次要批量工具，导入记录默认成为草稿。
-- 模块使用独立权限，不预制角色授权，由“系统设置 → 角色与权限”分配。不包含审批、定时发布、置顶、撤回或公告删除流程。
+- 模块使用独立权限，超级管理员默认获得 `announcements.*`，其他角色由“系统设置 → 角色与权限”分配。不包含审批、定时发布、置顶、撤回或公告删除流程。
 
 ## 实现设计
 
@@ -16,8 +16,8 @@
 1. 在 [`admin/app/Config/Autoload.php`](../admin/app/Config/Autoload.php) 将 `Modules\Announcements` 映射到 `admin/modules/Announcements`。其他业务模块使用各自的命名空间和目录，不把业务代码放进后台底座。
 2. 模块的 [`Config/Routes.php`](../admin/modules/Announcements/Config/Routes.php) 声明 `{locale}/admin/announcements` 下的业务路由。列表、详情及附件下载使用 `permission:announcements.access,announcements.manage`，满足任一权限即可进入；仅有阅读权限的用户只能读取已发布内容，公告管理者可查看草稿。新建、编辑、发布、CSV 工具及附件管理使用 `permission:announcements.manage`。仅显示菜单不构成访问控制，创建、更新、发布、导入、上传及移除均使用 POST。
 3. 模块的 [`Config/Registrar.php`](../admin/modules/Announcements/Config/Registrar.php) 只向 [`Geminus\Admin\Config\AdminMenu`](../admin/geminus/Admin/Config/AdminMenu.php) 追加菜单条目。菜单的 `permission` 支持原有字符串或权限字符串列表，列表按“任一权限”显示；公告入口对 `announcements.access` 或 `announcements.manage` 可见。`admin.access` 不替代模块阅读权限；模块权限也不会自动授予其他后台权限。侧栏高亮当前路径，不在后台底座里写死具体业务模块。
-4. 模块的 [`Database/Migrations/`](../admin/modules/Announcements/Database/Migrations/) 创建 `example_announcements` 表，将 `announcements.access` 和 `announcements.manage` 加入 Settings 的 `AuthGroups.permissions` 目录，不修改 `AuthGroups.matrix`，不预制任何角色授权，包括 `superadmin`。权限分配统一由“系统设置 → 角色与权限”操作。`AuthGroups` 配置和模块 Registrar 都不声明权限目录；已有权限描述及其他目录项保持不变。
-5. 发布状态通过独立增量迁移加入，不改写已执行的建表迁移。已有公告保留标题、正文和创建时间，默认成为草稿，不会自动公开。`status` 只能是 `draft` 或 `published`；数据库约束保证草稿无发布时间、已发布公告有发布时间。
+4. 模块的 [`Database/Migrations/`](../admin/modules/Announcements/Database/Migrations/) 创建 `example_announcements` 表，将 `announcements.access` 和 `announcements.manage` 加入 Settings 的 `AuthGroups.permissions` 目录，并为 `superadmin` 补齐 `announcements.*`，其已有合法单项授权按域归并。其他角色授权矩阵保持不变，由“系统设置 → 角色与权限”分配。`AuthGroups` 配置和模块 Registrar 都不声明权限目录；已有权限描述及其他目录项保持不变。
+5. 公告使用 `status` 和 `published_at` 表示发布状态及发布时间。`status` 只能是 `draft` 或 `published`；数据库约束保证草稿无发布时间、已发布公告有发布时间。
 
 ### 请求与页面
 
@@ -56,9 +56,7 @@
 
 ## 运行约束
 
-按 [README](../README.md#快速启动) 配置并启动本地服务，再由超级管理员在“系统设置 → 角色与权限”为目标角色勾选 `announcements.access` 或 `announcements.manage` 并保存。使用该角色的用户访问 `/zh-Hans/admin/announcements`；默认角色没有公告授权，仅有 `admin.access` 不能读取公告。管理权限已包含本模块的读取能力，无需同时授予阅读权限。
-
-已经执行过的权限登记迁移不会因文件修改自动重跑，已有环境需要同步缺失的权限目录。历史已保存的角色授权不会自动撤销，仍通过“角色与权限”管理。
+按 [README](../README.md#快速启动) 配置并启动本地服务，再由超级管理员在“系统设置 → 角色与权限”为其他目标角色勾选 `announcements.access` 或 `announcements.manage` 并保存。使用该角色的用户访问 `/zh-Hans/admin/announcements`；超级管理员默认拥有 `announcements.*`，其他默认角色没有公告授权，仅有 `admin.access` 不能读取公告。管理权限已包含本模块的读取能力，无需同时授予阅读权限。
 
 在仓库根目录运行公告模块相关测试：
 

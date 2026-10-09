@@ -8,8 +8,10 @@
     <div class="row g-2 align-items-center">
         <div class="col-12 col-md"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
         <div class="col-12 col-md-auto ms-auto btn-list">
+            <?php if ($me->can('users.create')): ?>
             <a class="btn btn-primary" href="<?= route_to('admin/users/create') ?>"><i class="ti ti-user-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createUser')) ?></a>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/template') ?>"><i class="ti ti-download me-1" aria-hidden="true"></i><?= esc(lang('Admin.userTemplate')) ?></a>
+            <?php endif; ?>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/export') . '?' . http_build_query(['q' => $search, 'sort' => $sort, 'direction' => $direction, 'created_from' => $createdRange['from'], 'created_to' => $createdRange['to']]) ?>"><i class="ti ti-file-export me-1" aria-hidden="true"></i><?= esc(lang('Admin.exportUsers')) ?></a>
         </div>
     </div>
@@ -60,7 +62,7 @@
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userSelf')) ?></span>
                                     <?php elseif ($editStates[$user->id] === 'protected'): ?>
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
-                                    <?php else: ?>
+                                    <?php elseif ($me->can('users.edit')): ?>
                                         <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.editUser'), 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
                                         <?php if (! $user->isBanned() && $user->email && setting('Auth.allowMagicLinkLogins')): ?>
                                             <form method="post" action="<?= route_to('admin/users/invite', $user->id) ?>">
@@ -69,7 +71,9 @@
                                             </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
-                                    <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
+                                    <?php if ($attachmentAccess[$user->id]): ?>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
+                                    <?php endif; ?>
                                     <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.viewUserPermissions'), 'attr') ?>">
                                         <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></button>
                                     </span>
@@ -79,7 +83,7 @@
                     <?php endforeach; ?>
                     <?php if ($users === []): ?>
                         <tr><td colspan="7" class="text-center py-4">
-                            <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.noUsersFound'), 'filtered' => $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '', 'createUrl' => route_to('admin/users/create'), 'createLabel' => lang('Admin.createUser'), 'createIcon' => 'user-plus', 'clearUrl' => route_to('admin/users'), 'clearLabel' => lang('Admin.userClear')]) ?>
+                            <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.noUsersFound'), 'filtered' => $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '', 'createUrl' => $me->can('users.create') ? route_to('admin/users/create') : '', 'createLabel' => lang('Admin.createUser'), 'createIcon' => 'user-plus', 'clearUrl' => route_to('admin/users'), 'clearLabel' => lang('Admin.userClear')]) ?>
                         </td></tr>
                     <?php endif; ?>
                 </tbody>
@@ -109,6 +113,7 @@
         </div>
     </div>
 
+    <?php if ($me->can('users.create')): ?>
     <form method="post" action="<?= route_to('admin/users/import') ?>" enctype="multipart/form-data" class="card mb-3">
         <?= csrf_field() ?>
         <div class="card-header"><h3 class="card-title"><?= esc(lang('Admin.importUsers')) ?></h3></div>
@@ -119,6 +124,7 @@
         </div>
         <div class="card-footer"><button type="submit" class="btn btn-primary"><i class="ti ti-file-import me-1" aria-hidden="true"></i><?= esc(lang('Admin.importUsers')) ?></button></div>
     </form>
+    <?php endif; ?>
 
     <?php if ($report !== null): ?>
         <?= view_cell('Geminus\Admin\Cells\ImportReportCell', [

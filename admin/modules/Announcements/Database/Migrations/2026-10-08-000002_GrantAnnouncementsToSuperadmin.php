@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Announcements\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
+use Geminus\Admin\Libraries\SuperadminGrants;
 
 class GrantAnnouncementsToSuperadmin extends Migration
 {
@@ -17,7 +18,9 @@ class GrantAnnouncementsToSuperadmin extends Migration
         if (! isset($permissions['announcements.manage'])) {
             $permissions['announcements.manage'] = 'Can manage example announcements';
         }
-        setting('AuthGroups.permissions', $permissions);
+        $matrix               = setting('AuthGroups.matrix');
+        $matrix['superadmin'] = SuperadminGrants::withPermissions($matrix['superadmin'] ?? [], ['announcements.access', 'announcements.manage']);
+        service('settings')->setMany(['AuthGroups.permissions' => $permissions, 'AuthGroups.matrix' => $matrix]);
     }
 
     public function down(): void

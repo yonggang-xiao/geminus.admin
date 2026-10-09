@@ -3,7 +3,9 @@
 <?= $this->section('header') ?>
     <div class="row g-2 align-items-center">
         <div class="col"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
-        <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Admin.attachments')) ?></a></div>
+        <?php if ($me->can('users.view')): ?>
+            <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Admin.attachments')) ?></a></div>
+        <?php endif; ?>
     </div>
 <?= $this->endSection() ?>
 
@@ -44,7 +46,7 @@
         </div>
         <div class="card-footer btn-list">
             <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveProfile')) ?></button>
-            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a>
+            <a class="btn btn-outline-secondary" href="<?= route_to($me->can('users.view') ? 'admin/users' : 'admin/dashboard') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a>
         </div>
     </form>
 <?= $this->endSection() ?>

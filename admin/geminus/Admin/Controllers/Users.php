@@ -15,6 +15,7 @@ use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\UserCsvImport;
+use Geminus\Admin\Libraries\UserManagementPolicy;
 use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
@@ -30,7 +31,7 @@ class Users extends BaseController
 
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.view')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -40,12 +41,14 @@ class Users extends BaseController
         $pageUsers            = $users->withIdentities()->withGroups()->withPermissions()->paginate($query->perPage);
         $editStates           = [];
         $roleNames            = [];
+        $attachmentAccess     = [];
         $groups               = setting('AuthGroups.groups');
         $permissions          = array_keys(setting('AuthGroups.permissions'));
         $effectivePermissions = [];
 
         foreach ($pageUsers as $user) {
             $editStates[$user->id]           = $this->editState($user);
+            $attachmentAccess[$user->id]     = $this->canAccessAttachments($user);
             $userGroups                      = $user->getGroups() ?? [];
             $roleNames[$user->id]            = implode(', ', array_map(static fn (string $group): string => $groups[$group]['title'] ?? $group, $userGroups));
             $effectivePermissions[$user->id] = array_values(array_filter($permissions, static fn (string $permission): bool => $user->can($permission)));
@@ -73,6 +76,7 @@ class Users extends BaseController
             'page_title'           => lang('Admin.users'),
             'users'                => $pageUsers,
             'editStates'           => $editStates,
+            'attachmentAccess'     => $attachmentAccess,
             'roleNames'            => $roleNames,
             'effectivePermissions' => $effectivePermissions,
             'invitationStatuses'   => $invitationStatuses,
@@ -105,7 +109,7 @@ class Users extends BaseController
 
     public function create(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.create')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -133,7 +137,7 @@ class Users extends BaseController
 
     public function uploadAttachment(int $userId): RedirectResponse|ResponseInterface
     {
-        if ($this->attachmentUser($userId) === null) {
+        if ($this->attachmentUser($userId, 'users.edit') === null) {
             return $this->response->setStatusCode(404);
         }
 
@@ -168,7 +172,7 @@ class Users extends BaseController
 
     public function removeAttachment(int $userId, int $attachmentId): RedirectResponse|ResponseInterface
     {
-        if ($this->attachmentUser($userId) === null) {
+        if ($this->attachmentUser($userId, 'users.edit') === null) {
             return $this->response->setStatusCode(404);
         }
 
@@ -187,7 +191,7 @@ class Users extends BaseController
 
     public function store(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.create')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -208,7 +212,7 @@ class Users extends BaseController
             return redirect()->to(route_to('admin/users/create'))->withInput()->with('user_errors', [$field => lang('Admin.userReason_' . $result)]);
         }
 
-        return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'success', 'message' => lang('Admin.userCreatedSuccess')]);
+        return redirect()->to($this->userReturnUrl('admin/users/create'))->with('alert', ['type' => 'success', 'message' => lang('Admin.userCreatedSuccess')]);
     }
 
     public function update(int $userId): RedirectResponse|ResponseInterface
@@ -250,7 +254,7 @@ class Users extends BaseController
             return redirect()->to(route_to('admin/users/edit', $userId))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Admin.userUpdateFailed')]);
         }
 
-        return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'success', 'message' => lang('Admin.userSaved')]);
+        return redirect()->to($this->userReturnUrl('admin/users/edit', $userId))->with('alert', ['type' => 'success', 'message' => lang('Admin.userSaved')]);
     }
 
     public function invite(int $userId): RedirectResponse|ResponseInterface
@@ -261,7 +265,7 @@ class Users extends BaseController
         }
 
         if (! setting('Auth.allowMagicLinkLogins') || ! service('settings')->get('Email.fromEmail') || ! $user->email || $user->isBanned()) {
-            return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.inviteUnavailable')]);
+            return redirect()->to($this->userReturnUrl('admin/users/edit', $userId))->with('alert', ['type' => 'danger', 'message' => lang('Admin.inviteUnavailable')]);
         }
 
         try {
@@ -287,7 +291,7 @@ class Users extends BaseController
             $sent = false;
         }
 
-        return redirect()->to(route_to('admin/users'))->with('alert', [
+        return redirect()->to($this->userReturnUrl('admin/users/edit', $userId))->with('alert', [
             'type'    => $sent ? 'success' : 'danger',
             'message' => lang($sent ? 'Admin.userInviteQueued' : 'Admin.userInviteFailed'),
         ]);
@@ -295,7 +299,7 @@ class Users extends BaseController
 
     public function template(): ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.create')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -304,7 +308,7 @@ class Users extends BaseController
 
     public function export(): ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.view')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -320,13 +324,13 @@ class Users extends BaseController
 
     public function import(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.create')) {
             return $this->response->setStatusCode(403);
         }
 
         $file = $this->request->getFile('file');
         if (! $file || ! $file->isValid() || $file->getSize() > 1024 * 1024 || strtolower($file->getClientExtension()) !== 'csv' || ! in_array($file->getMimeType(), ['text/plain', 'text/csv', 'application/vnd.ms-excel'], true)) {
-            return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
+            return redirect()->to($this->userReturnUrl('admin/users/create'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
         }
 
         $stream = fopen($file->getTempName(), 'rb');
@@ -334,12 +338,12 @@ class Users extends BaseController
         try {
             $report = (new UserCsvImport())->import($stream);
         } catch (InvalidArgumentException $exception) {
-            return redirect()->to(route_to('admin/users'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
+            return redirect()->to($this->userReturnUrl('admin/users/create'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
         } finally {
             fclose($stream);
         }
 
-        return redirect()->to(route_to('admin/users'))
+        return redirect()->to($this->userReturnUrl('admin/users/create'))
             ->with('user_import_report', $report)
             ->with('alert', ['type' => 'success', 'message' => lang('Admin.importFinished')]);
     }
@@ -372,18 +376,29 @@ class Users extends BaseController
         ], 'created_at');
     }
 
-    private function attachmentUser(int $userId): ?User
+    private function attachmentUser(int $userId, string $permission = 'users.view'): ?User
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can($permission)) {
             return null;
         }
 
-        return auth()->getProvider()->findById($userId);
+        $user = auth()->getProvider()->findById($userId);
+
+        return $user && $this->canAccessAttachments($user) ? $user : null;
+    }
+
+    private function canAccessAttachments(User $user): bool
+    {
+        if ($user->inGroup('superadmin') && ! auth()->user()?->inGroup('superadmin') && $user->id !== auth()->id()) {
+            return false;
+        }
+
+        return ! $user->inGroup('admin') || auth()->user()?->can('users.manage-admins') === true;
     }
 
     private function editableUser(int $userId): ?User
     {
-        if (! auth()->user()?->can('users.manage-admins')) {
+        if (! auth()->user()?->can('users.edit')) {
             return null;
         }
 
@@ -401,8 +416,7 @@ class Users extends BaseController
             return 'self';
         }
 
-        $groups = $user->getGroups() ?? [];
-        if (count($groups) > 1 || array_diff($groups, array_keys($this->assignableRoles())) !== []) {
+        if (! (new UserManagementPolicy(auth()->user()))->canManage($user)) {
             return 'protected';
         }
 
@@ -411,24 +425,12 @@ class Users extends BaseController
 
     private function assignableRoles(): array
     {
-        $roles = setting('AuthGroups.groups');
-        unset($roles['superadmin']);
+        return (new UserManagementPolicy(auth()->user()))->assignableRoles();
+    }
 
-        if (! auth()->user()?->inGroup('superadmin')) {
-            $matrix = setting('AuthGroups.matrix');
-
-            foreach ($roles as $name => $details) {
-                foreach ($matrix[$name] ?? [] as $grant) {
-                    if (str_contains($grant, '*') || ! auth()->user()->can($grant)) {
-                        unset($roles[$name]);
-
-                        break;
-                    }
-                }
-            }
-        }
-
-        return $roles;
+    private function userReturnUrl(string $formRoute, int ...$arguments): string
+    {
+        return auth()->user()?->can('users.view') ? route_to('admin/users') : route_to($formRoute, ...$arguments);
     }
 
     private function csvResponse(string $filename, string $contents): ResponseInterface

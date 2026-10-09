@@ -10,9 +10,9 @@ use Geminus\Admin\Config\AdminMenu;
             <span class="nav-link-title"> <?= lang('Admin.dashboard') ?> </span>
         </a>
     </li>
-    <?php if (auth()->user()?->can('users.manage-admins')): ?>
+    <?php if (auth()->user()?->can('users.view') || auth()->user()?->can('users.create')): ?>
         <li class="nav-item<?= url_is('*/admin/users*') ? ' active' : '' ?>">
-            <a class="nav-link<?= url_is('*/admin/users*') ? ' active' : '' ?>" href="<?= route_to('admin/users') ?>"<?= url_is('*/admin/users*') ? ' aria-current="page"' : '' ?>>
+            <a class="nav-link<?= url_is('*/admin/users*') ? ' active' : '' ?>" href="<?= route_to(auth()->user()->can('users.view') ? 'admin/users' : 'admin/users/create') ?>"<?= url_is('*/admin/users*') ? ' aria-current="page"' : '' ?>>
                 <i class="ti ti-users nav-link-icon icon" aria-hidden="true"></i>
                 <span class="nav-link-title"><?= esc(lang('Admin.users')) ?></span>
             </a>
