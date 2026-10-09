@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\Shield\Models\LoginModel;
 use CodeIgniter\Shield\Models\UserIdentityModel;
+use Config\Services;
 use Geminus\Admin\Config\MicrosoftOAuth;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\OrganizationAzure;
@@ -42,7 +43,7 @@ class MicrosoftLogin extends BaseController
             return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.microsoftPasswordInvalid')]);
         }
 
-        if (! (new MicrosoftLinks())->isEligible($user)) {
+        if (! Services::microsoftLinks()->isEligible($user)) {
             return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.microsoftLoginFailed')]);
         }
 
@@ -68,7 +69,7 @@ class MicrosoftLogin extends BaseController
 
         if (($flow['mode'] ?? null) === 'bind') {
             if (! auth()->loggedIn() || (int) auth()->user()->id !== ($flow['user_id'] ?? null)
-                                     || ! (new MicrosoftLinks())->isEligible(auth()->user())) {
+                                     || ! Services::microsoftLinks()->isEligible(auth()->user())) {
                 return $this->failed();
             }
         } elseif (($flow['mode'] ?? null) !== 'login' || auth()->loggedIn()) {
@@ -86,7 +87,7 @@ class MicrosoftLogin extends BaseController
 
             $tenant = $claims['tid'];
             $object = $claims['oid'];
-            $links  = new MicrosoftLinks();
+            $links  = Services::microsoftLinks();
 
             if ($flow['mode'] === 'bind') {
                 return $links->bind(auth()->user(), $tenant, $object)

@@ -1,7 +1,9 @@
 <?php
 
+use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -12,6 +14,7 @@ use Geminus\Admin\Controllers\MicrosoftLogin;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\OrganizationAzure;
+use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use TheNetworg\OAuth2\Client\Token\AccessToken;
 
@@ -254,7 +257,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $user   = $users->findById($users->getInsertID());
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-        $this->assertTrue((new MicrosoftLinks())->bind($user, $tenant, $object));
+        $this->assertTrue(Services::microsoftLinks()->bind($user, $tenant, $object));
 
         $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce']);
 
@@ -274,7 +277,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
         $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertFalse(auth()->loggedIn());
-        $this->assertSame([], (new MicrosoftLinks())->pending());
+        $this->assertSame([], Services::microsoftLinks()->pending());
         $this->assertNull(session('microsoft_flow'));
     }
 
@@ -287,7 +290,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
         $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertFalse(auth()->loggedIn());
-        $this->assertSame([], (new MicrosoftLinks())->pending());
+        $this->assertSame([], Services::microsoftLinks()->pending());
         $this->assertNull(session('microsoft_flow'));
     }
 
@@ -301,14 +304,14 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $user   = $users->findById($users->getInsertID());
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-        $this->assertTrue((new MicrosoftLinks())->bind($user, $tenant, $object));
+        $this->assertTrue(Services::microsoftLinks()->bind($user, $tenant, $object));
         $user->ban();
 
         $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce']);
 
         $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertFalse(auth()->loggedIn());
-        $this->assertSame([], (new MicrosoftLinks())->pending());
+        $this->assertSame([], Services::microsoftLinks()->pending());
     }
 
     public function testMicrosoftCallbackCreatesPendingRequestForUnlinkedIdentity(): void
@@ -320,7 +323,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame(lang('Admin.microsoftApprovalPending'), session('message'));
         $this->assertFalse(auth()->loggedIn());
-        $pending = (new MicrosoftLinks())->pending();
+        $pending = Services::microsoftLinks()->pending();
         $this->assertCount(1, $pending);
         $this->assertSame($tenant, $pending[0]['tenant_id']);
         $this->assertSame($object, $pending[0]['object_id']);
@@ -337,7 +340,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
         $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame(lang('Admin.microsoftLinked'), session('alert')['message']);
-        $this->assertSame(auth()->id(), (new MicrosoftLinks())->findUser($tenant, $object)?->id);
+        $this->assertSame(auth()->id(), Services::microsoftLinks()->findUser($tenant, $object)?->id);
         $this->assertSame(0, Database::connect()->table('auth_logins')->countAllResults());
     }
 
@@ -351,7 +354,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $owner  = $users->findById($users->getInsertID());
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $this->assertTrue($links->bind($owner, $tenant, $object));
         $this->loginAs('superadmin');
 
@@ -394,7 +397,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('user');
         $this->assertFalse(auth()->user()->can('admin.access'));
-        $this->assertTrue((new MicrosoftLinks())->isEligible(auth()->user()));
+        $this->assertTrue(Services::microsoftLinks()->isEligible(auth()->user()));
         service('settings')->set('MicrosoftOAuth.enabled', false);
 
         $this->post('/en/admin/profile/microsoft/connect', [csrf_token() => csrf_hash(), 'current_password' => 'A-local-password-123!'])->assertRedirectTo('/en/admin/profile');
@@ -418,7 +421,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user  = auth()->user();
-        $links = new MicrosoftLinks();
+        $links = Services::microsoftLinks();
         $this->assertTrue($links->bind($user, '11111111-2222-3333-4444-555555555555', 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff'));
 
         $this->post('/en/admin/profile/microsoft/connect', [csrf_token() => csrf_hash(), 'current_password' => 'A-local-password-123!'])->assertRedirectTo('/en/admin/profile');
@@ -446,7 +449,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $users->save($target);
         $target = $users->findById($users->getInsertID());
         $target->addGroup('user');
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $links->request($tenant, $object, 'microsoftsettings@example.com');
@@ -454,7 +457,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertNull($links->findUser($tenant, $object));
         $this->assertTrue(auth()->user()->can('users.manage-admins'));
         $this->assertFalse($target->can('admin.access'));
-        $this->assertTrue((new MicrosoftLinks())->isEligible($target));
+        $this->assertTrue(Services::microsoftLinks()->isEligible($target));
         $requestId = $links->pending()[0]['id'];
         $this->assertStringContainsString('value="' . $target->id . '"', $this->get('/en/admin/settings/microsoft')->response()->getBody());
         $this->post('/en/admin/settings/microsoft/requests/' . $requestId . '/approve', [csrf_token() => csrf_hash(), 'user_id' => $target->id])->assertRedirect();
@@ -469,7 +472,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user   = auth()->user();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $first  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $second = 'cccccccc-dddd-eeee-ffff-000000000000';
@@ -484,7 +487,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
     public function testExpiredApprovalRequestsAreRemoved(): void
     {
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $this->assertTrue($links->request($tenant, 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff', null));
         Database::connect()->table('microsoft_link_requests')->where('tenant_id', $tenant)->update(['expires_at' => '2000-01-01 00:00:00']);
@@ -495,7 +498,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
     public function testPendingRequestsAreLimitedPerTenant(): void
     {
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
 
         for ($index = 0; $index < 10; $index++) {
@@ -509,7 +512,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     public function testOrdinaryAdminCannotApproveMicrosoftIdentity(): void
     {
         $this->loginAs('admin');
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $links->request($tenant, $object, null);
@@ -519,12 +522,134 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertNull($links->findUser($tenant, $object));
     }
 
+    public function testGlobalRequestLimitStillAllowsRefreshingExistingRequest(): void
+    {
+        $links = Services::microsoftLinks();
+
+        for ($tenantIndex = 0; $tenantIndex < 10; $tenantIndex++) {
+            $tenant = sprintf('aaaaaaaa-bbbb-cccc-dddd-%012x', $tenantIndex);
+
+            for ($objectIndex = 0; $objectIndex < 10; $objectIndex++) {
+                $this->assertTrue($links->request($tenant, sprintf('bbbbbbbb-cccc-dddd-eeee-%012x', $objectIndex), null));
+            }
+        }
+
+        $this->assertCount(100, $links->pending());
+        $this->assertFalse($links->request('ffffffff-ffff-ffff-ffff-ffffffffffff', 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff', null));
+        $requests = new MicrosoftLinkRequestModel(Database::connect());
+        $existing = $requests->findForIdentity('aaaaaaaa-bbbb-cccc-dddd-000000000000', 'bbbbbbbb-cccc-dddd-eeee-000000000000');
+        $expires  = gmdate('Y-m-d H:i:s', time() + 60);
+        $requests->update($existing['id'], ['created_at' => '2000-01-01 00:00:00', 'expires_at' => $expires]);
+        $this->assertTrue($links->request('AAAAAAAA-BBBB-CCCC-DDDD-000000000000', 'BBBBBBBB-CCCC-DDDD-EEEE-000000000000', 'updated@example.com'));
+        $refreshed = $requests->find($existing['id']);
+        $this->assertSame('updated@example.com', $refreshed['email']);
+        $this->assertGreaterThan($expires, $refreshed['expires_at']);
+        $this->assertNotSame('2000-01-01 00:00:00', $refreshed['created_at']);
+        $this->assertCount(100, $links->pending());
+    }
+
+    public function testExpiredRequestsCannotBeApprovedOrRejectedAndRejectionExpires(): void
+    {
+        $this->loginAs('superadmin');
+        $links    = Services::microsoftLinks();
+        $tenant   = '11111111-2222-3333-4444-555555555555';
+        $object   = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $requests = new MicrosoftLinkRequestModel(Database::connect());
+        $this->assertTrue($links->request($tenant, $object, null));
+        $requestId = (int) $links->pending()[0]['id'];
+        $this->assertTrue($links->reject($requestId));
+        $this->assertFalse($links->reject($requestId));
+        $this->assertFalse($links->approve($requestId, auth()->user()));
+        $this->assertFalse($links->request($tenant, $object, null));
+        $requests->update($requestId, ['expires_at' => '2000-01-01 00:00:00']);
+        $this->assertTrue($links->request($tenant, $object, null));
+        $this->assertNull($requests->find($requestId));
+        $requestId = (int) $links->pending()[0]['id'];
+        $requests->update($requestId, ['expires_at' => '2000-01-01 00:00:00']);
+        $this->assertSame([], $links->pending());
+        $this->assertFalse($links->approve($requestId, auth()->user()));
+        $this->assertFalse($links->reject($requestId));
+        $this->assertSame('pending', $requests->find($requestId)['status']);
+        $this->assertNull($links->findUser($tenant, $object));
+    }
+
+    #[DataProvider('provideLinkCleanupFailuresRollBackAllWrites')]
+    public function testLinkCleanupFailuresRollBackAllWrites(string $action, bool $throws): void
+    {
+        $this->loginAs('superadmin');
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $links  = Services::microsoftLinks();
+        $this->assertTrue($links->request($tenant, $object, null));
+        $before   = $links->pending();
+        $db       = Database::connect();
+        $requests = $this->getMockBuilder(MicrosoftLinkRequestModel::class)->setConstructorArgs([$db])->onlyMethods(['delete', 'removeForIdentity'])->getMock();
+        $requests->expects($this->once())->method($action === 'approve' ? 'delete' : 'removeForIdentity')->willReturnCallback(static function () use ($db, $before, $throws): bool {
+            $db->table('microsoft_link_requests')->where('id', $before[0]['id'])->delete();
+            if ($throws) {
+                throw new DatabaseException('Request cleanup failed.');
+            }
+
+            return false;
+        });
+        $failing = new MicrosoftLinks($requests, new UserIdentityModel($db), auth()->getProvider(), $db);
+
+        $this->assertFalse($action === 'approve'
+            ? $failing->approve((int) $before[0]['id'], auth()->user())
+            : $failing->bind(auth()->user(), strtoupper($tenant), strtoupper($object)));
+
+        $this->assertNull($links->findUser($tenant, $object));
+        $this->assertSame($before, $links->pending());
+        $this->assertTrue($links->approve((int) $before[0]['id'], auth()->user()));
+        $this->assertSame([], $links->pending());
+    }
+
+    public static function provideLinkCleanupFailuresRollBackAllWrites(): iterable
+    {
+        return [['approve', false], ['approve', true], ['bind', false], ['bind', true]];
+    }
+
+    #[DataProvider('provideIdentityInsertFailuresPreserveRequest')]
+    public function testIdentityInsertFailuresPreserveRequest(string $action, bool $throws): void
+    {
+        $this->loginAs('superadmin');
+        $links  = Services::microsoftLinks();
+        $tenant = '11111111-2222-3333-4444-555555555555';
+        $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $this->assertTrue($links->request($tenant, $object, null));
+        $before   = $links->pending();
+        $user     = clone auth()->user();
+        $user->id = 2147483647;
+        $db       = Database::connect();
+        $db->transException($throws);
+
+        try {
+            $this->assertFalse($action === 'approve'
+                ? $links->approve((int) $before[0]['id'], $user)
+                : $links->bind($user, $tenant, $object));
+            $this->assertNull($links->findUser($tenant, $object));
+            $this->assertSame($before, $links->pending());
+            $this->assertTrue($action === 'approve'
+                ? $links->approve((int) $before[0]['id'], auth()->user())
+                : $links->bind(auth()->user(), $tenant, $object));
+            $this->assertSame(auth()->id(), $links->findUser($tenant, $object)?->id);
+            $this->assertSame([], $links->pending());
+        } finally {
+            $db->transException(false);
+        }
+    }
+
+    public static function provideIdentityInsertFailuresPreserveRequest(): iterable
+    {
+        return [['approve', false], ['approve', true], ['bind', false], ['bind', true]];
+    }
+
     public function testUserEditorsNeedAdditionalPermissionOnlyForAdminBindings(): void
     {
         $this->loginAs('developer');
         auth()->user()->addPermission('users.edit', 'microsoft-settings.manage');
         $users  = auth()->getProvider();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
 
         foreach (['user', 'developer', 'admin'] as $index => $role) {
@@ -586,7 +711,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             $target->addGroup('user');
             $target->addPermission('operation-audit.view');
         }
-        $links   = new MicrosoftLinks();
+        $links   = Services::microsoftLinks();
         $tenant  = '11111111-2222-3333-4444-555555555555';
         $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
@@ -625,7 +750,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $users->save($target);
         $target = $users->findById($users->getInsertID());
         $target->addGroup('user');
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $this->assertTrue($links->request($tenant, $object, null));
@@ -674,7 +799,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             $this->loginAs('admin');
             $this->assertTrue(auth()->user()->can('users.manage-admins'));
 
-            $links   = new MicrosoftLinks();
+            $links   = Services::microsoftLinks();
             $tenant  = '11111111-2222-3333-4444-555555555555';
             $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
             $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
@@ -712,7 +837,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $target->addGroup('superadmin');
         $this->loginAs('superadmin');
 
-        $links   = new MicrosoftLinks();
+        $links   = Services::microsoftLinks();
         $tenant  = '11111111-2222-3333-4444-555555555555';
         $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
@@ -738,7 +863,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user   = auth()->user();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $this->assertTrue($links->request($tenant, $object, null));
@@ -758,7 +883,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user   = auth()->user();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $first  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $second = 'cccccccc-dddd-eeee-ffff-000000000000';
@@ -779,7 +904,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user   = auth()->user();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
 
@@ -796,7 +921,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin');
         $user   = auth()->user();
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $user->ban();
@@ -810,7 +935,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
     public function testOrdinaryAdminCannotRevokeMicrosoftIdentity(): void
     {
         $this->loginAs('admin');
-        $links  = new MicrosoftLinks();
+        $links  = Services::microsoftLinks();
         $tenant = '11111111-2222-3333-4444-555555555555';
         $object = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
         $this->assertTrue($links->bind(auth()->user(), $tenant, $object));

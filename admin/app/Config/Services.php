@@ -4,8 +4,11 @@ namespace Config;
 
 use CodeIgniter\Config\BaseService;
 use CodeIgniter\Email\Email as EmailService;
+use CodeIgniter\Shield\Models\UserIdentityModel;
 use Geminus\Admin\Libraries\MailTemplates;
+use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 
 /**
  * Services Configuration file.
@@ -22,6 +25,17 @@ use Geminus\Admin\Libraries\QueuedEmail;
  */
 class Services extends BaseService
 {
+    public static function microsoftLinks(bool $getShared = false): MicrosoftLinks
+    {
+        if ($getShared) {
+            return static::getSharedInstance('microsoftLinks');
+        }
+
+        $db = Database::connect();
+
+        return new MicrosoftLinks(new MicrosoftLinkRequestModel($db), new UserIdentityModel($db), auth()->getProvider(), $db);
+    }
+
     public static function mailTemplates(bool $getShared = true): MailTemplates
     {
         if ($getShared) {

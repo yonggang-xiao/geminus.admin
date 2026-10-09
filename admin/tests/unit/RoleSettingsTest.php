@@ -9,7 +9,6 @@ use Config\Services;
 use Geminus\Admin\Database\Migrations\RegisterAdminFeaturePermissions;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MailTemplates;
-use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\SuperadminGrants;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -198,7 +197,7 @@ final class RoleSettingsTest extends CIUnitTestCase
 
         try {
             $this->loginAs('admin');
-            $links   = new MicrosoftLinks();
+            $links   = Services::microsoftLinks();
             $tenant  = '11111111-2222-3333-4444-555555555555';
             $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
             $pending = 'cccccccc-dddd-eeee-ffff-000000000000';

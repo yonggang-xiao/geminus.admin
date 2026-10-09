@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace Geminus\Admin\Libraries;
 
+use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserIdentityModel;
-use Config\Database;
+use CodeIgniter\Shield\Models\UserModel;
+use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 
 class MicrosoftLinks
 {
     public const IDENTITY_TYPE = 'microsoft_entra';
+
+    public function __construct(
+        private MicrosoftLinkRequestModel $requests,
+        private UserIdentityModel $identities,
+        private UserModel $users,
+        private BaseConnection $db,
+    ) {
+    }
 
     public function isEligible(User $user): bool
     {
@@ -20,9 +30,9 @@ class MicrosoftLinks
 
     public function findUser(string $tenant, string $object): ?User
     {
-        $identity = model(UserIdentityModel::class)->getIdentityBySecret(self::IDENTITY_TYPE, $this->key($tenant, $object));
+        $identity = $this->identities->getIdentityBySecret(self::IDENTITY_TYPE, $this->key($tenant, $object));
 
-        return $identity ? auth()->getProvider()->findById($identity->user_id) : null;
+        return $identity ? $this->users->findById($identity->user_id) : null;
     }
 
     public function request(string $tenant, string $object, ?string $email): bool
@@ -31,91 +41,89 @@ class MicrosoftLinks
             return false;
         }
 
-        $db = Database::connect();
-        $db->table('microsoft_link_requests')->where('expires_at <=', gmdate('Y-m-d H:i:s'))->delete();
+        $now = gmdate('Y-m-d H:i:s');
+        if (! $this->requests->removeExpired($now)) {
+            return false;
+        }
+
         $data = [
             'tenant_id'  => strtolower($tenant),
             'object_id'  => strtolower($object),
             'email'      => $email === null ? null : mb_substr($email, 0, 255),
             'expires_at' => gmdate('Y-m-d H:i:s', time() + 86400),
-            'created_at' => gmdate('Y-m-d H:i:s'),
+            'created_at' => $now,
         ];
-        $existing = $db->table('microsoft_link_requests')->where('tenant_id', $data['tenant_id'])->where('object_id', $data['object_id'])->get()->getRowArray();
+        $existing = $this->requests->findForIdentity($data['tenant_id'], $data['object_id']);
 
         if ($existing) {
             if ($existing['status'] === 'rejected') {
                 return false;
             }
 
-            $db->table('microsoft_link_requests')->where('id', $existing['id'])->update($data);
-
-            return true;
+            return $this->requests->update($existing['id'], $data);
         }
 
-        if ($db->table('microsoft_link_requests')->where('status', 'pending')->countAllResults() >= 100
-            || $db->table('microsoft_link_requests')->where('status', 'pending')->where('tenant_id', $data['tenant_id'])->countAllResults() >= 10) {
+        if ($this->requests->countPending() >= 100
+            || $this->requests->countPending($data['tenant_id']) >= 10) {
             return false;
         }
 
         $data['status'] = 'pending';
-        $db->table('microsoft_link_requests')->insert($data);
 
-        return true;
+        return $this->requests->insert($data) !== false;
     }
 
     public function pending(): array
     {
-        return Database::connect()->table('microsoft_link_requests')->where('status', 'pending')->where('expires_at >', gmdate('Y-m-d H:i:s'))->orderBy('created_at', 'DESC')->get()->getResultArray();
+        return $this->requests->pending(gmdate('Y-m-d H:i:s'));
     }
 
     public function reject(int $requestId): bool
     {
-        $db = Database::connect();
-        $db->table('microsoft_link_requests')
-            ->where('id', $requestId)->where('status', 'pending')->where('expires_at >', gmdate('Y-m-d H:i:s'))
-            ->update(['status' => 'rejected']);
-
-        return $db->affectedRows() === 1;
+        return $this->requests->rejectPending($requestId, gmdate('Y-m-d H:i:s'));
     }
 
     public function revoke(User $user): bool
     {
-        $identities = model(UserIdentityModel::class);
-        if (! $identities->getIdentityByType($user, self::IDENTITY_TYPE)) {
+        if (! $this->identities->getIdentityByType($user, self::IDENTITY_TYPE)) {
             return false;
         }
 
-        $identities->deleteIdentitiesByType($user, self::IDENTITY_TYPE);
+        $this->identities->deleteIdentitiesByType($user, self::IDENTITY_TYPE);
 
         return true;
     }
 
     public function approve(int $requestId, User $user): bool
     {
-        $db = Database::connect();
-        $db->transBegin();
+        $db = $this->db;
+        if (! $db->transBegin()) {
+            return false;
+        }
 
         try {
-            $request = $db->table('microsoft_link_requests')->where('id', $requestId)->where('status', 'pending')->where('expires_at >', gmdate('Y-m-d H:i:s'))->get()->getRowArray();
+            $request = $this->requests->findPending($requestId, gmdate('Y-m-d H:i:s'));
             if (! $request || ! $this->isEligible($user) || $this->findUser($request['tenant_id'], $request['object_id'])
-                           || model(UserIdentityModel::class)->getIdentityByType($user, self::IDENTITY_TYPE)) {
+                           || $this->identities->getIdentityByType($user, self::IDENTITY_TYPE)) {
                 $db->transRollback();
 
                 return false;
             }
 
-            $identity = model(UserIdentityModel::class);
-            $identity->insert([
+            $inserted = $this->identities->insert([
                 'user_id' => $user->id,
                 'type'    => self::IDENTITY_TYPE,
                 'secret'  => $this->key($request['tenant_id'], $request['object_id']),
             ]);
-            $db->table('microsoft_link_requests')->where('id', $requestId)->delete();
-            $db->transCommit();
+            if ($inserted === false || ! $this->requests->delete($requestId) || ! $db->transStatus() || ! $db->transCommit()) {
+                $this->rollback();
+
+                return false;
+            }
 
             return true;
         } catch (DatabaseException $exception) {
-            $db->transRollback();
+            $this->rollback();
 
             return false;
         }
@@ -127,29 +135,45 @@ class MicrosoftLinks
             return false;
         }
 
-        $db = Database::connect();
-        $db->transBegin();
+        $db = $this->db;
+        if (! $db->transBegin()) {
+            return false;
+        }
 
         try {
-            if (model(UserIdentityModel::class)->getIdentityByType($user, self::IDENTITY_TYPE)) {
+            if ($this->identities->getIdentityByType($user, self::IDENTITY_TYPE)) {
                 $db->transRollback();
 
                 return false;
             }
 
-            model(UserIdentityModel::class)->insert([
+            $inserted = $this->identities->insert([
                 'user_id' => $user->id,
                 'type'    => self::IDENTITY_TYPE,
                 'secret'  => $this->key($tenant, $object),
             ]);
-            $db->table('microsoft_link_requests')->where('tenant_id', strtolower($tenant))->where('object_id', strtolower($object))->delete();
-            $db->transCommit();
+            if ($inserted === false || ! $this->requests->removeForIdentity(strtolower($tenant), strtolower($object)) || ! $db->transStatus() || ! $db->transCommit()) {
+                $this->rollback();
+
+                return false;
+            }
 
             return true;
         } catch (DatabaseException $exception) {
-            $db->transRollback();
+            $this->rollback();
 
             return false;
+        }
+    }
+
+    private function rollback(): void
+    {
+        if ($this->db->transDepth > 0) {
+            $this->db->transRollback();
+        }
+
+        if ($this->db->transDepth === 0) {
+            $this->db->resetTransStatus();
         }
     }
 

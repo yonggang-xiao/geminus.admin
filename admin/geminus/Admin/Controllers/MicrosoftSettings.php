@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Shield\Models\UserIdentityModel;
+use Config\Services;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\UserManagementPolicy;
 
@@ -22,7 +23,7 @@ class MicrosoftSettings extends BaseController
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         $canApprove = auth()->user()->can('users.edit');
-        $links      = new MicrosoftLinks();
+        $links      = Services::microsoftLinks();
         $policy     = new UserManagementPolicy(auth()->user());
         $identities = $canApprove ? model(UserIdentityModel::class)->where('type', MicrosoftLinks::IDENTITY_TYPE)->findAll() : [];
         $bindings   = [];
@@ -88,7 +89,7 @@ class MicrosoftSettings extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        if (! $user || ! (new MicrosoftLinks())->approve($requestId, $user)) {
+        if (! $user || ! Services::microsoftLinks()->approve($requestId, $user)) {
             return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.microsoftApprovalFailed')]);
         }
 
@@ -101,7 +102,7 @@ class MicrosoftSettings extends BaseController
             return $this->response->setStatusCode(403);
         }
 
-        $rejected = (new MicrosoftLinks())->reject($requestId);
+        $rejected = Services::microsoftLinks()->reject($requestId);
 
         return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', [
             'type'    => $rejected ? 'success' : 'danger',
@@ -120,7 +121,7 @@ class MicrosoftSettings extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        $revoked = $user && (new MicrosoftLinks())->revoke($user);
+        $revoked = $user && Services::microsoftLinks()->revoke($user);
 
         return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', [
             'type'    => $revoked ? 'success' : 'danger',
