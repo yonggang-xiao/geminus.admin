@@ -8,7 +8,6 @@ use CodeIgniter\Test\FeatureTestTrait;
 use Config\Services;
 use Geminus\Admin\Database\Migrations\RegisterAdminFeaturePermissions;
 use Geminus\Admin\Entities\AdminUser;
-use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\SuperadminGrants;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -135,7 +134,7 @@ final class RoleSettingsTest extends CIUnitTestCase
 
             $settingKeys    = ['Email.fromEmail', 'Email.fromName', 'Email.protocol', 'MicrosoftOAuth.enabled', 'MicrosoftOAuth.tenant', 'MicrosoftOAuth.clientId'];
             $beforeSettings = service('settings')->getMany($settingKeys);
-            $templates      = new MailTemplates();
+            $templates      = service('mailTemplates');
             $beforeTemplate = $templates->get('invitation', 'en');
             $beforeQueue    = db_connect()->table('queue_jobs')->countAllResults();
 
