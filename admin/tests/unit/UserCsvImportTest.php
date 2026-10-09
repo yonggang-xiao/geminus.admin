@@ -18,7 +18,7 @@ final class UserCsvImportTest extends CIUnitTestCase
     public function testProcessingFailureMapsToSaveAndDoesNotStopLaterRows(): void
     {
         $attempt      = 0;
-        $provisioning = $this->getMockBuilder(UserProvisioning::class)->onlyMethods(['create'])->getMock();
+        $provisioning = $this->getMockBuilder(UserProvisioning::class)->disableOriginalConstructor()->onlyMethods(['create'])->getMock();
         $provisioning->expects($this->exactly(2))->method('create')->willReturnCallback(static function () use (&$attempt): string {
             if (++$attempt === 1) {
                 throw new RuntimeException('Private provisioning failure.');
@@ -46,7 +46,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "username,email\nfirst,first@example.com\nother,FIRST@example.com\ninvalid,not-an-email\nsecond,second@example.com\n");
         rewind($stream);
 
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertSame([2, 3, 4, 5], array_column($report, 'row'));
@@ -62,7 +62,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "username,email\nx,shared@example.com\nvalid,shared@example.com\n");
         rewind($stream);
 
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertSame(['error', 'created'], array_column($report, 'result'));
@@ -76,7 +76,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         rewind($stream);
 
         try {
-            (new UserCsvImport())->import($stream);
+            (new UserCsvImport(service('userProvisioning')))->import($stream);
             $this->fail('Expected an invalid CSV exception.');
         } catch (InvalidArgumentException $exception) {
             $this->assertSame(0, auth()->getProvider()->countAllResults());
@@ -91,7 +91,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "username,email\n" . str_repeat("valid,valid@example.com\n", 500));
         rewind($stream);
 
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertCount(500, $report);
@@ -108,7 +108,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         rewind($stream);
 
         try {
-            (new UserCsvImport())->import($stream);
+            (new UserCsvImport(service('userProvisioning')))->import($stream);
             $this->fail('Expected an invalid CSV header.');
         } catch (InvalidArgumentException $exception) {
             $this->assertSame('CSV header must be username,email.', $exception->getMessage());
@@ -125,7 +125,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         rewind($stream);
 
         try {
-            $report = (new UserCsvImport())->import($stream);
+            $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
 
             $this->assertSame([2, 3], array_column($report, 'row'));
             $this->assertSame(['error', 'created'], array_column($report, 'result'));
@@ -146,7 +146,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, "username,email\nextra,extra@example.com,unexpected\nother,existing@example.com\nexisting,new@example.com\n");
         rewind($stream);
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertSame(['error', 'skipped', 'error'], array_column($report, 'result'));
@@ -162,7 +162,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "\xEF\xBB\xBFusername,email\n\nvalid,valid@example.com\n");
         rewind($stream);
 
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertSame([3], array_column($report, 'row'));
@@ -175,7 +175,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "username,email\nname_with_underscore,invalidname@example.com\nvalid.name,valid@example.com\n");
         rewind($stream);
 
-        $report = (new UserCsvImport())->import($stream);
+        $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $this->assertSame(['error', 'created'], array_column($report, 'result'));
@@ -188,7 +188,7 @@ final class UserCsvImportTest extends CIUnitTestCase
         fwrite($stream, "username,email\nfirst,first@example.com\nsecond,second@example.com\n");
         rewind($stream);
 
-        (new UserCsvImport())->import($stream);
+        (new UserCsvImport(service('userProvisioning')))->import($stream);
         fclose($stream);
 
         $first  = auth()->getProvider()->findByCredentials(['email' => 'first@example.com']);

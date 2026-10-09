@@ -8,6 +8,7 @@ use CodeIgniter\Shield\Models\UserIdentityModel;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\EmailDeliveryLogModel;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 
@@ -26,6 +27,27 @@ use Geminus\Admin\Models\MicrosoftLinkRequestModel;
  */
 class Services extends BaseService
 {
+    public static function userProvisioning(bool $getShared = false): UserProvisioning
+    {
+        if ($getShared) {
+            return static::getSharedInstance('userProvisioning');
+        }
+
+        $provider = auth()->getProvider()::class;
+        $db       = Database::connect();
+        $auth     = config(Auth::class);
+
+        return new UserProvisioning(
+            static fn () => new $provider($db),
+            new UserIdentityModel($db),
+            static::validation(null, false),
+            service('passwords'),
+            $auth->usernameValidationRules,
+            $auth->emailValidationRules,
+            array_keys(service('settings')->get('AuthGroups.groups')),
+        );
+    }
+
     public static function microsoftLinks(bool $getShared = false): MicrosoftLinks
     {
         if ($getShared) {

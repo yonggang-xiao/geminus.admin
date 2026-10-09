@@ -21,6 +21,7 @@ use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\AttachmentModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -42,6 +43,195 @@ final class UsersTest extends CIUnitTestCase
         Services::resetSingle('queue');
         auth()->logout();
         parent::tearDown();
+    }
+
+    public function testProvisioningUsesIndependentModelsAndResetsValidationBetweenCalls(): void
+    {
+        $provisioning = service('userProvisioning');
+        $this->assertNotSame($provisioning, service('userProvisioning'));
+        $this->assertSame('invalid', $provisioning->create('x', 'invalid'));
+        $this->assertSame('created', $provisioning->create(' first ', ' FIRST@example.com '));
+        $first = auth()->getProvider()->findByCredentials(['email' => 'first@example.com']);
+        $this->assertFalse($provisioning->usernameTaken('FIRST', $first->id));
+        $this->assertTrue($provisioning->usernameTaken('FIRST'));
+        $this->assertSame('username', $provisioning->create('FIRST', 'other@example.com'));
+        $this->assertSame('duplicate', $provisioning->create('other', 'FIRST@example.com'));
+        $this->assertSame('created', $provisioning->create('second', 'second@example.com'));
+        $this->assertSame(2, auth()->getProvider()->countAllResults());
+        $this->assertSame(['user'], $first->getGroups());
+    }
+
+    #[DataProvider('provideProvisioningRejectsInvalidAccountUpdates')]
+    public function testProvisioningRejectsInvalidAccountUpdates(string $username, string $email, string $role, string $status): void
+    {
+        $provisioning = service('userProvisioning');
+        $this->assertSame('created', $provisioning->create('target', 'target@example.com'));
+        $user = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
+        $this->assertSame('invalid', $provisioning->updateAccount($user, $username, $email, $role, $status));
+        $stored = auth()->getProvider()->findById($user->id);
+        $this->assertSame('target', $stored->username);
+        $this->assertSame('target@example.com', $stored->email);
+        $this->assertSame(['user'], $stored->getGroups());
+        $this->assertFalse($stored->isBanned());
+        $this->assertSame('updated', $provisioning->updateAccount($stored, ' target ', ' TARGET@example.com ', 'user', 'enabled'));
+    }
+
+    public static function provideProvisioningRejectsInvalidAccountUpdates(): iterable
+    {
+        yield 'username' => ['x', 'changed@example.com', 'admin', 'banned'];
+
+        yield 'email' => ['changed', 'invalid', 'admin', 'banned'];
+
+        yield 'unknown role' => ['changed', 'changed@example.com', 'missing', 'banned'];
+
+        yield 'superadmin' => ['changed', 'changed@example.com', 'superadmin', 'banned'];
+
+        yield 'status' => ['changed', 'changed@example.com', 'admin', 'unknown'];
+
+        yield 'encoding' => ["bad\xFF", 'changed@example.com', 'admin', 'banned'];
+    }
+
+    public function testProvisioningRequiresPersistedTargetAndPreservesUnchangedLegacyUsername(): void
+    {
+        $provisioning = service('userProvisioning');
+        $this->assertSame('invalid', $provisioning->updateAccount(new AdminUser(), 'target', 'target@example.com', 'user', 'enabled'));
+        $this->assertSame('created', $provisioning->create('legacy', 'legacy@example.com'));
+        $user = auth()->getProvider()->findByCredentials(['email' => 'legacy@example.com']);
+        db_connect()->table(config('Auth')->tables['users'])->where('id', $user->id)->update(['username' => 'legacy_name']);
+        $user = auth()->getProvider()->findById($user->id);
+        $hash = $user->getEmailIdentity()->secret2;
+        $this->assertSame('updated', $provisioning->updateAccount($user, 'legacy_name', ' NEW@example.com ', 'developer', 'banned'));
+        $stored = auth()->getProvider()->findById($user->id);
+        $this->assertSame('new@example.com', $stored->email);
+        $this->assertSame($hash, $stored->getEmailIdentity()->secret2);
+        $this->assertSame(['developer'], $stored->getGroups());
+        $this->assertTrue($stored->isBanned());
+        $this->assertSame('updated', $provisioning->updateAccount($stored, 'legacy_name', 'new@example.com', 'user', 'enabled'));
+        $this->assertFalse(auth()->getProvider()->findById($user->id)->isBanned());
+    }
+
+    public function testProvisioningRollsBackFailedIdentityAndCanRetryOnSameConnection(): void
+    {
+        $db         = db_connect();
+        $identities = new UserIdentityModel($db);
+        $failing    = $this->getMockBuilder(UserIdentityModel::class)->setConstructorArgs([$db])->onlyMethods(['create'])->getMock();
+        $attempt    = 0;
+        $failing->expects($this->exactly(2))->method('create')->willReturnCallback(static function ($data) use ($identities, &$attempt): void {
+            if (++$attempt === 1) {
+                $data['secret2'] = str_repeat('x', 300);
+            }
+            $identities->create($data);
+        });
+        $provider     = auth()->getProvider()::class;
+        $provisioning = $this->provisioningWith(static fn () => new $provider($db), $failing);
+
+        $this->assertSame('save', $provisioning->create('failed', 'failed@example.com'));
+
+        foreach (['users', 'identities', 'groups_users'] as $table) {
+            $this->assertSame(0, $db->table(config('Auth')->tables[$table])->countAllResults());
+        }
+        $this->assertSame(0, $db->transDepth);
+        $this->assertTrue($db->transStatus());
+        $this->assertSame('created', $provisioning->create('retry', 'retry@example.com'));
+        $stored = auth()->getProvider()->findByCredentials(['email' => 'retry@example.com']);
+        $this->assertNotNull($stored);
+        $this->assertSame(['user'], $stored->getGroups());
+    }
+
+    public function testProvisioningRollsBackAccountAndGroupsWhenStatusSaveReturnsFalse(): void
+    {
+        $this->assertSame('created', service('userProvisioning')->create('target', 'target@example.com'));
+        $db       = db_connect();
+        $provider = auth()->getProvider()::class;
+        $users    = new $provider($db);
+        $failing  = $this->getMockBuilder($provider)->setConstructorArgs([$db])->onlyMethods(['save'])->getMock();
+        $attempt  = 0;
+        $failing->expects($this->exactly(2))->method('save')->willReturnCallback(static function ($user) use ($users, &$attempt): bool {
+            return ++$attempt === 1 && $users->save($user);
+        });
+        $factoryCalls = 0;
+        $provisioning = $this->provisioningWith(static function () use ($db, $provider, $failing, &$factoryCalls) {
+            return ++$factoryCalls === 1 ? $failing : new $provider($db);
+        });
+        $user = $users->findByCredentials(['email' => 'target@example.com']);
+        $hash = $user->getEmailIdentity()->secret2;
+        $this->assertSame('save', $provisioning->updateAccount($user, 'changed', 'changed@example.com', 'admin', 'banned'));
+        $stored = $users->findById($user->id);
+        $this->assertSame('target', $stored->username);
+        $this->assertSame('target@example.com', $stored->email);
+        $this->assertSame($hash, $stored->getEmailIdentity()->secret2);
+        $this->assertSame(['user'], $stored->getGroups());
+        $this->assertFalse($stored->isBanned());
+        $this->assertSame('target', $user->username);
+        $this->assertSame('updated', $provisioning->updateAccount($stored, 'changed', 'changed@example.com', 'admin', 'banned'));
+        $stored = $users->findById($user->id);
+        $this->assertSame('changed@example.com', $stored->email);
+        $this->assertSame(['admin'], $stored->getGroups());
+        $this->assertTrue($stored->isBanned());
+    }
+
+    private function provisioningWith(Closure $users, ?UserIdentityModel $identities = null): UserProvisioning
+    {
+        return new UserProvisioning(
+            $users,
+            $identities ?? new UserIdentityModel(db_connect()),
+            Services::validation(null, false),
+            service('passwords'),
+            config('Auth')->usernameValidationRules,
+            config('Auth')->emailValidationRules,
+            array_keys(service('settings')->get('AuthGroups.groups')),
+        );
+    }
+
+    public function testProvisioningRecoversAfterDatabaseUpdateConflict(): void
+    {
+        $provisioning = service('userProvisioning');
+        $this->assertSame('created', $provisioning->create('owner', 'owner@example.com'));
+        $this->assertSame('created', $provisioning->create('target', 'target@example.com'));
+        $db       = db_connect();
+        $provider = auth()->getProvider()::class;
+        $failing  = $this->getMockBuilder($provider)->setConstructorArgs([$db])->onlyMethods(['findByCredentials'])->getMock();
+        $failing->expects($this->once())->method('findByCredentials')->willReturn(null);
+        $calls        = 0;
+        $provisioning = $this->provisioningWith(static function () use ($db, $provider, $failing, &$calls) {
+            return ++$calls === 1 ? $failing : new $provider($db);
+        });
+        $user = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
+
+        $this->assertSame('save', $provisioning->updateAccount($user, 'changed', 'owner@example.com', 'admin', 'banned'));
+        $stored = auth()->getProvider()->findById($user->id);
+        $this->assertSame('target', $stored->username);
+        $this->assertSame('target@example.com', $stored->email);
+        $this->assertSame(['user'], $stored->getGroups());
+        $this->assertFalse($stored->isBanned());
+        $this->assertSame(0, $db->transDepth);
+        $this->assertTrue($db->transStatus());
+        $this->assertSame('updated', $provisioning->updateAccount($stored, 'changed', 'changed@example.com', 'admin', 'banned'));
+        $this->assertSame('changed@example.com', auth()->getProvider()->findById($user->id)->email);
+    }
+
+    public function testProvisioningPreservesFailureOfCallerOwnedTransaction(): void
+    {
+        $db         = db_connect();
+        $identities = new UserIdentityModel($db);
+        $failing    = $this->getMockBuilder(UserIdentityModel::class)->setConstructorArgs([$db])->onlyMethods(['create'])->getMock();
+        $failing->expects($this->once())->method('create')->willReturnCallback(static function ($data) use ($identities): void {
+            $data['secret2'] = str_repeat('x', 300);
+            $identities->create($data);
+        });
+        $provider     = auth()->getProvider()::class;
+        $provisioning = $this->provisioningWith(static fn () => new $provider($db), $failing);
+        $db->transBegin();
+
+        try {
+            $this->assertSame('save', $provisioning->create('failed', 'failed@example.com'));
+            $this->assertSame(1, $db->transDepth);
+            $this->assertFalse($db->transStatus());
+        } finally {
+            $db->transRollback();
+            $db->resetTransStatus();
+        }
+        $this->assertSame(0, auth()->getProvider()->countAllResults());
     }
 
     public function testUserListAndExportRequireViewPermission(): void

@@ -10,7 +10,7 @@ class UserCsvImport
 {
     private const MAX_ROWS = 500;
 
-    public function __construct(private readonly ?UserProvisioning $provisioning = null)
+    public function __construct(private readonly UserProvisioning $provisioning)
     {
     }
 
@@ -21,7 +21,7 @@ class UserCsvImport
      */
     public function import($stream): array
     {
-        $provisioning = $this->provisioning ?? new UserProvisioning();
+        $provisioning = $this->provisioning;
         $seen         = [];
         $report       = (new CsvImport())->import($stream, ['username', 'email'], static function (array $data) use ($provisioning, &$seen): array {
             $username = trim($data['username']);

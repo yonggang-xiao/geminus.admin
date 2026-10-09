@@ -15,7 +15,6 @@ use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
 use Geminus\Admin\Libraries\UserCsvImport;
 use Geminus\Admin\Libraries\UserManagementPolicy;
-use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
 use Throwable;
@@ -204,7 +203,7 @@ class Users extends BaseController
         }
 
         $data   = $validation->getValidated();
-        $result = (new UserProvisioning())->create($data['username'], $data['email']);
+        $result = service('userProvisioning')->create($data['username'], $data['email']);
         if ($result !== 'created') {
             $field = in_array($result, ['username', 'invalid'], true) ? 'username' : 'email';
 
@@ -243,7 +242,7 @@ class Users extends BaseController
         }
 
         $data   = $validation->getValidated();
-        $result = (new UserProvisioning())->updateAccount($user, $data['username'], $data['email'], $data['role'], $data['status']);
+        $result = service('userProvisioning')->updateAccount($user, $data['username'], $data['email'], $data['role'], $data['status']);
         if ($result === 'username' || $result === 'duplicate') {
             $field = $result === 'username' ? 'username' : 'email';
 
@@ -338,7 +337,7 @@ class Users extends BaseController
         $stream = fopen($file->getTempName(), 'rb');
 
         try {
-            $report = (new UserCsvImport())->import($stream);
+            $report = (new UserCsvImport(service('userProvisioning')))->import($stream);
         } catch (InvalidArgumentException $exception) {
             return redirect()->to($this->userReturnUrl('admin/users/create'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
         } finally {

@@ -40,6 +40,14 @@ bob,bob@example.com
 
 导入报告只在本次导入后显示，请当场核对结果。导入不接受角色、密码或微软身份列，也不会凭邮箱把账号与微软身份关联。
 
+### 账号写入契约
+
+`service('userProvisioning')` 默认创建非共享实例；用户 Model 通过工厂按操作独立创建，身份 Model、验证器、密码服务、字段规则和角色目录由 Services 装配。`UserCsvImport` 显式接收该能力，创建与导入共用业务验证。
+
+`create()` 返回 `created`、`invalid`、`username`、`duplicate` 或 `save`；`updateAccount()` 返回 `updated` 或相同的失败原因。用户名会去除首尾空格，邮箱会去除首尾空格并转为小写。更新要求已持久化的目标账号、有效邮箱、目录内的非 `superadmin` 角色以及 `enabled` / `banned` 状态；未变更的历史用户名不重新应用当前格式限制。用户名或邮箱冲突不会写入账号、身份、角色或状态。
+
+调用方必须先检查基础操作权限、目标账号是否可管理及角色是否可分配，Library 不代替当前操作者授权。独立事务失败会回滚并恢复连接的事务状态；处于调用方的外层事务时，调用方必须在返回 `save` 后回滚外层事务，Library 不清除外层失败标记。
+
 ### 数据库唯一性
 
 PostgreSQL 中 `users.username` 使用 `citext` 和 Shield 原有的唯一键，不区分大小写地查询和查重；混存其他凭据的 `auth_identities.secret` 保持原类型，仅对 `email_password` 身份建立 `LOWER(secret)` 唯一索引。密码哈希与微软身份、访问令牌不在上述邮箱唯一索引范围内。

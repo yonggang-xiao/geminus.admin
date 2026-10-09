@@ -11,7 +11,6 @@ use Geminus\Admin\Cells\TimezoneSelectorCell;
 use Geminus\Admin\Libraries\AvatarFiles;
 use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MicrosoftLinks;
-use Geminus\Admin\Libraries\UserProvisioning;
 use RuntimeException;
 use Throwable;
 
@@ -67,7 +66,7 @@ class Profile extends BaseController
             return redirect()->back()->withInput()->with('profile_errors', ['timezone' => lang('Admin.invalidPreference')]);
         }
 
-        if ($data['username'] !== $user->username && (new UserProvisioning())->usernameTaken($data['username'], $user->id)) {
+        if ($data['username'] !== $user->username && service('userProvisioning')->usernameTaken($data['username'], $user->id)) {
             return redirect()->back()->withInput()->with('profile_errors', ['username' => lang('Admin.usernameTaken')]);
         }
 
