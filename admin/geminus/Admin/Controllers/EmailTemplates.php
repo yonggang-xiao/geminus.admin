@@ -24,12 +24,16 @@ class EmailTemplates extends BaseController
         $locale = in_array($locale, config('App')->supportedLocales, true) ? $locale : $this->request->getLocale();
 
         return view('Geminus\Admin\Views\email_templates', [
-            'me'         => auth()->user(),
-            'page_title' => lang('Admin.mailTemplates'),
-            'template'   => (new MailTemplates())->get($type, $locale),
-            'type'       => $type,
-            'locale'     => $locale,
-            'types'      => MailTemplates::TYPES,
+            'me'                 => auth()->user(),
+            'page_title'         => lang('Admin.mailTemplates'),
+            'template'           => service('mailTemplates')->get($type, $locale),
+            'type'               => $type,
+            'locale'             => $locale,
+            'types'              => MailTemplates::TYPES,
+            'microsoftLoginHtml' => view('Geminus\Admin\Views\auth\email\microsoft_login', [
+                'enabled' => (bool) service('settings')->get('MicrosoftOAuth.enabled'),
+                'locale'  => $locale,
+            ], ['debug' => false]),
         ]);
     }
 
@@ -55,11 +59,11 @@ class EmailTemplates extends BaseController
         }
 
         $data = $validation->getValidated();
-        if (! (new MailTemplates())->validContent($type, $data['subject'], $data['body'])) {
+        if (! service('mailTemplates')->validContent($type, $data['subject'], $data['body'])) {
             return redirect()->to($url)->withInput()->with('template_errors', ['body' => lang('Admin.mailTemplateInvalid')]);
         }
 
-        (new MailTemplates())->save($type, $locale, $data['subject'], $data['body']);
+        service('mailTemplates')->save($type, $locale, $data['subject'], $data['body']);
 
         return redirect()->to($url)->with('alert', ['type' => 'success', 'message' => lang('Admin.mailTemplateSaved')]);
     }
@@ -74,7 +78,7 @@ class EmailTemplates extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        (new MailTemplates())->reset($type, $locale);
+        service('mailTemplates')->reset($type, $locale);
 
         return redirect()->to(route_to('admin/mail/templates') . '?type=' . $type . '&locale=' . $locale)
             ->with('alert', ['type' => 'success', 'message' => lang('Admin.mailTemplateReset')]);

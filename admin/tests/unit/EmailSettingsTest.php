@@ -1,6 +1,8 @@
 <?php
 
+use CodeIgniter\Language\Language;
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Settings\Settings;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -102,7 +104,7 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->loginAs('superadmin');
         $url = '/en/admin/mail/templates/invitation/zh-Hans';
         $this->post($url, [csrf_token() => csrf_hash(), 'subject' => 'Hi {username}', 'body' => 'Go {link}'])->assertRedirect();
-        $template = new MailTemplates();
+        $template = service('mailTemplates');
         $this->assertSame(['subject' => 'Hi {username}', 'body' => 'Go {link}'], $template->get('invitation', 'zh-Hans'));
         $this->assertSame('帳戶邀請', $template->get('invitation', 'zh-Hant')['subject']);
         $this->assertSame('Go https://example.com', $template->render('invitation', 'zh-Hans', ['link' => 'https://example.com'])['body']);
@@ -134,7 +136,7 @@ final class EmailSettingsTest extends CIUnitTestCase
     public function testInvitationRendersHtmlWithOptionalMicrosoftInstructions(): void
     {
         $this->loginAs('superadmin');
-        $templates = new MailTemplates();
+        $templates = service('mailTemplates');
         $settings  = service('settings');
         $previous  = $settings->get('MicrosoftOAuth.enabled');
         $settings->set(MailTemplates::settingKey('invitation', 'en', 'body'), '<p>{username}</p><a href="{link}">Open</a>{microsoftLogin}');
@@ -145,7 +147,7 @@ final class EmailSettingsTest extends CIUnitTestCase
             $this->assertStringContainsString('<p>&lt;user&gt;</p>', $rendered['body']);
             $this->assertStringContainsString('&quot; onclick=&quot;', $rendered['body']);
             $this->assertStringNotContainsString('Microsoft', $rendered['body']);
-            $this->assertStringContainsString('<meta name="viewport"', $templates->renderHtml($rendered));
+            $this->assertStringContainsString('<meta name="viewport"', view('Geminus\Admin\Views\auth\email\html', $rendered));
             $this->assertStringContainsString('microsoftLogin: ""', $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hant')->response()->getBody());
 
             $settings->forget(MailTemplates::settingKey('invitation', 'en', 'body'));
@@ -161,13 +163,14 @@ final class EmailSettingsTest extends CIUnitTestCase
             $settings->set('MicrosoftOAuth.enabled', true);
 
             foreach (['en' => 'sign in with Microsoft', 'zh-Hans' => '通过微软登录', 'zh-Hant' => '透過微軟登入'] as $locale => $label) {
-                $body = $templates->render('invitation', $locale, ['link' => 'https://example.invalid'])['body'];
+                $microsoftLoginHtml = view('Geminus\Admin\Views\auth\email\microsoft_login', ['enabled' => true, 'locale' => $locale], ['debug' => false]);
+                $body               = $templates->render('invitation', $locale, ['link' => 'https://example.invalid'], $microsoftLoginHtml)['body'];
                 $this->assertStringContainsString('<a href="' . site_url($locale . '/microsoft/start') . '">' . $label . '</a>', $body);
                 $this->assertStringNotContainsString('<a href="/' . $locale . '/microsoft/start">', $body);
                 $this->assertStringNotContainsString('{microsoftLink}', $body);
             }
             $preview = $this->get('/en/admin/mail/templates?type=invitation&locale=zh-Hant')->response()->getBody();
-            $this->assertStringContainsString('microsoftLogin: ' . json_encode($templates->microsoftLoginBody('zh-Hant'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), $preview);
+            $this->assertStringContainsString('microsoftLogin: ' . json_encode($microsoftLoginHtml, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), $preview);
         } finally {
             $settings->set('MicrosoftOAuth.enabled', $previous);
         }
@@ -197,15 +200,98 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->assertStringContainsString('a%26b', $body);
         $this->assertStringNotContainsString('token=a&b', $body);
         service('settings')->set(MailTemplates::settingKey('magic-link', 'en', 'subject'), 'Hello {username}');
-        $rendered = (new MailTemplates())->render('magic-link', 'en', ['username' => '<user>', 'link' => 'https://example.invalid/login']);
+        $rendered = service('mailTemplates')->render('magic-link', 'en', ['username' => '<user>', 'link' => 'https://example.invalid/login']);
         $this->assertSame('Hello <user>', $rendered['subject']);
         $this->assertStringContainsString('&lt;user&gt;', $rendered['body']);
+    }
+
+    public function testCoreTemplatesUseInjectedDependenciesAndExplicitLocale(): void
+    {
+        $settings = $this->createStub(Settings::class);
+        $settings->method('get')->willReturn(null);
+        $language  = new Language('en');
+        $templates = new MailTemplates($settings, $language, ['en', 'zh-Hans', 'zh-Hant']);
+        $email     = $this->createMock(QueuedEmail::class);
+        $email->expects($this->never())->method('setSubject');
+        Services::injectMock('email', $email);
+
+        foreach (['zh-Hans' => '账户邀请', 'zh-Hant' => '帳戶邀請', 'en' => 'Account invitation'] as $locale => $subject) {
+            $rendered = $templates->render('invitation', $locale, [
+                'username' => '<user>', 'link' => 'https://example.invalid', 'microsoftLogin' => '<script>evil</script>',
+            ]);
+            $this->assertSame($subject, $rendered['subject']);
+            $this->assertStringContainsString('&lt;user&gt;', $rendered['body']);
+            $this->assertStringNotContainsString('<script>', $rendered['body']);
+            $this->assertStringNotContainsString('{microsoftLogin}', $rendered['body']);
+            $this->assertStringNotContainsString('<html>', $rendered['body']);
+            $this->assertSame('en', $language->getLocale());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $templates->get('invitation', 'fr');
+    }
+
+    public function testCoreTemplatePersistenceUsesInjectedSettings(): void
+    {
+        $subjectKey = MailTemplates::settingKey('invitation', 'zh-Hans', 'subject');
+        $bodyKey    = MailTemplates::settingKey('invitation', 'zh-Hans', 'body');
+        $settings   = $this->createMock(Settings::class);
+        $settings->expects($this->exactly(2))->method('get')->willReturnMap([
+            [$subjectKey, null, 'Injected subject'],
+            [$bodyKey, null, 'Injected {link}'],
+        ]);
+        $settings->expects($this->once())->method('setMany')->with([
+            $subjectKey => 'Saved subject',
+            $bodyKey    => 'Saved {link}',
+        ]);
+        $settings->expects($this->once())->method('forgetMany')->with([$subjectKey, $bodyKey]);
+        $templates = new MailTemplates($settings, new Language('en'), ['en', 'zh-Hans']);
+
+        $this->assertSame(['subject' => 'Injected subject', 'body' => 'Injected {link}'], $templates->get('invitation', 'zh-Hans'));
+        $templates->save('invitation', 'zh-Hans', 'Saved subject', 'Saved {link}');
+        $templates->reset('invitation', 'zh-Hans');
+    }
+
+    public function testShieldMailViewsUseRequestLocaleForEveryTemplate(): void
+    {
+        $request  = service('request');
+        $previous = $request->getLocale();
+
+        try {
+            foreach (config('App')->supportedLocales as $locale) {
+                $request->setLocale($locale);
+
+                foreach (['magic-link-email' => 'magic-link', 'action_email_activate_email' => 'activation', 'action_email_2fa_email' => 'email-2fa'] as $view => $type) {
+                    $subject = $locale . ' ' . $type . ' <{username}>';
+                    $token   = $type === 'magic-link' ? 'link' : 'code';
+                    service('mailTemplates')->save($type, $locale, $subject, '<p>{username}: {' . $token . '}</p>');
+                    $email = $this->createMock(QueuedEmail::class);
+                    $email->expects($this->once())->method('setSubject')->with($locale . ' ' . $type . ' <<user>>');
+                    Services::injectMock('email', $email);
+
+                    $body = view(config('Auth')->views[$view], [
+                        'user'      => (object) ['username' => '<user>'], 'token' => 'a&b', 'code' => '<123>',
+                        'ipAddress' => '<ip>', 'userAgent' => '<agent>', 'date' => '<date>',
+                    ]);
+                    $this->assertStringContainsString('<title>' . esc($locale . ' ' . $type . ' <<user>>') . '</title>', $body);
+                    $this->assertStringContainsString('&lt;user&gt;', $body);
+                    $this->assertStringNotContainsString('<user>', $body);
+                    if ($type === 'magic-link') {
+                        $this->assertStringContainsString(url_to('verify-magic-link', $locale) . '?token=a%26b', $body);
+                    } else {
+                        $this->assertStringContainsString('&lt;123&gt;', $body);
+                    }
+                }
+            }
+        } finally {
+            $request->setLocale($previous);
+        }
     }
 
     public function testHtmlShieldTemplateCanBeSavedAndReset(): void
     {
         $this->loginAs('superadmin');
-        $templates = new MailTemplates();
+        $templates = service('mailTemplates');
 
         foreach (config('App')->supportedLocales as $locale) {
             $this->assertStringContainsString('<a href="{link}"', $templates->get('magic-link', $locale)['body']);

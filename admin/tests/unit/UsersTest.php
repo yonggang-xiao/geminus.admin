@@ -1191,6 +1191,46 @@ final class UsersTest extends CIUnitTestCase
         $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
     }
 
+    public function testInviteIncludesMicrosoftInstructionsOnlyWhenEnabled(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('invitee', 'invitee@example.com');
+        $user     = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
+        $settings = service('settings');
+        $settings->set('Email.fromEmail', 'sender@example.com');
+        $previous = $settings->get('MicrosoftOAuth.enabled');
+
+        try {
+            foreach (['en' => 'sign in with Microsoft', 'zh-Hans' => '通过微软登录', 'zh-Hant' => '透過微軟登入'] as $locale => $label) {
+                foreach ([false, true] as $enabled) {
+                    $settings->set('MicrosoftOAuth.enabled', $enabled);
+                    $email = $this->createMock(QueuedEmail::class);
+                    $email->expects($this->once())->method('setSubject')->with(lang('Admin.userInviteSubject', [], $locale));
+                    $email->expects($this->once())->method('setMessage')->with($this->callback(function (string $body) use ($enabled, $locale, $label): bool {
+                        $this->assertStringContainsString('<!DOCTYPE html PUBLIC', $body);
+                        $this->assertStringContainsString(url_to('magic-link', $locale), $body);
+                        $this->assertStringNotContainsString('{microsoftLogin}', $body);
+                        $this->assertStringNotContainsString('DEBUG-VIEW', $body);
+                        if ($enabled) {
+                            $this->assertStringContainsString('<a href="' . url_to('microsoft/start', $locale) . '">' . $label . '</a>', $body);
+                        } else {
+                            $this->assertStringNotContainsString(url_to('microsoft/start', $locale), $body);
+                        }
+
+                        return true;
+                    }));
+                    $email->method('send')->willReturn(true);
+                    Services::injectMock('email', $email);
+
+                    $this->post('/' . $locale . '/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+                    $this->assertSame('success', session('alert')['type']);
+                }
+            }
+        } finally {
+            $settings->set('MicrosoftOAuth.enabled', $previous);
+        }
+    }
+
     public function testInvitationQueueAuditShowsLatestDeliveryStatus(): void
     {
         $this->loginAs('superadmin');

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Geminus\Admin\Libraries;
 
+use CodeIgniter\Language\Language;
+use CodeIgniter\Settings\Settings;
 use InvalidArgumentException;
 
 class MailTemplates
@@ -15,19 +17,26 @@ class MailTemplates
         'email-2fa'  => ['label' => 'mailEmail2fa', 'html' => true, 'required' => 'code', 'variables' => ['username', 'code', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
     ];
 
+    public function __construct(private readonly Settings $settings, private readonly Language $language, private readonly array $supportedLocales)
+    {
+    }
+
     public function get(string $type, string $locale): array
     {
-        if (! isset(self::TYPES[$type]) || ! in_array($locale, config('App')->supportedLocales, true)) {
+        if (! isset(self::TYPES[$type]) || ! in_array($locale, $this->supportedLocales, true)) {
             throw new InvalidArgumentException('Unknown mail template or locale.');
         }
 
+        $language = clone $this->language;
+        $language->setLocale($locale);
+
         return [
-            'subject' => service('settings')->get(self::settingKey($type, $locale, 'subject')) ?? lang($this->languageKey($type, 'Subject'), [], $locale),
-            'body'    => service('settings')->get(self::settingKey($type, $locale, 'body')) ?? str_replace(['{0}', '{1}'], ['{username}', '{link}'], lang($this->languageKey($type, 'Body'), [], $locale)),
+            'subject' => $this->settings->get(self::settingKey($type, $locale, 'subject')) ?? $language->getLine($this->languageKey($type, 'Subject')),
+            'body'    => $this->settings->get(self::settingKey($type, $locale, 'body')) ?? str_replace(['{0}', '{1}'], ['{username}', '{link}'], $language->getLine($this->languageKey($type, 'Body'))),
         ];
     }
 
-    public function render(string $type, string $locale, array $values): array
+    public function render(string $type, string $locale, array $values, string $microsoftLoginHtml = ''): array
     {
         $template            = $this->get($type, $locale);
         $subjectReplacements = [];
@@ -40,7 +49,7 @@ class MailTemplates
         }
 
         if ($type === 'invitation') {
-            $bodyReplacements['{microsoftLogin}'] = $this->microsoftLoginBody($locale);
+            $bodyReplacements['{microsoftLogin}'] = $microsoftLoginHtml;
         }
 
         return [
@@ -49,39 +58,9 @@ class MailTemplates
         ];
     }
 
-    public function renderShield(string $type, array $values): string
-    {
-        $rendered = $this->render($type, service('request')->getLocale(), $values);
-        service('email')->setSubject($rendered['subject']);
-
-        return $this->renderHtml($rendered);
-    }
-
-    public function microsoftLoginBody(string $locale): string
-    {
-        if (! service('settings')->get('MicrosoftOAuth.enabled')) {
-            return '';
-        }
-
-        return strtr(lang('Admin.userInviteMicrosoftBody', [], $locale), [
-            '{microsoftLink}' => esc(url_to('microsoft/start', $locale)),
-        ]);
-    }
-
-    public function renderHtml(array $rendered): string
-    {
-        return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
-            . '<html><head><meta name="x-apple-disable-message-reformatting">'
-            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            . '<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">'
-            . '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
-            . '<title>' . esc($rendered['subject']) . '</title></head><body>'
-            . $rendered['body'] . '</body></html>';
-    }
-
     public function save(string $type, string $locale, string $subject, string $body): void
     {
-        service('settings')->setMany([
+        $this->settings->setMany([
             self::settingKey($type, $locale, 'subject') => $subject,
             self::settingKey($type, $locale, 'body')    => $body,
         ]);
@@ -89,7 +68,7 @@ class MailTemplates
 
     public function reset(string $type, string $locale): void
     {
-        service('settings')->forgetMany([
+        $this->settings->forgetMany([
             self::settingKey($type, $locale, 'subject'),
             self::settingKey($type, $locale, 'body'),
         ]);

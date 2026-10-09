@@ -1,8 +1,4 @@
-    <?php
-
-use Geminus\Admin\Libraries\MailTemplates;
-
-?><?= $this->extend('Geminus\Admin\Views\layout_main') ?>
+    <?= $this->extend('Geminus\Admin\Views\layout_main') ?>
 
     <?= $this->section('header') ?>
         <h2 class="page-title"><?= esc($page_title) ?></h2>
@@ -68,7 +64,7 @@ use Geminus\Admin\Libraries\MailTemplates;
                     'invitation' => url_to('magic-link', $locale),
                     'magic-link' => url_to('verify-magic-link', $locale) . '?token=preview',
                     default      => '',
-                }, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, code: '123456', ipAddress: '192.0.2.1', userAgent: 'Browser', date: '2026-01-01', microsoftLogin: <?= json_encode((new MailTemplates())->microsoftLoginBody($locale), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> };
+                }, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, code: '123456', ipAddress: '192.0.2.1', userAgent: 'Browser', date: '2026-01-01', microsoftLogin: <?= json_encode($microsoftLoginHtml, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> };
                 const updatePreview = () => {
                     const markup = bodyInput.value.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (token, name) => Object.hasOwn(samples, name) ? samples[name] : token);
                     preview.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:">' + markup;

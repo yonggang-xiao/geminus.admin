@@ -1,11 +1,12 @@
 <?php
 
-use Geminus\Admin\Libraries\MailTemplates;
-
-echo (new MailTemplates())->renderShield('activation', [
+$rendered = service('mailTemplates')->render('activation', service('request')->getLocale(), [
     'username'  => $user->username,
     'code'      => $code,
     'ipAddress' => $ipAddress,
     'userAgent' => $userAgent,
     'date'      => $date,
 ]);
+service('email')->setSubject($rendered['subject']);
+
+echo view('Geminus\Admin\Views\auth\email\html', $rendered, ['debug' => false]);

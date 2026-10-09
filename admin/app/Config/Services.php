@@ -4,6 +4,7 @@ namespace Config;
 
 use CodeIgniter\Config\BaseService;
 use CodeIgniter\Email\Email as EmailService;
+use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\QueuedEmail;
 
 /**
@@ -21,6 +22,15 @@ use Geminus\Admin\Libraries\QueuedEmail;
  */
 class Services extends BaseService
 {
+    public static function mailTemplates(bool $getShared = true): MailTemplates
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mailTemplates');
+        }
+
+        return new MailTemplates(service('settings'), service('language'), config(App::class)->supportedLocales);
+    }
+
     public static function email($config = null, bool $getShared = true): EmailService
     {
         if ($getShared) {

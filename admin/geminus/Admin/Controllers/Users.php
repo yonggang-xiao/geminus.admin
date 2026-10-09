@@ -13,7 +13,6 @@ use CodeIgniter\Shield\Models\UserModel;
 use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
-use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\UserCsvImport;
 use Geminus\Admin\Libraries\UserManagementPolicy;
 use Geminus\Admin\Libraries\UserProvisioning;
@@ -269,18 +268,21 @@ class Users extends BaseController
         }
 
         try {
-            $templates = new MailTemplates();
+            $templates = service('mailTemplates');
             $template  = $templates->render('invitation', $this->request->getLocale(), [
                 'username' => $user->username,
                 'link'     => url_to('magic-link'),
-            ]);
+            ], view('Geminus\Admin\Views\auth\email\microsoft_login', [
+                'enabled' => (bool) service('settings')->get('MicrosoftOAuth.enabled'),
+                'locale'  => $this->request->getLocale(),
+            ], ['debug' => false]));
             $email = service('email');
             $email->clear();
             $email->setFrom(service('settings')->get('Email.fromEmail'), service('settings')->get('Email.fromName') ?? '');
             $email->setTo($user->email);
             $email->setSubject($template['subject']);
             $email->setMailType('html');
-            $email->setMessage($templates->renderHtml($template));
+            $email->setMessage(view('Geminus\Admin\Views\auth\email\html', $template, ['debug' => false]));
             $email->setInvitationUserId($user->id);
             $sent = $email->send();
             if (! $sent) {
