@@ -281,9 +281,15 @@ final class UsersTest extends CIUnitTestCase
             $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
             $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
             $this->assertStringNotContainsString('other-only.txt', $page->response()->getBody());
+            $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '"', $page->response()->getBody());
+            $this->assertStringContainsString('action="' . $route . '/' . $attachment['id'] . '/remove"', $page->response()->getBody());
             $otherPage = $this->get('/en/admin/users/' . $other->id . '/attachments');
             $otherPage->assertSee('other-only.txt');
             $this->assertStringNotContainsString('&lt;script&gt;.txt', $otherPage->response()->getBody());
+            $this->assertStringNotContainsString('href="' . $route . '/', $otherPage->response()->getBody());
+            $this->assertStringNotContainsString('action="' . $route . '/', $otherPage->response()->getBody());
+            $this->assertStringNotContainsString('/attachments/' . $attachment['id'] . '"', $otherPage->response()->getBody());
+            $this->assertStringNotContainsString('/attachments/' . $attachment['id'] . '/remove"', $otherPage->response()->getBody());
             $download = $this->get($route . '/' . $attachment['id']);
             $download->assertStatus(200);
             $this->assertInstanceOf(DownloadResponse::class, $download->response());
@@ -352,6 +358,15 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringNotContainsString('dateexcluded@example.com', $page->response()->getBody());
         $this->assertSame(4, substr_count($page->response()->getBody(), 'name="created_from"'));
         $this->assertStringContainsString('created_to=2026-10-02', $page->response()->getBody());
+        $document = new DOMDocument();
+        $document->loadHTML($page->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+
+        foreach (['q' => 'date', 'created_from' => '2026-10-01', 'created_to' => '2026-10-02'] as $name => $value) {
+            $this->assertSame(3, $xpath->query('//thead//input[@name="' . $name . '" and @value="' . $value . '"]')->length);
+        }
+        $this->assertSame(1, $xpath->query('//thead//th[@aria-sort="ascending"]')->length);
+        $this->assertSame(1, $xpath->query('//thead//th[.//button[@value="email"]]//input[@name="direction" and @value="DESC"]')->length);
         $export = $this->get('/en/admin/users/export' . $parameters);
         $export->assertOK();
         $this->assertStringContainsString('dateincluded@example.com', $export->response()->getBody());

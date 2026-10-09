@@ -115,7 +115,7 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertStringContainsString('aria-describedby="new-password-hint"', $result->response()->getBody());
         $this->assertStringContainsString('id="new-password-hint"', $result->response()->getBody());
         $this->assertStringContainsString('dist/libs/vanilla-calendar-pro/index.js', $result->response()->getBody());
-        $this->assertStringContainsString('data-bs-toggle="datepicker" data-bs-date-min="', $result->response()->getBody());
+        $this->assertMatchesRegularExpression('/<input\b[^>]*id="token-expires"[^>]*data-bs-toggle="datepicker"[^>]*data-bs-date-min="\d{4}-\d{2}-\d{2}"/', $result->response()->getBody());
         $this->assertStringContainsString('dateFormat: (date) =>', $result->response()->getBody());
 
         $this->get('/zh-Hans/admin/profile')->assertSee('至少 8 个字符，最多 255 个字符');
@@ -722,6 +722,9 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertSame([], $user->accessTokens());
         $result = $this->withSession($_SESSION)->get('/en/admin/profile');
         $this->assertStringContainsString('value="2020-01-01"', $result->response()->getBody());
+        $this->assertStringContainsString(esc(lang('Admin.futureExpiry')), $result->response()->getBody());
+        $this->assertStringContainsString('id="token-expires-error"', $result->response()->getBody());
+        $this->assertMatchesRegularExpression('/<input\b[^>]*id="token-expires"[^>]*aria-invalid="true"[^>]*aria-describedby="token-expires-error"/', $result->response()->getBody());
     }
 
     public function testUserCannotRevokeAnotherUsersToken(): void

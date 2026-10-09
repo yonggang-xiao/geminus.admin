@@ -6,8 +6,8 @@
 
 <?= $this->section('header') ?>
     <div class="row g-2 align-items-center">
-        <div class="col"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
-        <div class="col-auto ms-auto btn-list">
+        <div class="col-12 col-md"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
+        <div class="col-12 col-md-auto ms-auto btn-list">
             <a class="btn btn-primary" href="<?= route_to('admin/users/create') ?>"><i class="ti ti-user-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createUser')) ?></a>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/template') ?>"><i class="ti ti-download me-1" aria-hidden="true"></i><?= esc(lang('Admin.userTemplate')) ?></a>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/export') . '?' . http_build_query(['q' => $search, 'sort' => $sort, 'direction' => $direction, 'created_from' => $createdRange['from'], 'created_to' => $createdRange['to']]) ?>"><i class="ti ti-file-export me-1" aria-hidden="true"></i><?= esc(lang('Admin.exportUsers')) ?></a>
@@ -18,66 +18,27 @@
 <?= $this->section('content') ?>
     <div class="card mb-3">
         <div class="card-body">
-            <form method="get" action="<?= route_to('admin/users') ?>" class="row g-2 align-items-end">
-                <div class="col-12 col-md-6">
-                    <label class="form-label" for="user-search"><?= esc(lang('Admin.userSearch')) ?></label>
-                    <input class="form-control" id="user-search" name="q" value="<?= esc($search) ?>" maxlength="100">
-                </div>
-                <input type="hidden" name="sort" value="<?= esc($sort) ?>">
-                <input type="hidden" name="direction" value="<?= esc($direction) ?>">
-                <div class="col-6 col-md-3">
-                    <label class="form-label" for="created-from"><?= esc(lang('Admin.createdFrom')) ?></label>
-                    <div class="input-icon">
-                        <input type="text" id="created-from" name="created_from" class="form-control" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($createdRange['from'], 'attr') ?>">
-                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label" for="created-to"><?= esc(lang('Admin.createdTo')) ?></label>
-                    <div class="input-icon">
-                        <input type="text" id="created-to" name="created_to" class="form-control" data-bs-toggle="datepicker" autocomplete="off" placeholder="YYYY-MM-DD" value="<?= esc($createdRange['to'], 'attr') ?>">
-                        <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
-                    </div>
-                </div>
-                <div class="col-12 col-md-auto btn-list">
-                    <button class="btn btn-primary" type="submit"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
-                    <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.userClear')) ?></a>
-                </div>
-            </form>
+            <?= view_cell('Geminus\Admin\Cells\FilterBarCell', [
+                'action'      => route_to('admin/users'), 'clearUrl' => route_to('admin/users'),
+                'submitLabel' => lang('Admin.userFilter'), 'clearLabel' => lang('Admin.userClear'),
+                'hidden'      => ['sort' => $sort, 'direction' => $direction],
+                'fields'      => [
+                    ['id' => 'user-search', 'name' => 'q', 'label' => lang('Admin.userSearch'), 'value' => $search, 'maxlength' => 100, 'class' => 'col-12 col-md-6'],
+                    ['type' => 'date', 'id' => 'created-from', 'name' => 'created_from', 'label' => lang('Admin.createdFrom'), 'value' => $createdRange['from'], 'class' => 'col-12 col-sm-6 col-md-3'],
+                    ['type' => 'date', 'id' => 'created-to', 'name' => 'created_to', 'label' => lang('Admin.createdTo'), 'value' => $createdRange['to'], 'class' => 'col-12 col-sm-6 col-md-3'],
+                ],
+            ]) ?>
         </div>
         <div class="table-responsive">
             <table class="table card-table table-vcenter">
                 <thead><tr>
-                    <th scope="col" aria-sort="<?= $sort === 'username' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
-                        <form method="get" action="<?= route_to('admin/users') ?>">
-                            <input type="hidden" name="q" value="<?= esc($search) ?>">
-                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
-                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
-                            <input type="hidden" name="direction" value="<?= $sort === 'username' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
-                            <button type="submit" name="sort" value="username" class="table-sort<?= $sort === 'username' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.username')) ?></button>
-                        </form>
-                    </th>
-                    <th scope="col" aria-sort="<?= $sort === 'email' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
-                        <form method="get" action="<?= route_to('admin/users') ?>">
-                            <input type="hidden" name="q" value="<?= esc($search) ?>">
-                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
-                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
-                            <input type="hidden" name="direction" value="<?= $sort === 'email' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
-                            <button type="submit" name="sort" value="email" class="table-sort<?= $sort === 'email' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.email')) ?></button>
-                        </form>
-                    </th>
+                    <?php foreach (['username' => 'Admin.username', 'email' => 'Admin.email'] as $field => $label): ?>
+                        <?= view_cell('Geminus\Admin\Cells\SortHeaderCell', ['action' => route_to('admin/users'), 'field' => $field, 'label' => lang($label), 'sort' => $sort, 'direction' => $direction, 'filters' => ['q' => $search, 'created_from' => $createdRange['from'], 'created_to' => $createdRange['to']]]) ?>
+                    <?php endforeach; ?>
                     <th scope="col"><?= esc(lang('Admin.userRole')) ?></th>
                     <th scope="col"><?= esc(lang('Admin.userStatus')) ?></th>
                     <th scope="col"><?= esc(lang('Admin.userInviteStatus')) ?></th>
-                    <th scope="col" aria-sort="<?= $sort === 'created_at' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
-                        <form method="get" action="<?= route_to('admin/users') ?>">
-                            <input type="hidden" name="q" value="<?= esc($search) ?>">
-                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
-                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
-                            <input type="hidden" name="direction" value="<?= $sort === 'created_at' && $direction === 'DESC' ? 'ASC' : 'DESC' ?>">
-                            <button type="submit" name="sort" value="created_at" class="table-sort<?= $sort === 'created_at' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.userCreated')) ?></button>
-                        </form>
-                    </th>
+                    <?= view_cell('Geminus\Admin\Cells\SortHeaderCell', ['action' => route_to('admin/users'), 'field' => 'created_at', 'label' => lang('Admin.userCreated'), 'sort' => $sort, 'direction' => $direction, 'defaultDirection' => 'DESC', 'filters' => ['q' => $search, 'created_from' => $createdRange['from'], 'created_to' => $createdRange['to']]]) ?>
                     <th scope="col" class="text-end"><?= esc(lang('Admin.userActions')) ?></th>
                 </tr></thead>
                 <tbody>
@@ -118,8 +79,7 @@
                     <?php endforeach; ?>
                     <?php if ($users === []): ?>
                         <tr><td colspan="7" class="text-center py-4">
-                            <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
-                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><i class="ti ti-<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'x' : 'user-plus' ?> me-1" aria-hidden="true"></i><?= esc(lang($search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
+                            <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.noUsersFound'), 'filtered' => $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '', 'createUrl' => route_to('admin/users/create'), 'createLabel' => lang('Admin.createUser'), 'createIcon' => 'user-plus', 'clearUrl' => route_to('admin/users'), 'clearLabel' => lang('Admin.userClear')]) ?>
                         </td></tr>
                     <?php endif; ?>
                 </tbody>
@@ -145,8 +105,7 @@
             </div>
         <?php endforeach; ?>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="text-secondary"><?= esc(lang('Admin.userTotal')) ?>: <?= esc($pager->getTotal()) ?></span>
-            <?= $pager->links() ?>
+            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.userTotal')]) ?>
         </div>
     </div>
 
@@ -162,19 +121,13 @@
     </form>
 
     <?php if ($report !== null): ?>
-        <div class="card">
-            <div class="card-header"><h3 class="card-title"><?= esc(lang('Admin.userImportReport')) ?></h3></div>
-            <div class="table-responsive">
-                <table class="table card-table table-vcenter">
-                    <thead><tr><th scope="col"><?= esc(lang('Admin.userRow')) ?></th><th scope="col"><?= esc(lang('Admin.email')) ?></th><th scope="col"><?= esc(lang('Admin.userResult')) ?></th><th scope="col"><?= esc(lang('Admin.userReason')) ?></th></tr></thead>
-                    <tbody>
-                        <?php foreach ($report as $entry): ?>
-                            <tr><td><?= esc($entry['row']) ?></td><td><?= esc($entry['email']) ?></td><td><?= esc(lang('Admin.userResult_' . $entry['result'])) ?></td><td><?= $entry['reason'] !== '' ? esc(lang('Admin.userReason_' . $entry['reason'])) : '' ?></td></tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <?= view_cell('Geminus\Admin\Cells\ImportReportCell', [
+            'title'        => lang('Admin.userImportReport'), 'rowLabel' => lang('Admin.userRow'),
+            'resultLabel'  => lang('Admin.userResult'), 'reasonLabel' => lang('Admin.userReason'),
+            'columns'      => ['email' => lang('Admin.email')], 'rows' => $report,
+            'resultLabels' => ['created' => lang('Admin.userResult_created'), 'skipped' => lang('Admin.userResult_skipped'), 'error' => lang('Admin.userResult_error')],
+            'reasonLabels' => ['duplicate' => lang('Admin.userReason_duplicate'), 'invalid' => lang('Admin.userReason_invalid'), 'username' => lang('Admin.userReason_username'), 'save' => lang('Admin.userReason_save')],
+        ]) ?>
     <?php endif; ?>
 <?= $this->endSection() ?>
 

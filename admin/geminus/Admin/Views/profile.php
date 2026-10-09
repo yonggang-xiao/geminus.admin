@@ -126,12 +126,7 @@
                             <?php if (session('token_errors.name')): ?><div class="invalid-feedback"><?= esc(session('token_errors.name')) ?></div><?php endif; ?>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label required" for="token-expires"><?= esc(lang('Admin.tokenExpires')) ?></label>
-                            <div class="input-icon">
-                                <span class="input-icon-addon"><i class="ti ti-calendar" aria-hidden="true"></i></span>
-                                <input id="token-expires" type="text" name="expires" class="form-control<?= session('token_errors.expires') ? ' is-invalid' : '' ?>" data-bs-toggle="datepicker" data-bs-date-min="<?= esc(gmdate('Y-m-d')) ?>" value="<?= esc(old('expires')) ?>" placeholder="YYYY-MM-DD" autocomplete="off" required>
-                            </div>
-                            <?php if (session('token_errors.expires')): ?><div class="invalid-feedback d-block"><?= esc(session('token_errors.expires')) ?></div><?php endif; ?>
+                            <?= view_cell('Geminus\Admin\Cells\DateFieldCell', ['inputId' => 'token-expires', 'name' => 'expires', 'label' => lang('Admin.tokenExpires'), 'value' => (string) old('expires'), 'error' => (string) session('token_errors.expires'), 'min' => gmdate('Y-m-d'), 'required' => true]) ?>
                         </div>
                         <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary"><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createToken')) ?></button></div>
                     </form>
