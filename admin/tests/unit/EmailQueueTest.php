@@ -7,6 +7,7 @@ use CodeIgniter\Queue\QueuePushResult;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use Config\Services;
+use Geminus\Admin\Config\Services as AdminServices;
 use Geminus\Admin\Jobs\SendEmail;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Models\EmailDeliveryLogModel;
@@ -25,6 +26,36 @@ final class EmailQueueTest extends CIUnitTestCase
         Services::resetSingle('email');
         Services::resetSingle('queue');
         parent::tearDown();
+    }
+
+    public function testAdminServicesAreDiscoveredWithExistingLifetimes(): void
+    {
+        foreach (['userProvisioning', 'microsoftLinks', 'mailTemplates'] as $name) {
+            $this->assertSame(AdminServices::class, Services::serviceExists($name));
+        }
+
+        $this->assertNotSame(service('userProvisioning'), Services::userProvisioning());
+        $this->assertNotSame(service('microsoftLinks'), Services::microsoftLinks());
+        $this->assertSame(service('mailTemplates'), Services::mailTemplates());
+        $this->assertNotSame(service('mailTemplates'), Services::mailTemplates(false));
+    }
+
+    public function testApplicationEmailOverrideDelegatesWithoutChangingItsContract(): void
+    {
+        Services::resetSingle('email');
+        $email = service('email');
+        $this->assertInstanceOf(QueuedEmail::class, $email);
+        $this->assertSame($email, Services::email());
+        $this->assertNotSame($email, Services::email(null, false));
+
+        $configured = Services::email(['wordWrap' => false], false);
+        $this->assertInstanceOf(QueuedEmail::class, $configured);
+        $this->assertFalse($configured->wordWrap);
+
+        $mock = $this->createStub(QueuedEmail::class);
+        Services::injectMock('email', $mock);
+        $this->assertSame($mock, service('email'));
+        $this->assertSame($mock, Services::email());
     }
 
     public function testEmailIsQueuedAndAuditedWithoutSending(): void
