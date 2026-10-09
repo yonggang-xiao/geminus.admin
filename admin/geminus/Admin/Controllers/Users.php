@@ -10,14 +10,24 @@ use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserModel;
+use Geminus\Admin\Libraries\DataManagement\Attachments;
+use Geminus\Admin\Libraries\DataManagement\Csv;
+use Geminus\Admin\Libraries\DataManagement\ListQuery;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\UserCsvImport;
 use Geminus\Admin\Libraries\UserProvisioning;
+use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
 use Throwable;
 
 class Users extends BaseController
 {
+    private const EXPORT_LIMIT = 10000;
+
+    public function __construct(private readonly ?Attachments $attachments = null)
+    {
+    }
+
     public function index(): ResponseInterface|string
     {
         if (! auth()->user()?->can('users.manage-admins')) {
@@ -25,8 +35,9 @@ class Users extends BaseController
         }
 
         $this->response->setHeader('Cache-Control', 'private, no-store');
-        $users                = $this->filteredUsers();
-        $pageUsers            = $users->withIdentities()->withGroups()->withPermissions()->paginate(20);
+        $query                = $this->listQuery();
+        $users                = $this->filteredUsers($query);
+        $pageUsers            = $users->withIdentities()->withGroups()->withPermissions()->paginate($query->perPage);
         $editStates           = [];
         $roleNames            = [];
         $groups               = setting('AuthGroups.groups');
@@ -66,9 +77,10 @@ class Users extends BaseController
             'effectivePermissions' => $effectivePermissions,
             'invitationStatuses'   => $invitationStatuses,
             'pager'                => $users->pager,
-            'search'               => trim((string) $this->request->getGet('q')),
-            'sort'                 => $this->sort(),
-            'direction'            => $this->direction(),
+            'search'               => $query->search,
+            'sort'                 => $query->sort,
+            'direction'            => $query->direction,
+            'createdRange'         => $query->range('created', 'date'),
             'report'               => session('user_import_report'),
         ]);
     }
@@ -100,6 +112,77 @@ class Users extends BaseController
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         return view('Geminus\Admin\Views\user_create', ['me' => auth()->user(), 'page_title' => lang('Admin.createUser')]);
+    }
+
+    public function attachments(int $userId): ResponseInterface|string
+    {
+        $user = $this->editableUser($userId);
+        if ($user === null) {
+            return $this->response->setStatusCode(404);
+        }
+        $model = new AttachmentModel();
+        $this->response->setHeader('Cache-Control', 'private, no-store');
+
+        return view('Geminus\Admin\Views\user_attachments', [
+            'me'          => auth()->user(), 'user' => $user, 'page_title' => lang('Admin.attachments'),
+            'attachments' => $model->forResource('user', $userId)->orderBy('id', 'DESC')->paginate(20),
+            'pager'       => $model->pager,
+            'accept'      => implode(',', array_map(static fn (string $extension): string => '.' . $extension, array_keys(Attachments::FILE_TYPES))),
+        ]);
+    }
+
+    public function uploadAttachment(int $userId): RedirectResponse|ResponseInterface
+    {
+        if ($this->editableUser($userId) === null) {
+            return $this->response->setStatusCode(404);
+        }
+
+        try {
+            ($this->attachments ?? new Attachments())->upload('user', $userId, $this->request->getFile('file'), (int) auth()->id());
+        } catch (InvalidArgumentException $exception) {
+            return redirect()->to(route_to('admin/users/attachments', $userId))->with('attachment_errors', ['file' => lang('Admin.attachmentInvalid')]);
+        } catch (Throwable $exception) {
+            log_message('error', 'Attachment upload failed: {type}', ['type' => $exception::class]);
+
+            return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'danger', 'message' => lang('Admin.attachmentFailed')]);
+        }
+
+        return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'success', 'message' => lang('Admin.attachmentSaved')]);
+    }
+
+    public function downloadAttachment(int $userId, int $attachmentId): ResponseInterface
+    {
+        if ($this->editableUser($userId) === null) {
+            return $this->response->setStatusCode(404);
+        }
+        $service    = $this->attachments ?? new Attachments();
+        $attachment = $service->find('user', $userId, $attachmentId);
+        $path       = $attachment === null ? null : $service->path($attachment);
+        if ($path === null) {
+            return $this->response->setStatusCode(404);
+        }
+
+        return $this->response->download($path, null)->setFileName($attachment['original_name'])
+            ->setHeader('Cache-Control', 'private, no-store')->setHeader('X-Content-Type-Options', 'nosniff');
+    }
+
+    public function removeAttachment(int $userId, int $attachmentId): RedirectResponse|ResponseInterface
+    {
+        if ($this->editableUser($userId) === null) {
+            return $this->response->setStatusCode(404);
+        }
+
+        try {
+            if (! ($this->attachments ?? new Attachments())->remove('user', $userId, $attachmentId)) {
+                return $this->response->setStatusCode(404);
+            }
+        } catch (Throwable $exception) {
+            log_message('error', 'Attachment removal failed: {type}', ['type' => $exception::class]);
+
+            return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'danger', 'message' => lang('Admin.attachmentFailed')]);
+        }
+
+        return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'success', 'message' => lang('Admin.attachmentRemoved')]);
     }
 
     public function store(): RedirectResponse|ResponseInterface
@@ -216,7 +299,7 @@ class Users extends BaseController
             return $this->response->setStatusCode(403);
         }
 
-        return $this->csvResponse('users-template.csv', "username,email\r\n");
+        return $this->csvResponse('users-template.csv', (new Csv())->write(['username', 'email']));
     }
 
     public function export(): ResponseInterface
@@ -225,21 +308,12 @@ class Users extends BaseController
             return $this->response->setStatusCode(403);
         }
 
-        $users = $this->filteredUsers()->withIdentities()->findAll(10001);
-        if (count($users) > 10000) {
+        $users = $this->filteredUsers($this->listQuery())->withIdentities()->findAll(self::EXPORT_LIMIT + 1);
+        if (count($users) > self::EXPORT_LIMIT) {
             return $this->response->setStatusCode(413)->setBody(lang('Admin.exportLimit'));
         }
 
-        $stream = fopen('php://temp', 'w+b');
-        fputcsv($stream, ['username', 'email'], escape: '');
-
-        foreach ($users as $user) {
-            fputcsv($stream, [$this->csvValue((string) $user->username), $this->csvValue((string) $user->email)], escape: '');
-        }
-
-        rewind($stream);
-        $csv = stream_get_contents($stream);
-        fclose($stream);
+        $csv = (new Csv())->write(['username', 'email'], array_map(static fn (User $user): array => [(string) $user->username, (string) $user->email], $users), self::EXPORT_LIMIT);
 
         return $this->csvResponse('users.csv', $csv);
     }
@@ -270,28 +344,32 @@ class Users extends BaseController
             ->with('alert', ['type' => 'success', 'message' => lang('Admin.importFinished')]);
     }
 
-    private function filteredUsers(): UserModel
+    private function filteredUsers(ListQuery $query): UserModel
     {
         $users      = model(get_class(auth()->getProvider()), false);
-        $search     = trim((string) $this->request->getGet('q'));
-        $sort       = $this->sort();
         $userTable  = config('Auth')->tables['users'];
         $identities = config('Auth')->tables['identities'];
 
-        if ($search !== '') {
-            $search = mb_substr($search, 0, 100);
-            $users->select($userTable . '.*')->join($identities, $identities . '.user_id = ' . $userTable . '.id AND ' . $identities . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "'", 'left')
-                ->groupStart()->like($userTable . '.username', $search)->orLike($identities . '.secret', $search, 'both', null, true)->groupEnd();
+        if ($query->search !== '') {
+            $users->select($userTable . '.*')->join($identities, $identities . '.user_id = ' . $userTable . '.id AND ' . $identities . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "'", 'left');
         }
 
-        $db        = db_connect(config('Auth')->DBGroup);
-        $sortField = $userTable . '.' . $sort;
-        if ($sort === 'email') {
-            $identityTable = $db->prefixTable($identities);
-            $sortField     = '(SELECT MIN(LOWER(' . $identityTable . '.secret)) FROM ' . $identityTable . ' WHERE ' . $identityTable . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identityTable . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')";
-        }
+        $query->apply($users, [$userTable . '.username', $identities . '.secret'], stableField: $userTable . '.id', ranges: ['created' => ['field' => $userTable . '.created_at', 'type' => 'date']]);
 
-        return $users->orderBy($sortField, $this->direction(), $sort === 'created_at')->orderBy($userTable . '.id', 'DESC');
+        return $users;
+    }
+
+    private function listQuery(): ListQuery
+    {
+        $db         = db_connect(config('Auth')->DBGroup);
+        $userTable  = config('Auth')->tables['users'];
+        $identities = $db->prefixTable(config('Auth')->tables['identities']);
+
+        return new ListQuery($this->request->getGet(), [
+            'username'   => $userTable . '.username',
+            'created_at' => $userTable . '.created_at',
+            'email'      => ['field' => '(SELECT MIN(LOWER(' . $identities . '.secret)) FROM ' . $identities . ' WHERE ' . $identities . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identities . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')", 'escape' => false],
+        ], 'created_at');
     }
 
     private function editableUser(int $userId): ?User
@@ -342,23 +420,6 @@ class Users extends BaseController
         }
 
         return $roles;
-    }
-
-    private function sort(): string
-    {
-        $sort = (string) $this->request->getGet('sort');
-
-        return in_array($sort, ['username', 'email', 'created_at'], true) ? $sort : 'created_at';
-    }
-
-    private function direction(): string
-    {
-        return strtoupper((string) $this->request->getGet('direction')) === 'ASC' ? 'ASC' : 'DESC';
-    }
-
-    private function csvValue(string $value): string
-    {
-        return preg_match('/^[=+\-@\t\r]/', $value) ? "'" . $value : $value;
     }
 
     private function csvResponse(string $filename, string $contents): ResponseInterface

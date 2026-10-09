@@ -4,6 +4,7 @@ use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\UserCsvImport;
+use Geminus\Admin\Libraries\UserProvisioning;
 
 /**
  * @internal
@@ -13,6 +14,31 @@ final class UserCsvImportTest extends CIUnitTestCase
     use DatabaseTestTrait;
 
     protected $namespace;
+
+    public function testProcessingFailureMapsToSaveAndDoesNotStopLaterRows(): void
+    {
+        $attempt      = 0;
+        $provisioning = $this->getMockBuilder(UserProvisioning::class)->onlyMethods(['create'])->getMock();
+        $provisioning->expects($this->exactly(2))->method('create')->willReturnCallback(static function () use (&$attempt): string {
+            if (++$attempt === 1) {
+                throw new RuntimeException('Private provisioning failure.');
+            }
+
+            return 'created';
+        });
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, "username,email\nfailed,failed@example.com\nvalid,valid@example.com\n");
+        rewind($stream);
+
+        try {
+            $report = (new UserCsvImport($provisioning))->import($stream);
+            $this->assertSame(['error', 'created'], array_column($report, 'result'));
+            $this->assertSame(['save', ''], array_column($report, 'reason'));
+            $this->assertStringNotContainsString('Private provisioning failure', json_encode($report));
+        } finally {
+            fclose($stream);
+        }
+    }
 
     public function testImportSkipsDuplicateEmailsAndReportsEachRow(): void
     {

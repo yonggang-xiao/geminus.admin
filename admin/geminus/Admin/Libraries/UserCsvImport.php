@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace Geminus\Admin\Libraries;
 
-use InvalidArgumentException;
+use Geminus\Admin\Libraries\DataManagement\CsvImport;
 
 class UserCsvImport
 {
+    private const MAX_ROWS = 500;
+
+    public function __construct(private readonly ?UserProvisioning $provisioning = null)
+    {
+    }
+
     /**
      * @param resource $stream
      *
@@ -15,59 +21,29 @@ class UserCsvImport
      */
     public function import($stream): array
     {
-        $header = fgetcsv($stream, escape: '');
-        if (! is_array($header)) {
-            throw new InvalidArgumentException('CSV header must be username,email.');
-        }
-
-        $header[0] = isset($header[0]) ? preg_replace('/^\xEF\xBB\xBF/', '', $header[0]) : null;
-        if ($header !== ['username', 'email']) {
-            throw new InvalidArgumentException('CSV header must be username,email.');
-        }
-
-        $rows = [];
-        $row  = 1;
-
-        while (($fields = fgetcsv($stream, escape: '')) !== false) {
-            $row++;
-            if ($fields !== [null]) {
-                $rows[] = ['number' => $row, 'fields' => $fields];
-            }
-
-            if (count($rows) > 500) {
-                throw new InvalidArgumentException('CSV must contain at most 500 data rows.');
-            }
-        }
-
-        $provisioning = new UserProvisioning();
-        $report       = [];
+        $provisioning = $this->provisioning ?? new UserProvisioning();
         $seen         = [];
+        $report       = (new CsvImport())->import($stream, ['username', 'email'], static function (array $data) use ($provisioning, &$seen): array {
+            $username = trim($data['username']);
+            $email    = strtolower(trim($data['email']));
+            if (isset($seen[$email])) {
+                return ['result' => 'skipped', 'reason' => 'duplicate'];
+            }
+            $reason = $provisioning->create($username, $email);
+            if ($reason === 'created') {
+                $seen[$email] = true;
 
-        foreach ($rows as $record) {
-            $fields   = $record['fields'];
-            $username = trim($fields[0] ?? '');
-            $email    = strtolower(trim($fields[1] ?? ''));
-            $entry    = ['row' => $record['number'], 'email' => $email, 'result' => 'error', 'reason' => ''];
-
-            if (count($fields) !== 2) {
-                $entry['reason'] = 'invalid';
-            } elseif (isset($seen[$email])) {
-                $entry['result'] = 'skipped';
-                $entry['reason'] = 'duplicate';
-            } else {
-                $entry['reason'] = $provisioning->create($username, $email);
-                if ($entry['reason'] === 'created') {
-                    $entry['result'] = 'created';
-                    $entry['reason'] = '';
-                    $seen[$email]    = true;
-                } elseif ($entry['reason'] === 'duplicate') {
-                    $entry['result'] = 'skipped';
-                }
+                return ['result' => 'created', 'reason' => ''];
             }
 
-            $report[] = $entry;
-        }
+            return ['result' => $reason === 'duplicate' ? 'skipped' : 'error', 'reason' => $reason];
+        }, self::MAX_ROWS);
 
-        return $report;
+        return array_map(static fn (array $entry): array => [
+            'row'    => $entry['row'],
+            'email'  => strtolower(trim($entry['data']['email'])),
+            'result' => $entry['result'],
+            'reason' => $entry['reason'] === 'processing' ? 'save' : $entry['reason'],
+        ], $report);
     }
 }

@@ -8,11 +8,19 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\I18n\Time;
 use Geminus\Admin\Cells\TimezoneSelectorCell;
+use Geminus\Admin\Libraries\AvatarFiles;
+use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\UserProvisioning;
+use RuntimeException;
+use Throwable;
 
 class Profile extends BaseController
 {
+    public function __construct(private readonly ?UploadStorage $avatarStorage = null)
+    {
+    }
+
     public function index(): string
     {
         $user = auth()->user();
@@ -101,24 +109,32 @@ class Profile extends BaseController
     {
         $validation = service('validation');
         $validation->setRules([
-            'avatar' => ['label' => 'Admin.avatar', 'rules' => 'uploaded[avatar]|max_size[avatar,2048]|is_image[avatar]|mime_in[avatar,image/jpeg,image/png,image/webp]|ext_in[avatar,jpg,jpeg,png,webp]'],
+            'avatar' => ['label' => 'Admin.avatar', 'rules' => AvatarFiles::rules()],
         ]);
 
         if (! $validation->run($this->request->getPost())) {
             return redirect()->to(route_to('admin/profile'))->with('avatar_errors', $validation->getErrors());
         }
 
-        $file = $this->request->getFile('avatar');
-        $file->move(WRITEPATH . 'uploads/avatars', $file->getRandomName());
+        $storage  = $this->avatarStorage ?? AvatarFiles::storage();
+        $user     = auth()->user();
+        $previous = $user->avatar;
+        $filename = null;
 
-        $user         = auth()->user();
-        $previous     = $user->avatar;
-        $user->avatar = $file->getName();
-        auth()->getProvider()->save($user);
+        try {
+            $filename     = $storage->store($this->request->getFile('avatar'));
+            $user->avatar = $filename;
+            if (! auth()->getProvider()->save($user)) {
+                throw new RuntimeException('Could not save avatar.');
+            }
+        } catch (Throwable $exception) {
+            $user->avatar = $previous;
+            $this->deleteAvatar($filename);
+            log_message('error', 'Avatar upload failed: {type}', ['type' => $exception::class]);
 
-        if ($previous && basename($previous) === $previous && is_file(WRITEPATH . 'uploads/avatars/' . $previous)) {
-            unlink(WRITEPATH . 'uploads/avatars/' . $previous);
+            return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.avatarFailed')]);
         }
+        $this->deleteAvatar($previous);
 
         return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.avatarSaved')]);
     }
@@ -128,13 +144,29 @@ class Profile extends BaseController
         $user         = auth()->user();
         $previous     = $user->avatar;
         $user->avatar = null;
-        auth()->getProvider()->save($user);
 
-        if ($previous && basename($previous) === $previous && is_file(WRITEPATH . 'uploads/avatars/' . $previous)) {
-            unlink(WRITEPATH . 'uploads/avatars/' . $previous);
+        try {
+            if (! auth()->getProvider()->save($user)) {
+                throw new RuntimeException('Could not remove avatar.');
+            }
+        } catch (Throwable $exception) {
+            $user->avatar = $previous;
+            log_message('error', 'Avatar removal failed: {type}', ['type' => $exception::class]);
+
+            return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.avatarFailed')]);
         }
+        $this->deleteAvatar($previous);
 
         return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.avatarRemoved')]);
+    }
+
+    private function deleteAvatar(?string $filename): void
+    {
+        try {
+            ($this->avatarStorage ?? AvatarFiles::storage())->delete($filename);
+        } catch (Throwable $exception) {
+            log_message('error', 'Avatar file cleanup failed: {type}', ['type' => $exception::class]);
+        }
     }
 
     public function password(): RedirectResponse

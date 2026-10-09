@@ -6,7 +6,7 @@
         <div class="col-auto ms-auto btn-list">
             <a class="btn btn-primary" href="<?= route_to('admin/users/create') ?>"><i class="ti ti-user-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createUser')) ?></a>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/template') ?>"><i class="ti ti-download me-1" aria-hidden="true"></i><?= esc(lang('Admin.userTemplate')) ?></a>
-            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/export') . '?' . http_build_query(['q' => $search, 'sort' => $sort, 'direction' => $direction]) ?>"><i class="ti ti-file-export me-1" aria-hidden="true"></i><?= esc(lang('Admin.exportUsers')) ?></a>
+            <a class="btn btn-outline-secondary" href="<?= route_to('admin/users/export') . '?' . http_build_query(['q' => $search, 'sort' => $sort, 'direction' => $direction, 'created_from' => $createdRange['from'], 'created_to' => $createdRange['to']]) ?>"><i class="ti ti-file-export me-1" aria-hidden="true"></i><?= esc(lang('Admin.exportUsers')) ?></a>
         </div>
     </div>
 <?= $this->endSection() ?>
@@ -21,6 +21,14 @@
                 </div>
                 <input type="hidden" name="sort" value="<?= esc($sort) ?>">
                 <input type="hidden" name="direction" value="<?= esc($direction) ?>">
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="created-from"><?= esc(lang('Admin.createdFrom')) ?></label>
+                    <input type="date" id="created-from" name="created_from" class="form-control" value="<?= esc($createdRange['from']) ?>">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="created-to"><?= esc(lang('Admin.createdTo')) ?></label>
+                    <input type="date" id="created-to" name="created_to" class="form-control" value="<?= esc($createdRange['to']) ?>">
+                </div>
                 <div class="col-12 col-md-auto btn-list">
                     <button class="btn btn-primary" type="submit"><i class="ti ti-search me-1" aria-hidden="true"></i><?= esc(lang('Admin.userFilter')) ?></button>
                     <a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><?= esc(lang('Admin.userClear')) ?></a>
@@ -33,6 +41,8 @@
                     <th scope="col" aria-sort="<?= $sort === 'username' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
                         <form method="get" action="<?= route_to('admin/users') ?>">
                             <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
+                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
                             <input type="hidden" name="direction" value="<?= $sort === 'username' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
                             <button type="submit" name="sort" value="username" class="table-sort<?= $sort === 'username' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.username')) ?></button>
                         </form>
@@ -40,6 +50,8 @@
                     <th scope="col" aria-sort="<?= $sort === 'email' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
                         <form method="get" action="<?= route_to('admin/users') ?>">
                             <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
+                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
                             <input type="hidden" name="direction" value="<?= $sort === 'email' && $direction === 'ASC' ? 'DESC' : 'ASC' ?>">
                             <button type="submit" name="sort" value="email" class="table-sort<?= $sort === 'email' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.email')) ?></button>
                         </form>
@@ -50,6 +62,8 @@
                     <th scope="col" aria-sort="<?= $sort === 'created_at' ? ($direction === 'ASC' ? 'ascending' : 'descending') : 'none' ?>">
                         <form method="get" action="<?= route_to('admin/users') ?>">
                             <input type="hidden" name="q" value="<?= esc($search) ?>">
+                            <input type="hidden" name="created_from" value="<?= esc($createdRange['from']) ?>">
+                            <input type="hidden" name="created_to" value="<?= esc($createdRange['to']) ?>">
                             <input type="hidden" name="direction" value="<?= $sort === 'created_at' && $direction === 'DESC' ? 'ASC' : 'DESC' ?>">
                             <button type="submit" name="sort" value="created_at" class="table-sort<?= $sort === 'created_at' ? ($direction === 'ASC' ? ' asc' : ' desc') : '' ?>"><?= esc(lang('Admin.userCreated')) ?></button>
                         </form>
@@ -92,7 +106,7 @@
                     <?php if ($users === []): ?>
                         <tr><td colspan="7" class="text-center py-4">
                             <div class="text-secondary mb-2"><?= esc(lang('Admin.noUsersFound')) ?></div>
-                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
+                            <a class="btn btn-outline-secondary btn-sm" href="<?= $search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? route_to('admin/users') : route_to('admin/users/create') ?>"><?= esc(lang($search !== '' || $createdRange['from'] !== '' || $createdRange['to'] !== '' ? 'Admin.userClear' : 'Admin.createUser')) ?></a>
                         </td></tr>
                     <?php endif; ?>
                 </tbody>

@@ -8,6 +8,7 @@ use App\Controllers\BaseController;
 use CodeIgniter\Files\Exceptions\FileNotFoundException;
 use CodeIgniter\Files\File;
 use CodeIgniter\HTTP\ResponseInterface;
+use Geminus\Admin\Libraries\AvatarFiles;
 
 class FileController extends BaseController
 {
@@ -19,6 +20,12 @@ class FileController extends BaseController
         }
 
         $filePath = WRITEPATH . 'uploads/' . $type . '/' . $filename;
+        if ($type === 'avatars') {
+            $filePath = AvatarFiles::storage()->path($filename);
+            if ($filePath === null) {
+                return $this->response->setStatusCode(404);
+            }
+        }
 
         try {
             $file = new File($filePath, true);

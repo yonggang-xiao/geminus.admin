@@ -4,6 +4,7 @@ use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Shield\Auth;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -12,6 +13,8 @@ use Config\Services;
 use Geminus\Admin\Controllers\FileController;
 use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\AvatarFiles;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * @internal
@@ -361,7 +364,8 @@ final class ProfileAccessTest extends CIUnitTestCase
         }
     }
 
-    public function testAvatarUploadReplacesPreviousFileAndSavesRandomName(): void
+    #[DataProvider('avatarSaveOutcomes')]
+    public function testAvatarUploadPreservesFilesAccordingToSaveOutcome(bool $fails, bool $throws, bool $cleanupFails = false): void
     {
         $user        = new AdminUser(['username' => 'avatarreplacement']);
         $user->email = 'avatarreplacement@example.com';
@@ -383,13 +387,15 @@ final class ProfileAccessTest extends CIUnitTestCase
         $source = tempnam(sys_get_temp_dir(), 'avatar-upload-');
         $image  = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', true);
         file_put_contents($source, $image);
-        $movedName = null;
+        $movedName        = null;
+        $providerProperty = new ReflectionProperty(Auth::class, 'userProvider');
 
         try {
             $upload = $this->getMockBuilder(UploadedFile::class)
                 ->setConstructorArgs([$source, 'avatar.png', 'image/png', filesize($source), UPLOAD_ERR_OK])
-                ->onlyMethods(['move', 'getName'])
+                ->onlyMethods(['move', 'getName', 'isValid'])
                 ->getMock();
+            $upload->method('isValid')->willReturn(true);
             $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$movedName): bool {
                 $movedName = $name;
                 copy($source, $target . '/' . $name);
@@ -407,27 +413,190 @@ final class ProfileAccessTest extends CIUnitTestCase
             $request->expects($this->atLeastOnce())->method('getFileMultiple')->with('avatar')->willReturn(null);
             Services::injectMock('request', $request);
             Services::resetSingle('validation');
-            $controller = new Profile();
+            $storage = null;
+            if ($cleanupFails) {
+                $storage = AvatarFiles::storage(static fn (string $filename): bool => false);
+            }
+            $controller = new Profile($storage);
             $controller->initController($request, Services::response(null, false), Services::logger());
+            if ($fails) {
+                $provider = $this->getMockBuilder($users::class)->onlyMethods(['save'])->getMock();
+                $provider->expects($this->once())->method('save')->willReturnCallback(static function () use ($throws): bool {
+                    if ($throws) {
+                        throw new RuntimeException('Simulated avatar save failure.');
+                    }
+
+                    return false;
+                });
+                $providerProperty->setValue(auth(), $provider);
+            }
 
             $response = $controller->avatar();
 
             $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
-            $this->assertSame(lang('Admin.avatarSaved'), session('alert')['message']);
             $this->assertNotNull($movedName);
-            $this->assertNotSame('avatar.png', $movedName);
-            $this->assertSame($movedName, $users->findById($user->id)->avatar);
-            $this->assertSame($image, file_get_contents($directory . $movedName));
-            $this->assertFileDoesNotExist($directory . $oldName);
+            $this->assertMatchesRegularExpression('/\A[a-f0-9]{32}\.png\z/', $movedName);
+            if ($fails) {
+                $this->assertSame(lang('Admin.avatarFailed'), session('alert')['message']);
+                $this->assertSame('danger', session('alert')['type']);
+                $this->assertSame($oldName, $users->findById($user->id)->avatar);
+                $this->assertSame($oldName, auth()->user()->avatar);
+                $this->assertFileExists($directory . $oldName);
+                $this->assertFileDoesNotExist($directory . $movedName);
+            } else {
+                $this->assertSame(lang('Admin.avatarSaved'), session('alert')['message']);
+                $this->assertSame($movedName, $users->findById($user->id)->avatar);
+                $this->assertSame($image, file_get_contents($directory . $movedName));
+                if ($cleanupFails) {
+                    $this->assertFileExists($directory . $oldName);
+                    $this->assertLogged('error', 'Avatar file cleanup failed: RuntimeException');
+                } else {
+                    $this->assertFileDoesNotExist($directory . $oldName);
+                }
+            }
         } finally {
+            $providerProperty->setValue(auth(), $users);
             Services::resetSingle('request');
             Services::resetSingle('validation');
+            Services::resetSingle('logger');
             unlink($source);
             if (is_file($directory . $oldName)) {
                 unlink($directory . $oldName);
             }
             if ($movedName !== null && is_file($directory . $movedName)) {
                 unlink($directory . $movedName);
+            }
+        }
+    }
+
+    public static function avatarSaveOutcomes(): iterable
+    {
+        yield 'saved' => [false, false];
+
+        yield 'save returns false' => [true, false];
+
+        yield 'save throws' => [true, true];
+
+        yield 'cleanup fails after save' => [false, false, true];
+    }
+
+    #[DataProvider('provideAvatarValidationRejectsInvalidFilesBeforeMoving')]
+    public function testAvatarValidationRejectsInvalidFilesBeforeMoving(string $failure): void
+    {
+        $user        = new AdminUser(['username' => 'avatarvalidation']);
+        $user->email = 'avatarvalidation@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+        $directory = WRITEPATH . 'uploads/avatars/';
+        $before    = glob($directory . '*');
+        $source    = tempnam(sys_get_temp_dir(), 'avatar-invalid-');
+        $image     = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', true);
+        $contents  = $failure === 'content' ? 'plain text' : $image;
+        if ($failure === 'size') {
+            $contents .= str_repeat("\0", 2 * 1024 * 1024);
+        }
+        file_put_contents($source, $contents);
+
+        try {
+            $upload = $this->getMockBuilder(UploadedFile::class)
+                ->setConstructorArgs([$source, $failure === 'extension' ? 'avatar.gif' : 'avatar.png', 'image/png', filesize($source), UPLOAD_ERR_OK])
+                ->onlyMethods(['isValid', 'move'])->getMock();
+            $upload->method('isValid')->willReturn(true);
+            $upload->expects($this->never())->method('move');
+            $request = $this->getMockBuilder(IncomingRequest::class)
+                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                ->onlyMethods(['getFile', 'getFileMultiple'])->getMock();
+            $request->expects($this->atLeastOnce())->method('getFile')->with('avatar')->willReturn($upload);
+            $request->expects($this->atLeastOnce())->method('getFileMultiple')->with('avatar')->willReturn(null);
+            Services::injectMock('request', $request);
+            Services::resetSingle('validation');
+            $controller = new Profile();
+            $controller->initController($request, Services::response(null, false), Services::logger());
+            $response = $controller->avatar();
+            $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            $this->assertArrayHasKey('avatar', session('avatar_errors'));
+            $this->assertNull($users->findById($user->id)->avatar);
+            $this->assertSame($before, glob($directory . '*'));
+        } finally {
+            Services::resetSingle('request');
+            Services::resetSingle('validation');
+            unlink($source);
+        }
+    }
+
+    public static function provideAvatarValidationRejectsInvalidFilesBeforeMoving(): iterable
+    {
+        yield 'not an image' => ['content'];
+
+        yield 'unsupported extension' => ['extension'];
+
+        yield 'over 2 MB' => ['size'];
+    }
+
+    #[DataProvider('avatarSaveOutcomes')]
+    public function testAvatarRemovalPreservesFileWhenSaveFails(bool $fails, bool $throws, bool $cleanupFails = false): void
+    {
+        $user        = new AdminUser(['username' => 'avatarremove']);
+        $user->email = 'avatarremove@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user      = $users->findById($users->getInsertID());
+        $directory = WRITEPATH . 'uploads/avatars/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+        $filename = 'remove-test-' . bin2hex(random_bytes(8)) . '.png';
+        file_put_contents($directory . $filename, 'previous avatar');
+        $user->avatar = $filename;
+        $users->save($user);
+        $user = $users->findById($user->id);
+        auth()->login($user);
+        $providerProperty = new ReflectionProperty(Auth::class, 'userProvider');
+
+        try {
+            if ($fails) {
+                $provider = $this->getMockBuilder($users::class)->onlyMethods(['save'])->getMock();
+                $provider->expects($this->once())->method('save')->willReturnCallback(static function () use ($throws): bool {
+                    if ($throws) {
+                        throw new RuntimeException('Simulated avatar removal failure.');
+                    }
+
+                    return false;
+                });
+                $providerProperty->setValue(auth(), $provider);
+            }
+            $storage = null;
+            if ($cleanupFails) {
+                $storage = AvatarFiles::storage(static fn (string $filename): bool => false);
+            }
+            $controller = new Profile($storage);
+            $controller->initController(service('request'), Services::response(null, false), service('logger'));
+            $response = $controller->removeAvatar();
+            $this->assertSame('/en/admin/profile', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            if ($fails) {
+                $this->assertSame(lang('Admin.avatarFailed'), session('alert')['message']);
+                $this->assertSame($filename, $users->findById($user->id)->avatar);
+                $this->assertSame($filename, auth()->user()->avatar);
+                $this->assertFileExists($directory . $filename);
+            } else {
+                $this->assertSame(lang('Admin.avatarRemoved'), session('alert')['message']);
+                $this->assertNull($users->findById($user->id)->avatar);
+                if ($cleanupFails) {
+                    $this->assertFileExists($directory . $filename);
+                    $this->assertLogged('error', 'Avatar file cleanup failed: RuntimeException');
+                } else {
+                    $this->assertFileDoesNotExist($directory . $filename);
+                }
+            }
+        } finally {
+            $providerProperty->setValue(auth(), $users);
+            Services::resetSingle('logger');
+            if (is_file($directory . $filename)) {
+                unlink($directory . $filename);
             }
         }
     }
@@ -447,6 +616,8 @@ final class ProfileAccessTest extends CIUnitTestCase
         $sentinelPath = WRITEPATH . 'uploads/' . $sentinelName;
         $sentinel     = 'private-' . bin2hex(random_bytes(16));
         file_put_contents($sentinelPath, $sentinel);
+        $linkName = 'link-' . $filename;
+        symlink($sentinelPath, $directory . $linkName);
         $unlistedType = 'unlisted-' . bin2hex(random_bytes(8));
         $unlistedPath = WRITEPATH . 'uploads/' . $unlistedType;
         mkdir($unlistedPath);
@@ -467,6 +638,7 @@ final class ProfileAccessTest extends CIUnitTestCase
             $this->assertSame($content, $response->response()->getBody());
             $this->get('/admin/files/' . $unlistedType . '/' . $filename)->assertStatus(404);
             $this->get('/admin/files/avatars/missing-' . $filename)->assertStatus(404);
+            $this->get('/admin/files/avatars/' . $linkName)->assertStatus(404);
             $traversal = $this->get('/admin/files/avatars/%2e%2e%2f' . $sentinelName);
             $traversal->assertStatus(404);
             $this->assertStringNotContainsString($sentinel, $traversal->response()->getBody());
@@ -476,6 +648,7 @@ final class ProfileAccessTest extends CIUnitTestCase
             $this->assertSame(404, $direct->getStatusCode());
             $this->assertStringNotContainsString($sentinel, (string) $direct->getBody());
         } finally {
+            unlink($directory . $linkName);
             unlink($filePath);
             unlink($sentinelPath);
             unlink($unlistedPath . '/' . $filename);

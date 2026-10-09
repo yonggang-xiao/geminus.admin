@@ -3,6 +3,7 @@
 use CodeIgniter\Config\Services;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Files\File;
+use CodeIgniter\HTTP\DownloadResponse;
 use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\UserAgent;
@@ -15,9 +16,12 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Controllers\Users;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\DataManagement\Attachments;
+use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Models\AttachmentModel;
 
 /**
  * @internal
@@ -48,6 +52,223 @@ final class UsersTest extends CIUnitTestCase
         $this->get('/en/admin/users/export')->assertRedirect();
     }
 
+    public function testAttachmentsRequirePermissionAndProtectedUsersAreNotAccessible(): void
+    {
+        $this->get('/en/admin/users/1/attachments')->assertRedirect();
+        $this->post('/en/admin/users/1/attachments', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->loginAs('admin');
+        $this->get('/en/admin/users/1/attachments')->assertRedirect();
+        $this->get('/en/admin/users/1/attachments/1')->assertRedirect();
+        $this->post('/en/admin/users/1/attachments/1/remove', [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertSame(0, (new AttachmentModel())->countAllResults());
+        $this->loginAs('superadmin');
+        $this->get('/en/admin/users/' . auth()->id() . '/attachments')->assertStatus(404);
+        $this->post('/en/admin/users/' . auth()->id() . '/attachments', [csrf_token() => csrf_hash()])->assertStatus(404);
+    }
+
+    public function testAttachmentUploadRequiresCsrf(): void
+    {
+        $this->loginAs('superadmin');
+        $this->expectException(SecurityException::class);
+        $this->post('/en/admin/users/1/attachments');
+    }
+
+    public function testExistingAttachmentsOfProtectedAccountsCannotBeDownloadedOrRemoved(): void
+    {
+        $this->loginAs('superadmin');
+        $actorId = (int) auth()->id();
+        $this->createUser('protectedattachment', 'protectedattachment@example.com');
+        $protected = auth()->getProvider()->findByCredentials(['email' => 'protectedattachment@example.com']);
+        $protected->addGroup('superadmin');
+        $this->createUser('multiroleattachment', 'multiroleattachment@example.com');
+        $multiple = auth()->getProvider()->findByCredentials(['email' => 'multiroleattachment@example.com']);
+        $multiple->addGroup('admin', 'beta');
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+
+        foreach ([$actorId, (int) $protected->id, (int) $multiple->id] as $resourceId) {
+            $filename = bin2hex(random_bytes(16)) . '.txt';
+            file_put_contents($directory . $filename, 'protected content');
+            $model        = new AttachmentModel();
+            $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $resourceId, 'filename' => $filename, 'original_name' => 'protected.txt', 'mime_type' => 'text/plain', 'size_bytes' => 17, 'uploaded_by' => $actorId]);
+
+            try {
+                $route = '/en/admin/users/' . $resourceId . '/attachments/' . $attachmentId;
+                $this->get($route)->assertStatus(404);
+                $this->post($route . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
+                $this->assertNotNull($model->find($attachmentId));
+                $this->assertFileExists($directory . $filename);
+            } finally {
+                unlink($directory . $filename);
+            }
+        }
+    }
+
+    public function testAttachmentRemovalRequiresCsrf(): void
+    {
+        $this->loginAs('superadmin');
+        $this->expectException(SecurityException::class);
+        $this->post('/en/admin/users/1/attachments/1/remove');
+    }
+
+    public function testAttachmentControllerUploadFailureReturnsDangerAndCleansFile(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('failedattachment', 'failedattachment@example.com');
+        $owner  = auth()->getProvider()->findByCredentials(['email' => 'failedattachment@example.com']);
+        $source = tempnam(sys_get_temp_dir(), 'attachment-controller-');
+        file_put_contents($source, 'content');
+        $path = null;
+
+        try {
+            $upload = $this->getMockBuilder(UploadedFile::class)
+                ->setConstructorArgs([$source, 'document.txt', 'text/plain', filesize($source), UPLOAD_ERR_OK])
+                ->onlyMethods(['isValid', 'move'])->getMock();
+            $upload->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
+            $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
+                $path = $target . '/' . $name;
+
+                return copy($source, $path);
+            });
+            $request = $this->getMockBuilder(IncomingRequest::class)
+                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                ->onlyMethods(['getFile'])->getMock();
+            $request->expects($this->once())->method('getFile')->with('file')->willReturn($upload);
+            $model = $this->getMockBuilder(AttachmentModel::class)->onlyMethods(['insert'])->getMock();
+            $model->expects($this->once())->method('insert')->willReturn(false);
+            $controller = new Users(new Attachments($model));
+            $controller->initController($request, Services::response(null, false), service('logger'));
+            $response = $controller->uploadAttachment($owner->id);
+            $this->assertSame('/en/admin/users/' . $owner->id . '/attachments', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            $this->assertSame(['type' => 'danger', 'message' => lang('Admin.attachmentFailed')], session('alert'));
+            $this->assertSame(0, (new AttachmentModel())->countAllResults());
+            $this->assertNotNull($path);
+            $this->assertFileDoesNotExist($path);
+        } finally {
+            unlink($source);
+            if ($path !== null && is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    public function testAttachmentControllerRemovalFailureAndCleanupFailureHaveCorrectResponses(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('removeattachment', 'removeattachment@example.com');
+        $owner     = auth()->getProvider()->findByCredentials(['email' => 'removeattachment@example.com']);
+        $filename  = bin2hex(random_bytes(16)) . '.txt';
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+        file_put_contents($directory . $filename, 'content');
+        $model        = new AttachmentModel();
+        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $owner->id, 'filename' => $filename, 'original_name' => 'document.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
+
+        try {
+            $failedModel = $this->getMockBuilder(AttachmentModel::class)->onlyMethods(['delete'])->getMock();
+            $failedModel->expects($this->once())->method('delete')->willReturn(false);
+            $controller = new Users(new Attachments($failedModel));
+            $controller->initController(service('request'), Services::response(null, false), service('logger'));
+            $controller->removeAttachment($owner->id, $attachmentId);
+            $this->assertSame(['type' => 'danger', 'message' => lang('Admin.attachmentFailed')], session('alert'));
+            $this->assertNotNull($model->find($attachmentId));
+            $this->assertFileExists($directory . $filename);
+
+            $storage    = new UploadStorage('attachments', ['text/plain'], ['txt'], 100, static fn (string $file): bool => false);
+            $controller = new Users(new Attachments($model, $storage));
+            $controller->initController(service('request'), Services::response(null, false), service('logger'));
+            $response = $controller->removeAttachment($owner->id, $attachmentId);
+            $this->assertSame('/en/admin/users/' . $owner->id . '/attachments', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            $this->assertSame(['type' => 'success', 'message' => lang('Admin.attachmentRemoved')], session('alert'));
+            $this->assertNull($model->find($attachmentId));
+            $this->assertFileExists($directory . $filename);
+            $this->assertLogged('error', 'Attachment file cleanup failed: RuntimeException');
+        } finally {
+            unlink($directory . $filename);
+        }
+    }
+
+    public function testAttachmentUploadDownloadAndRemovalAreResourceScoped(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('attachmentowner', 'attachmentowner@example.com');
+        $this->createUser('otherowner', 'otherowner@example.com');
+        $owner = auth()->getProvider()->findByCredentials(['email' => 'attachmentowner@example.com']);
+        $other = auth()->getProvider()->findByCredentials(['email' => 'otherowner@example.com']);
+        $route = '/en/admin/users/' . $owner->id . '/attachments';
+        $page  = $this->get($route);
+        $page->assertOK();
+        $page->assertSee(lang('Admin.attachmentsEmpty'));
+        $this->assertStringContainsString('enctype="multipart/form-data"', $page->response()->getBody());
+        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo($route);
+        $this->assertNotEmpty(session('attachment_errors.file'));
+        $this->assertSame(0, (new AttachmentModel())->countAllResults());
+
+        $source = tempnam(sys_get_temp_dir(), 'user-attachment-');
+        file_put_contents($source, 'private attachment content');
+        $path = null;
+
+        try {
+            $upload = $this->getMockBuilder(UploadedFile::class)
+                ->setConstructorArgs([$source, '<script>.txt', 'text/plain', filesize($source), UPLOAD_ERR_OK])
+                ->onlyMethods(['isValid', 'move'])->getMock();
+            $upload->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
+            $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
+                $path = $target . '/' . $name;
+
+                return copy($source, $path);
+            });
+            $request = $this->getMockBuilder(IncomingRequest::class)
+                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                ->onlyMethods(['getFile'])->getMock();
+            $request->expects($this->once())->method('getFile')->with('file')->willReturn($upload);
+            $controller = new Users();
+            $controller->initController($request, Services::response(null, false), service('logger'));
+            $response = $controller->uploadAttachment($owner->id);
+            $this->assertSame($route, parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+            $attachment = (new AttachmentModel())->first();
+            $this->assertSame($owner->id, (int) $attachment['resource_id']);
+            $this->assertSame((int) auth()->id(), (int) $attachment['uploaded_by']);
+            (new AttachmentModel())->insert(['resource_type' => 'user', 'resource_id' => $other->id, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'other-only.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
+            $page = $this->get($route);
+            $page->assertOK();
+            $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
+            $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
+            $this->assertStringNotContainsString('other-only.txt', $page->response()->getBody());
+            $otherPage = $this->get('/en/admin/users/' . $other->id . '/attachments');
+            $otherPage->assertSee('other-only.txt');
+            $this->assertStringNotContainsString('&lt;script&gt;.txt', $otherPage->response()->getBody());
+            $download = $this->get($route . '/' . $attachment['id']);
+            $download->assertStatus(200);
+            $this->assertInstanceOf(DownloadResponse::class, $download->response());
+            $download->response()->buildHeaders();
+            $this->assertStringContainsString('attachment;', $download->response()->getHeaderLine('Content-Disposition'));
+            $this->assertStringContainsString('filename="' . $attachment['original_name'] . '"', $download->response()->getHeaderLine('Content-Disposition'));
+            $this->assertStringContainsString('private', $download->response()->getHeaderLine('Cache-Control'));
+            $this->assertStringContainsString('no-store', $download->response()->getHeaderLine('Cache-Control'));
+            $this->assertSame('nosniff', $download->response()->getHeaderLine('X-Content-Type-Options'));
+            $this->assertSame('private attachment content', file_get_contents($path));
+            $otherRoute = '/en/admin/users/' . $other->id . '/attachments/' . $attachment['id'];
+            $this->get($otherRoute)->assertStatus(404);
+            $this->post($otherRoute . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->assertFileExists($path);
+            $this->post($route . '/' . $attachment['id'] . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
+            $this->assertSame(1, (new AttachmentModel())->countAllResults());
+            $this->assertNull((new AttachmentModel())->find($attachment['id']));
+            $this->assertFileDoesNotExist($path);
+            $this->get($route . '/' . $attachment['id'])->assertStatus(404);
+        } finally {
+            unlink($source);
+            if ($path !== null && is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
     public function testUserListAndExportShareSearchFilter(): void
     {
         $this->loginAs('superadmin');
@@ -74,6 +295,35 @@ final class UsersTest extends CIUnitTestCase
         }
     }
 
+    public function testUserListAndExportShareCreatedDateRange(): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('dateincluded', 'dateincluded@example.com');
+        $this->createUser('dateexcluded', 'dateexcluded@example.com');
+        $table = db_connect()->table(config('Auth')->tables['users']);
+        $table->where('username', 'dateincluded')->update(['created_at' => '2026-10-02 23:59:59']);
+        $table->where('username', 'dateexcluded')->update(['created_at' => '2026-10-03 00:00:00']);
+        $parameters = '?q=date&created_from=2026-10-01&created_to=2026-10-02&sort=email&direction=ASC';
+        $page       = $this->get('/en/admin/users' . $parameters);
+        $page->assertOK();
+        $page->assertSee('dateincluded@example.com');
+        $this->assertStringNotContainsString('dateexcluded@example.com', $page->response()->getBody());
+        $this->assertSame(4, substr_count($page->response()->getBody(), 'name="created_from"'));
+        $this->assertStringContainsString('created_to=2026-10-02', $page->response()->getBody());
+        $export = $this->get('/en/admin/users/export' . $parameters);
+        $export->assertOK();
+        $this->assertStringContainsString('dateincluded@example.com', $export->response()->getBody());
+        $this->assertStringNotContainsString('dateexcluded@example.com', $export->response()->getBody());
+    }
+
+    public function testEmptyDateFilteredListOffersClearFilters(): void
+    {
+        $this->loginAs('superadmin');
+        $page = $this->get('/en/admin/users?created_from=2099-01-01');
+        $page->assertOK();
+        $page->assertSee(lang('Admin.userClear'), 'tbody');
+    }
+
     public function testUserListDisplaysCreationTimeInViewerTimezone(): void
     {
         $this->loginAs('superadmin');
@@ -86,6 +336,28 @@ final class UsersTest extends CIUnitTestCase
         $page = $this->get('/en/admin/users?q=dateduser');
         $page->assertOK();
         $this->assertStringContainsString('<td>' . $viewer->formatDateTime($created->created_at) . '</td>', $page->response()->getBody());
+    }
+
+    public function testExportAcceptsLimitAndRejectsOneMoreMatchingUser(): void
+    {
+        $this->loginAs('superadmin');
+        $rows = [];
+
+        for ($number = 0; $number < 10000; $number++) {
+            $rows[] = ['username' => 'exportlimit' . $number, 'active' => 1];
+        }
+        $table = db_connect()->table(config('Auth')->tables['users']);
+        $table->insertBatch($rows);
+
+        $export = $this->get('/en/admin/users/export?q=exportlimit');
+        $export->assertOK();
+        $this->assertSame(10001, substr_count($export->response()->getBody(), "\n"));
+
+        $table->insert(['username' => 'exportlimit10000', 'active' => 1]);
+        $export = $this->get('/en/admin/users/export?q=exportlimit');
+        $export->assertStatus(413);
+        $this->assertSame(lang('Admin.exportLimit'), $export->response()->getBody());
+        $this->assertStringNotContainsString('username,email', $export->response()->getBody());
     }
 
     public function testUserListShowsEditActionAndProtectedAccountReason(): void

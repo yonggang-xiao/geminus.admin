@@ -18,6 +18,10 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->get('template', 'Users::template', ['as' => 'admin/users/template']);
         $routes->get('export', 'Users::export', ['as' => 'admin/users/export']);
         $routes->post('import', 'Users::import', ['as' => 'admin/users/import']);
+        $routes->get('(:num)/attachments', 'Users::attachments/$1', ['as' => 'admin/users/attachments']);
+        $routes->post('(:num)/attachments', 'Users::uploadAttachment/$1', ['as' => 'admin/users/attachments/upload']);
+        $routes->get('(:num)/attachments/(:num)', 'Users::downloadAttachment/$1/$2', ['as' => 'admin/users/attachments/download']);
+        $routes->post('(:num)/attachments/(:num)/remove', 'Users::removeAttachment/$1/$2', ['as' => 'admin/users/attachments/remove']);
     });
     $routes->group('settings/email', ['filter' => 'permission:admin.settings'], static function ($routes) {
         $routes->get('', 'EmailSettings::index', ['as' => 'admin/settings/email']);
