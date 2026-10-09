@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace Geminus\Admin\Libraries;
 
 use CodeIgniter\Email\Email;
+use CodeIgniter\Queue\Interfaces\QueueInterface;
+use Geminus\Admin\Models\EmailDeliveryLogModel;
 use RuntimeException;
 use Throwable;
 
 class QueuedEmail extends Email
 {
     private ?int $invitedUserId = null;
+
+    public function __construct(private readonly EmailDeliveryLogModel $deliveryLogs, private readonly QueueInterface $queue, $config = null)
+    {
+        parent::__construct($config);
+    }
 
     public function setInvitationUserId(int $userId): static
     {
@@ -22,6 +29,7 @@ class QueuedEmail extends Email
     public function clear($clearAttachments = false)
     {
         $this->invitedUserId = null;
+        $this->tmpArchive    = [];
 
         return parent::clear($clearAttachments);
     }
@@ -38,18 +46,10 @@ class QueuedEmail extends Email
             throw new RuntimeException('Queued email attachments are not supported.');
         }
 
-        $db      = db_connect();
-        $auditId = $db->table('email_delivery_logs')->insert([
-            'recipient'       => implode(', ', $this->recipients),
-            'subject'         => $this->tmpArchive['subject'] ?? '',
-            'invited_user_id' => $this->invitedUserId,
-            'status'          => 'queued',
-            'attempts'        => 0,
-            'created_at'      => gmdate('Y-m-d H:i:s'),
-        ]) ? $db->insertID() : throw new RuntimeException('Failed to create email delivery log.');
+        $auditId = $this->deliveryLogs->createQueued(implode(', ', $this->recipients), $this->tmpArchive['subject'] ?? '', $this->invitedUserId);
 
         try {
-            $result = service('queue')->push('email', 'send-email', [
+            $result = $this->queue->push('email', 'send-email', [
                 'audit_id' => $auditId,
                 'to'       => $this->recipients,
                 'cc'       => $this->tmpArchive['CCArray'] ?? $this->CCArray,
@@ -59,17 +59,16 @@ class QueuedEmail extends Email
                 'type'     => $this->mailType,
             ]);
         } catch (Throwable $exception) {
-            $db->table('email_delivery_logs')->where('id', $auditId)->update([
-                'status'         => 'failed',
-                'failure_reason' => 'Queue push failed.',
-            ]);
+            $this->deliveryLogs->markQueueFailed($auditId);
 
             throw $exception;
         }
 
-        $db->table('email_delivery_logs')->where('id', $auditId)->update($result->getStatus()
-            ? ['job_id' => $result->getJobId()]
-            : ['status' => 'failed', 'failure_reason' => 'Queue push failed.']);
+        if ($result->getStatus()) {
+            $this->deliveryLogs->assignJob($auditId, $result->getJobId());
+        } else {
+            $this->deliveryLogs->markQueueFailed($auditId);
+        }
 
         if ($result->getStatus() && $autoClear) {
             $this->clear();

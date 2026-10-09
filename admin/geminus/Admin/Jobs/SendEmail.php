@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Geminus\Admin\Jobs;
 
 use CodeIgniter\Queue\BaseJob;
+use Geminus\Admin\Models\EmailDeliveryLogModel;
 use RuntimeException;
 use Throwable;
 
@@ -14,11 +15,11 @@ class SendEmail extends BaseJob
 
     public function process(): void
     {
-        $db    = db_connect();
-        $table = $db->table('email_delivery_logs');
-        $log   = $table->where('id', $this->data['audit_id'])->get()->getRowArray();
+        $deliveryLogs = new EmailDeliveryLogModel();
+        $auditId      = (int) $this->data['audit_id'];
+        $log          = $deliveryLogs->findUnsent($auditId);
 
-        if ($log === null || $log['status'] === 'sent') {
+        if ($log === null) {
             return;
         }
 
@@ -41,19 +42,11 @@ class SendEmail extends BaseJob
 
                 throw new RuntimeException($failureReason);
             }
-
-            $status = 'sent';
         } catch (Throwable $exception) {
-            $status = 'failed';
             $failureReason ??= isset($email) ? $email->auditFailureReason($exception->getMessage()) : 'Email service unavailable.';
         }
 
-        $db->table('email_delivery_logs')->where('id', $this->data['audit_id'])->update([
-            'status'         => $status,
-            'attempts'       => $log['attempts'] + 1,
-            'processed_at'   => gmdate('Y-m-d H:i:s'),
-            'failure_reason' => $failureReason ?? null,
-        ]);
+        $deliveryLogs->recordAttempt($auditId, (int) $log['attempts'] + 1, $failureReason ?? null);
 
         if (isset($exception)) {
             throw $exception;

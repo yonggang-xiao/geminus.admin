@@ -1239,7 +1239,6 @@ final class UsersTest extends CIUnitTestCase
         service('settings')->set('Email.fromEmail', 'sender@example.com');
 
         $this->assertStringContainsString('Not sent', $this->get('/en/admin/users?q=invitee')->response()->getBody());
-        Services::injectMock('email', service('email', null, false));
 
         $queue = $this->createMock(QueueInterface::class);
         $queue->expects($this->exactly(2))->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['invitee@example.com']
@@ -1249,6 +1248,7 @@ final class UsersTest extends CIUnitTestCase
             && ! str_contains($data['body'], 'GeminusAdmin')))
             ->willReturnOnConsecutiveCalls(QueuePushResult::success(41), QueuePushResult::success(42));
         Services::injectMock('queue', $queue);
+        Services::injectMock('email', service('email', null, false));
 
         $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->assertSame(lang('Admin.userInviteQueued'), session('alert')['message']);

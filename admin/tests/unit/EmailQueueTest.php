@@ -9,6 +9,7 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use Config\Services;
 use Geminus\Admin\Jobs\SendEmail;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Models\EmailDeliveryLogModel;
 
 /**
  * @internal
@@ -32,7 +33,7 @@ final class EmailQueueTest extends CIUnitTestCase
         $queue->expects($this->once())->method('push')->with('email', 'send-email', $this->callback(static fn (array $data): bool => $data['to'] === ['recipient@example.com'] && $data['subject'] === 'Hello' && $data['body'] === 'Private body'))->willReturn(QueuePushResult::success(42));
         Services::injectMock('queue', $queue);
 
-        $email = $this->getMockBuilder(QueuedEmail::class)->onlyMethods(['sendDirect'])->getMock();
+        $email = $this->getMockBuilder(QueuedEmail::class)->setConstructorArgs([new EmailDeliveryLogModel(), $queue])->onlyMethods(['sendDirect'])->getMock();
         $email->expects($this->never())->method('sendDirect');
         $this->assertInstanceOf(QueuedEmail::class, $email);
         $email->setFrom('sender@example.com')->setTo('recipient@example.com')->setSubject('Hello')->setMessage('Private body');
@@ -64,7 +65,7 @@ final class EmailQueueTest extends CIUnitTestCase
             $this->assertTrue($email->send());
             $log = db_connect()->table('email_delivery_logs')->get()->getRowArray();
 
-            $transport = $this->getMockBuilder(QueuedEmail::class)->onlyMethods(['sendDirect'])->getMock();
+            $transport = $this->getMockBuilder(QueuedEmail::class)->setConstructorArgs([new EmailDeliveryLogModel(), $queue])->onlyMethods(['sendDirect'])->getMock();
             $transport->expects($this->once())->method('sendDirect')->willReturn(true);
             Services::injectMock('email', $transport);
             (new SendEmail([
@@ -101,6 +102,162 @@ final class EmailQueueTest extends CIUnitTestCase
         $this->assertNull($logs[1]['invited_user_id']);
     }
 
+    public function testSuccessfulSendClearsAllQueuedMessageState(): void
+    {
+        $payloads = [];
+        $queue    = $this->createMock(QueueInterface::class);
+        $queue->expects($this->exactly(2))->method('push')->willReturnCallback(static function (string $queueName, string $jobName, array $data) use (&$payloads): QueuePushResult {
+            $payloads[] = $data;
+
+            return QueuePushResult::success(count($payloads));
+        });
+        Services::injectMock('queue', $queue);
+
+        $email = service('email', null, false);
+        $email->setFrom('sender@example.com')->setTo('first@example.com')->setCC('cc@example.com')->setBCC('bcc@example.com')->setSubject('First')->setMessage('First body')->setInvitationUserId(9);
+        $this->assertTrue($email->send());
+        $this->assertFalse($email->send());
+
+        $email->setFrom('sender@example.com')->setTo('second@example.com');
+        $this->assertTrue($email->send());
+
+        $this->assertSame(['first@example.com'], $payloads[0]['to']);
+        $this->assertSame(['cc@example.com'], $payloads[0]['cc']);
+        $this->assertSame(['bcc@example.com'], $payloads[0]['bcc']);
+        $this->assertSame(['second@example.com'], $payloads[1]['to']);
+        $this->assertSame([], $payloads[1]['cc']);
+        $this->assertSame([], $payloads[1]['bcc']);
+        $this->assertSame('', $payloads[1]['subject']);
+        $this->assertSame('', $payloads[1]['body']);
+        $logs = db_connect()->table('email_delivery_logs')->orderBy('id')->get()->getResultArray();
+        $this->assertSame('', $logs[1]['subject']);
+        $this->assertNull($logs[1]['invited_user_id']);
+    }
+
+    public function testQueueFailureAndDisabledAutoClearRetainMessageUntilExplicitClear(): void
+    {
+        $payloads = [];
+        $queue    = $this->createMock(QueueInterface::class);
+        $queue->expects($this->exactly(4))->method('push')->willReturnCallback(static function (string $queueName, string $jobName, array $data) use (&$payloads): QueuePushResult {
+            $payloads[] = $data;
+
+            return count($payloads) === 1 ? QueuePushResult::failure('Unavailable') : QueuePushResult::success(count($payloads));
+        });
+        Services::injectMock('queue', $queue);
+
+        $email = service('email', null, false);
+        $email->setFrom('sender@example.com')->setTo('invitee@example.com')->setCC('cc@example.com')->setBCC('bcc@example.com')->setSubject('Invite')->setMessage('Invite body')->setInvitationUserId(9);
+        $this->assertFalse($email->send());
+        $this->assertTrue($email->send(false));
+        $this->assertTrue($email->send(false));
+
+        foreach ($payloads as $payload) {
+            $this->assertSame(['invitee@example.com'], $payload['to']);
+            $this->assertSame(['cc@example.com'], $payload['cc']);
+            $this->assertSame(['bcc@example.com'], $payload['bcc']);
+            $this->assertSame('Invite', $payload['subject']);
+            $this->assertSame('Invite body', $payload['body']);
+        }
+        $logs = db_connect()->table('email_delivery_logs')->orderBy('id')->get()->getResultArray();
+        $this->assertSame(['failed', 'queued', 'queued'], array_column($logs, 'status'));
+        $this->assertSame([9, 9, 9], array_map(static fn (array $log): int => (int) $log['invited_user_id'], $logs));
+
+        $this->assertSame($email, $email->clear(true));
+        $this->assertFalse($email->send());
+        $email->setFrom('sender@example.com')->setTo('other@example.com');
+        $this->assertTrue($email->send());
+        $this->assertSame([], $payloads[3]['cc']);
+        $this->assertSame([], $payloads[3]['bcc']);
+        $this->assertSame('', $payloads[3]['subject']);
+        $this->assertSame('', $payloads[3]['body']);
+        $latest = db_connect()->table('email_delivery_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+        $this->assertNull($latest['invited_user_id']);
+    }
+
+    public function testLogCreationFailureDoesNotEnqueueEmail(): void
+    {
+        $logs = $this->getMockBuilder(EmailDeliveryLogModel::class)->onlyMethods(['insert'])->getMock();
+        $logs->expects($this->once())->method('insert')->willReturn(false);
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->never())->method('push');
+
+        $email = new QueuedEmail($logs, $queue);
+        $email->setFrom('sender@example.com')->setTo('recipient@example.com');
+
+        $this->expectExceptionMessage('Failed to create email delivery log.');
+        $email->send();
+    }
+
+    public function testDirectSendUsesTransportWithoutQueueOrDeliveryLog(): void
+    {
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->never())->method('push');
+        $email = $this->getMockBuilder(QueuedEmail::class)->setConstructorArgs([new EmailDeliveryLogModel(), $queue, ['protocol' => 'smtp']])->onlyMethods(['sendWithSmtp'])->getMock();
+        $email->expects($this->exactly(2))->method('sendWithSmtp')->willReturn(true);
+        $email->setFrom('sender@example.com')->setTo('recipient@example.com')->setSubject('Direct')->setMessage('Body');
+
+        $this->assertTrue($email->sendDirect(false));
+        $this->assertTrue($email->sendDirect());
+        $this->assertFalse($email->sendDirect());
+        $this->assertSame(0, db_connect()->table('email_delivery_logs')->countAllResults());
+    }
+
+    public function testWorkerSkipsMissingLog(): void
+    {
+        $email = $this->createMock(QueuedEmail::class);
+        $email->expects($this->never())->method('clear');
+        $email->expects($this->never())->method('sendDirect');
+        Services::injectMock('email', $email);
+
+        $job = new SendEmail(['audit_id' => 0]);
+        $this->assertSame(3, $job->getTries());
+        $job->process();
+        $this->assertSame(0, db_connect()->table('email_delivery_logs')->countAllResults());
+    }
+
+    public function testWorkerRecordsThrownTransportFailureBeforeRetrying(): void
+    {
+        $logs    = new EmailDeliveryLogModel();
+        $auditId = $logs->createQueued('recipient@example.com', 'Hello', 9);
+        $data    = [
+            'audit_id' => $auditId, 'to' => ['recipient@example.com'], 'cc' => ['cc@example.com'], 'bcc' => ['bcc@example.com'],
+            'subject'  => 'Hello', 'body' => 'Private body', 'type' => 'html',
+        ];
+        $exception = new RuntimeException('SMTP credentials rejected: smtp-secret');
+        $email     = $this->getMockBuilder(QueuedEmail::class)->setConstructorArgs([$logs, $this->createStub(QueueInterface::class)])->onlyMethods(['sendDirect'])->getMock();
+        $email->expects($this->exactly(2))->method('sendDirect')->willReturnCallback(static function () use (&$exception): bool {
+            if ($exception !== null) {
+                throw $exception;
+            }
+
+            return true;
+        });
+        Services::injectMock('email', $email);
+
+        try {
+            (new SendEmail($data))->process();
+            $this->fail('Transport exception must trigger a retry.');
+        } catch (RuntimeException $caught) {
+            $this->assertSame($exception, $caught);
+        }
+
+        $failed = $logs->find($auditId);
+        $this->assertSame('failed', $failed['status']);
+        $this->assertSame(1, (int) $failed['attempts']);
+        $this->assertSame('Email transport authentication failed.', $failed['failure_reason']);
+        $this->assertNotNull($failed['processed_at']);
+        $this->assertSame(9, (int) $failed['invited_user_id']);
+
+        $exception = null;
+        (new SendEmail($data))->process();
+        (new SendEmail($data))->process();
+        $sent = $logs->find($auditId);
+        $this->assertSame('sent', $sent['status']);
+        $this->assertSame(2, (int) $sent['attempts']);
+        $this->assertNull($sent['failure_reason']);
+        $this->assertSame(9, (int) $sent['invited_user_id']);
+    }
+
     public function testQueueFailureIsRecordedAndInvalidEmailIsRejected(): void
     {
         $queue = $this->createMock(QueueInterface::class);
@@ -133,7 +290,7 @@ final class EmailQueueTest extends CIUnitTestCase
             'subject'  => 'Hello', 'body' => 'Private body', 'type' => 'text',
         ];
 
-        $email = $this->getMockBuilder(QueuedEmail::class)->onlyMethods(['sendDirect', 'printDebugger'])->getMock();
+        $email = $this->getMockBuilder(QueuedEmail::class)->setConstructorArgs([new EmailDeliveryLogModel(), $this->createStub(QueueInterface::class)])->onlyMethods(['sendDirect', 'printDebugger'])->getMock();
         $email->expects($this->exactly(2))->method('sendDirect')->willReturnOnConsecutiveCalls(false, true);
         $email->method('printDebugger')->willReturn('The following SMTP error was encountered: 421 closing connection');
         Services::injectMock('email', $email);
@@ -160,7 +317,7 @@ final class EmailQueueTest extends CIUnitTestCase
 
     public function testFailureReasonOnlyStoresSafeCategories(): void
     {
-        $email = new QueuedEmail();
+        $email = service('email', null, false);
         $email->setMessage('<p>Private body</p>');
         $email->SMTPUser = 'smtp-user';
         $email->SMTPPass = 'smtp-secret';

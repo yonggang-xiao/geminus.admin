@@ -8,6 +8,7 @@ use CodeIgniter\Shield\Models\UserIdentityModel;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Geminus\Admin\Models\EmailDeliveryLogModel;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 
 /**
@@ -59,7 +60,7 @@ class Services extends BaseService
             }
         }
 
-        return new QueuedEmail($config);
+        return new QueuedEmail(new EmailDeliveryLogModel(), service('queue'), $config);
     }
 
     /*
