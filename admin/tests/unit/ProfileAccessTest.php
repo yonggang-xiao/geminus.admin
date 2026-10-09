@@ -10,7 +10,6 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Composer\InstalledVersions;
 use Config\Services;
-use Geminus\Admin\Controllers\FileController;
 use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\AvatarFiles;
@@ -601,7 +600,7 @@ final class ProfileAccessTest extends CIUnitTestCase
         }
     }
 
-    public function testAuthenticatedFileRouteOnlyServesAllowedExistingFilename(): void
+    public function testAvatarRouteOnlyServesAssociatedSafeAvatars(): void
     {
         $directory = WRITEPATH . 'uploads/avatars/';
         if (! is_dir($directory)) {
@@ -618,41 +617,66 @@ final class ProfileAccessTest extends CIUnitTestCase
         file_put_contents($sentinelPath, $sentinel);
         $linkName = 'link-' . $filename;
         symlink($sentinelPath, $directory . $linkName);
-        $unlistedType = 'unlisted-' . bin2hex(random_bytes(8));
-        $unlistedPath = WRITEPATH . 'uploads/' . $unlistedType;
-        mkdir($unlistedPath);
-        file_put_contents($unlistedPath . '/' . $filename, $content);
+        $blockedFiles = [];
+
+        foreach (['documents', 'images', 'attachments'] as $type) {
+            $blockedDirectory = WRITEPATH . 'uploads/' . $type . '/';
+            if (! is_dir($blockedDirectory)) {
+                mkdir($blockedDirectory, 0750, true);
+            }
+            $blockedFiles[$type] = $blockedDirectory . $filename;
+            file_put_contents($blockedFiles[$type], $sentinel);
+        }
 
         try {
-            $this->get('/admin/files/avatars/' . $filename)->assertRedirect();
-            $user        = new AdminUser(['username' => 'fileviewer']);
+            $user        = new AdminUser(['username' => 'fileviewer', 'avatar' => $filename]);
             $user->email = 'fileviewer@example.com';
             $user->setPassword('A-local-password-123!');
             $users = auth()->getProvider();
             $users->save($user);
-            auth()->login($users->findById($users->getInsertID()));
+            $user  = $users->findById($users->getInsertID());
+            $route = '/admin/avatars/' . $user->id;
+            $this->assertSame(base_url(ltrim($route, '/')), $user->getAvatarUrl());
+            $this->get($route)->assertRedirect();
+            auth()->login($user);
+            $this->assertFalse($user->can('users.manage-admins'));
 
-            $response = $this->get('/admin/files/avatars/' . $filename);
+            $response = $this->get($route);
             $response->assertOK();
             $this->assertSame('image/png', $response->response()->getHeaderLine('Content-Type'));
             $this->assertSame($content, $response->response()->getBody());
-            $this->get('/admin/files/' . $unlistedType . '/' . $filename)->assertStatus(404);
-            $this->get('/admin/files/avatars/missing-' . $filename)->assertStatus(404);
-            $this->get('/admin/files/avatars/' . $linkName)->assertStatus(404);
-            $traversal = $this->get('/admin/files/avatars/%2e%2e%2f' . $sentinelName);
-            $traversal->assertStatus(404);
-            $this->assertStringNotContainsString($sentinel, $traversal->response()->getBody());
-            $controller = new FileController();
-            $controller->initController(service('request'), Services::response(null, false), service('logger'));
-            $direct = $controller->serve('avatars', '../' . $sentinelName);
-            $this->assertSame(404, $direct->getStatusCode());
-            $this->assertStringNotContainsString($sentinel, (string) $direct->getBody());
+            $this->assertStringContainsString('private', $response->response()->getHeaderLine('Cache-Control'));
+            $this->assertStringContainsString('no-store', $response->response()->getHeaderLine('Cache-Control'));
+            $this->assertSame('nosniff', $response->response()->getHeaderLine('X-Content-Type-Options'));
+            $this->get('/admin/files/avatars/' . $filename)->assertStatus(404);
+
+            foreach ($blockedFiles as $type => $blockedFile) {
+                $blocked = $this->get('/admin/files/' . $type . '/' . $filename);
+                $blocked->assertStatus(404);
+                $this->assertStringNotContainsString($sentinel, $blocked->response()->getBody());
+                $this->assertFileExists($blockedFile);
+            }
+            $this->get('/admin/avatars/99999999')->assertStatus(404);
+
+            foreach ([null, 'missing-' . $filename, $linkName, '../' . $sentinelName] as $invalidAvatar) {
+                $user         = $users->findById($user->id);
+                $user->avatar = $invalidAvatar;
+                $users->save($user);
+                $blocked = $this->get($route);
+                $blocked->assertStatus(404);
+                $this->assertStringNotContainsString($sentinel, $blocked->response()->getBody());
+                if ($invalidAvatar === null) {
+                    $this->assertNull($user->getAvatarUrl());
+                }
+            }
         } finally {
             unlink($directory . $linkName);
             unlink($filePath);
             unlink($sentinelPath);
-            unlink($unlistedPath . '/' . $filename);
-            rmdir($unlistedPath);
+
+            foreach ($blockedFiles as $blockedFile) {
+                unlink($blockedFile);
+            }
         }
     }
 

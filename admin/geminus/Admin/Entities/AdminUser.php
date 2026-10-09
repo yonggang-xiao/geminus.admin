@@ -24,12 +24,9 @@ class AdminUser extends User
 
     public function getAvatarUrl(): ?string
     {
-        helper('file');
-
-        // Return the URL of the user's avatar if set, otherwise null
         $avatar = $this->attributes['avatar'] ?? null;
-        if ($avatar) {
-            return uploaded_file_url('avatars', $avatar);
+        if ($avatar && $this->id) {
+            return base_url('admin/avatars/' . $this->id);
         }
 
         return null;

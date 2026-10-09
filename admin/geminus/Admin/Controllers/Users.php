@@ -116,7 +116,7 @@ class Users extends BaseController
 
     public function attachments(int $userId): ResponseInterface|string
     {
-        $user = $this->editableUser($userId);
+        $user = $this->attachmentUser($userId);
         if ($user === null) {
             return $this->response->setStatusCode(404);
         }
@@ -133,7 +133,7 @@ class Users extends BaseController
 
     public function uploadAttachment(int $userId): RedirectResponse|ResponseInterface
     {
-        if ($this->editableUser($userId) === null) {
+        if ($this->attachmentUser($userId) === null) {
             return $this->response->setStatusCode(404);
         }
 
@@ -152,7 +152,7 @@ class Users extends BaseController
 
     public function downloadAttachment(int $userId, int $attachmentId): ResponseInterface
     {
-        if ($this->editableUser($userId) === null) {
+        if ($this->attachmentUser($userId) === null) {
             return $this->response->setStatusCode(404);
         }
         $service    = $this->attachments ?? new Attachments();
@@ -168,7 +168,7 @@ class Users extends BaseController
 
     public function removeAttachment(int $userId, int $attachmentId): RedirectResponse|ResponseInterface
     {
-        if ($this->editableUser($userId) === null) {
+        if ($this->attachmentUser($userId) === null) {
             return $this->response->setStatusCode(404);
         }
 
@@ -370,6 +370,15 @@ class Users extends BaseController
             'created_at' => $userTable . '.created_at',
             'email'      => ['field' => '(SELECT MIN(LOWER(' . $identities . '.secret)) FROM ' . $identities . ' WHERE ' . $identities . '.user_id = ' . $db->prefixTable($userTable) . '.id AND ' . $identities . ".type = '" . Session::ID_TYPE_EMAIL_PASSWORD . "')", 'escape' => false],
         ], 'created_at');
+    }
+
+    private function attachmentUser(int $userId): ?User
+    {
+        if (! auth()->user()?->can('users.manage-admins')) {
+            return null;
+        }
+
+        return auth()->getProvider()->findById($userId);
     }
 
     private function editableUser(int $userId): ?User

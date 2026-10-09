@@ -3,7 +3,7 @@
 <?= $this->section('header') ?>
     <div class="row g-2 align-items-center">
         <div class="col"><h2 class="page-title"><?= esc($page_title) ?></h2><div class="text-secondary text-break"><?= esc($user->username) ?></div></div>
-        <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.editUser')) ?></a></div>
+        <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Admin.userBack')) ?></a></div>
     </div>
 <?= $this->endSection() ?>
 

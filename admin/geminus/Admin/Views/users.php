@@ -98,6 +98,7 @@
                                             </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
+                                    <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>" data-bs-toggle="tooltip"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
                                     <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye me-1" aria-hidden="true"></i><?= esc(lang('Admin.viewUserPermissions')) ?></button>
                                 </div>
                             </td>

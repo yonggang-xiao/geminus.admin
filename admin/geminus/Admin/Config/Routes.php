@@ -2,8 +2,8 @@
 
 $routes->set404Override(static fn () => view('Geminus\Admin\Views\errors\404'));
 
-$routes->group('admin/files', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
-    $routes->get('(:segment)/(:segment)', 'FileController::serve/$1/$2', ['as' => 'admin/files/serve']);
+$routes->group('admin/avatars', ['namespace' => 'Geminus\Admin\Controllers', 'filter' => 'session'], static function ($routes) {
+    $routes->get('(:num)', 'AvatarController::show/$1', ['as' => 'admin/avatars/show']);
 });
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
