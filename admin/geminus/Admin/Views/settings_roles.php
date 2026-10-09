@@ -31,7 +31,7 @@
                             <thead><tr><th scope="col"><?= esc(lang('Admin.permissionKey')) ?></th><th scope="col"><?= esc(lang('Admin.permissionDescription')) ?></th><th scope="col" class="text-end"><?= esc(lang('Admin.userActions')) ?></th></tr></thead>
                             <tbody>
                                 <?php foreach ($permissionGroups as $domain => $items): ?>
-                                    <tr class="table-light"><th scope="rowgroup" colspan="3"><?= esc($domain) ?></th></tr>
+                                    <tr class="table-light"><th scope="rowgroup" colspan="3"><?= esc($permissionDomainLabels[$domain] ?? $domain) ?></th></tr>
                                     <?php foreach ($items as $permission => $description): ?>
                                         <tr<?= $editingPermission === $permission ? ' class="table-active"' : '' ?>>
                                             <td class="text-nowrap"><?= esc($permission) ?></td>
@@ -144,10 +144,10 @@
                                 <p class="text-secondary small"><?= esc(sprintf(lang('Admin.effectivePermissionCount'), count($checked), count($permissions))) ?></p>
                                 <?php foreach ($effectivePermissionGroups as $domain => $items): ?>
                                     <section class="mb-4">
-                                        <h4 class="h4 border-bottom pb-2 mb-3"><?= esc($domain) ?></h4>
+                                        <h4 class="h4 border-bottom pb-2 mb-3"><?= esc($permissionDomainLabels[$domain] ?? $domain) ?></h4>
                                         <?php foreach ($items as $permission => $info): ?>
                                             <div class="border-bottom py-2">
-                                                <div class="fw-medium"><?= esc($permission) ?></div>
+                                                <div class="fw-medium text-break"><?= esc($permission) ?></div>
                                                 <div class="text-secondary small"><?= esc($info['description']) ?></div>
                                                 <div class="text-secondary small"><?= esc(lang('Admin.permissionGrantedBy')) ?>: <?php foreach ($info['grants'] as $grant): ?><code class="me-2"><?= esc($grant) ?></code><?php endforeach; ?></div>
                                             </div>
@@ -166,13 +166,13 @@
                             <?php else: ?>
                                 <?php foreach ($permissionGroups as $domain => $items): ?>
                                     <fieldset class="mb-4">
-                                        <legend class="h4 border-bottom pb-2 mb-3"><?= esc($domain) ?></legend>
+                                        <legend class="h4 border-bottom pb-2 mb-3"><?= esc($permissionDomainLabels[$domain] ?? $domain) ?></legend>
                                         <div class="row g-2">
                                             <?php foreach ($items as $permission => $description): ?>
                                                 <div class="col-12 col-md-6">
                                                     <label class="form-check">
                                                         <input class="form-check-input" type="checkbox" name="permissions[]" value="<?= esc($permission, 'attr') ?>"<?= isset($checked[$permission]) ? ' checked' : '' ?>>
-                                                        <span class="form-check-label"><?= esc($permission) ?></span>
+                                                        <span class="form-check-label text-break"><?= esc($permission) ?></span>
                                                         <span class="form-check-description"><?= esc($description) ?></span>
                                                     </label>
                                                 </div>

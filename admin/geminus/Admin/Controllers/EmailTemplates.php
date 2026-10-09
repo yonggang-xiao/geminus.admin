@@ -13,7 +13,7 @@ class EmailTemplates extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('email-templates.manage')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -35,7 +35,7 @@ class EmailTemplates extends BaseController
 
     public function update(string $type, string $locale): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('email-templates.manage')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -66,7 +66,7 @@ class EmailTemplates extends BaseController
 
     public function reset(string $type, string $locale): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('email-templates.manage')) {
             return $this->response->setStatusCode(403);
         }
 

@@ -23,14 +23,14 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->get('(:num)/attachments/(:num)', 'Users::downloadAttachment/$1/$2', ['as' => 'admin/users/attachments/download']);
         $routes->post('(:num)/attachments/(:num)/remove', 'Users::removeAttachment/$1/$2', ['as' => 'admin/users/attachments/remove']);
     });
-    $routes->group('settings/email', ['filter' => 'permission:admin.settings'], static function ($routes) {
+    $routes->group('settings/email', ['filter' => 'permission:email-settings.manage'], static function ($routes) {
         $routes->get('', 'EmailSettings::index', ['as' => 'admin/settings/email']);
         $routes->post('', 'EmailSettings::update', ['as' => 'admin/settings/email/update']);
         $routes->post('test', 'EmailSettings::sendTest', ['as' => 'admin/settings/email/test']);
     });
-    $routes->get('audit', 'OperationAudit::index', ['as' => 'admin/audit', 'filter' => 'permission:admin.settings']);
-    $routes->group('mail', ['filter' => 'permission:admin.settings'], static function ($routes) {
-        $routes->get('deliveries', 'EmailQueue::index', ['as' => 'admin/mail/deliveries']);
+    $routes->get('audit', 'OperationAudit::index', ['as' => 'admin/audit', 'filter' => 'permission:operation-audit.view']);
+    $routes->get('mail/deliveries', 'EmailQueue::index', ['as' => 'admin/mail/deliveries', 'filter' => 'permission:email-deliveries.view']);
+    $routes->group('mail', ['filter' => 'permission:email-templates.manage'], static function ($routes) {
         $routes->get('templates', 'EmailTemplates::index', ['as' => 'admin/mail/templates']);
         $routes->post('templates/(:segment)/(:segment)', 'EmailTemplates::update/$1/$2', ['as' => 'admin/mail/templates/update']);
         $routes->post('templates/(:segment)/(:segment)/reset', 'EmailTemplates::reset/$1/$2', ['as' => 'admin/mail/templates/reset']);
@@ -43,7 +43,7 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
         $routes->post('permissions', 'RoleSettings::createPermission', ['as' => 'admin/settings/permissions/create']);
         $routes->post('permissions/(:segment)', 'RoleSettings::updatePermission/$1', ['as' => 'admin/settings/permissions/update']);
     });
-    $routes->group('settings/microsoft', ['filter' => 'permission:admin.settings'], static function ($routes) {
+    $routes->group('settings/microsoft', ['filter' => 'permission:microsoft-settings.manage'], static function ($routes) {
         $routes->get('', 'MicrosoftSettings::index', ['as' => 'admin/settings/microsoft']);
         $routes->post('', 'MicrosoftSettings::update', ['as' => 'admin/settings/microsoft/update']);
     });

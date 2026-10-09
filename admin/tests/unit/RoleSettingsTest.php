@@ -1,10 +1,16 @@
 <?php
 
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Shield\Authorization\PermissionMatcher;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
+use Config\Services;
+use Geminus\Admin\Database\Migrations\RegisterAdminFeaturePermissions;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\MailTemplates;
+use Geminus\Admin\Libraries\MicrosoftLinks;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * @internal
@@ -22,6 +28,50 @@ final class RoleSettingsTest extends CIUnitTestCase
         parent::tearDown();
     }
 
+    public function testAdminFeatureMigrationPreservesExistingCatalogAndRoleGrants(): void
+    {
+        $originalPermissions                  = setting('AuthGroups.permissions');
+        $originalMatrix                       = setting('AuthGroups.matrix');
+        $permissions                          = $originalPermissions;
+        $permissions['email-settings.manage'] = 'Custom email settings';
+        setting('AuthGroups.permissions', $permissions);
+
+        try {
+            $migration = new RegisterAdminFeaturePermissions();
+            $migration->up();
+            $migration->up();
+            Services::resetSingle('settings');
+
+            $updated = setting('AuthGroups.permissions');
+            $matrix  = setting('AuthGroups.matrix');
+            $this->assertSame('Custom email settings', $updated['email-settings.manage']);
+
+            foreach (['email-settings.manage', 'email-deliveries.view', 'email-templates.manage', 'operation-audit.view', 'microsoft-settings.manage'] as $permission) {
+                $this->assertArrayHasKey($permission, $updated);
+                $this->assertTrue(PermissionMatcher::matches($permission, $matrix['superadmin']));
+            }
+
+            foreach ($originalPermissions as $permission => $description) {
+                if ($permission !== 'email-settings.manage') {
+                    $this->assertSame($description, $updated[$permission]);
+                }
+            }
+
+            foreach ($originalMatrix as $role => $grants) {
+                if ($role !== 'superadmin') {
+                    $this->assertSame($grants, $matrix[$role]);
+                } else {
+                    foreach ($grants as $grant) {
+                        $this->assertContains($grant, $matrix[$role]);
+                    }
+                }
+            }
+            $this->assertSame(count($matrix['superadmin']), count(array_unique($matrix['superadmin'])));
+        } finally {
+            service('settings')->setMany(['AuthGroups.permissions' => $originalPermissions, 'AuthGroups.matrix' => $originalMatrix]);
+        }
+    }
+
     public function testOnlySuperadminCanManageRolesAndPermissions(): void
     {
         $this->get('/en/admin/settings/roles')->assertRedirect();
@@ -36,6 +86,151 @@ final class RoleSettingsTest extends CIUnitTestCase
         $this->assertArrayNotHasKey('reports.view', setting('AuthGroups.permissions'));
         $this->assertNotSame('Changed', setting('AuthGroups.permissions')['users.create']);
         $this->assertNotSame('Changed', setting('AuthGroups.groups')['developer']['title']);
+    }
+
+    #[DataProvider('provideRoleGrantOnlyOpensItsOwnFeature')]
+    public function testRoleGrantOnlyOpensItsOwnFeature(string $permission, string $allowedPath): void
+    {
+        $originalMatrix = setting('AuthGroups.matrix');
+        $this->loginAs('superadmin');
+
+        try {
+            $this->post('/en/admin/settings/roles/admin/permissions', [csrf_token() => csrf_hash(), 'permissions' => [$permission]])->assertRedirect();
+            $this->assertSame([$permission], setting('AuthGroups.matrix')['admin']);
+            auth()->logout();
+            $this->loginAs('admin');
+
+            $page = $this->get($allowedPath);
+            $page->assertOK();
+            $body = $page->response()->getBody();
+            $this->assertStringContainsString('href="' . $allowedPath . '"', $body);
+            $deniedUrl = config('Auth')->permissionDeniedRedirect();
+
+            foreach (self::provideRoleGrantOnlyOpensItsOwnFeature() as [$otherPermission, $otherPath]) {
+                if ($otherPermission !== $permission) {
+                    $this->assertStringNotContainsString('href="' . $otherPath . '"', $body);
+                    $this->get($otherPath)->assertRedirectTo($deniedUrl);
+                }
+            }
+
+            $settingKeys    = ['Email.fromEmail', 'Email.fromName', 'Email.protocol', 'MicrosoftOAuth.enabled', 'MicrosoftOAuth.tenant', 'MicrosoftOAuth.clientId'];
+            $beforeSettings = service('settings')->getMany($settingKeys);
+            $templates      = new MailTemplates();
+            $beforeTemplate = $templates->get('invitation', 'en');
+            $beforeQueue    = db_connect()->table('queue_jobs')->countAllResults();
+
+            foreach ([
+                'email-settings.manage' => [
+                    ['/en/admin/settings/email', ['fromEmail' => 'denied@example.com', 'fromName' => 'Denied', 'protocol' => 'mail']],
+                    ['/en/admin/settings/email/test', ['test_email' => 'denied@example.com']],
+                ],
+                'email-templates.manage' => [
+                    ['/en/admin/mail/templates/invitation/en', ['subject' => 'Denied', 'body' => 'Denied {link}']],
+                    ['/en/admin/mail/templates/invitation/en/reset', []],
+                ],
+                'microsoft-settings.manage' => [
+                    ['/en/admin/settings/microsoft', ['enabled' => '1', 'tenant' => 'organizations', 'clientId' => 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']],
+                ],
+            ] as $writePermission => $requests) {
+                if ($writePermission !== $permission) {
+                    foreach ($requests as [$writePath, $data]) {
+                        $this->post($writePath, [csrf_token() => csrf_hash()] + $data)->assertRedirectTo($deniedUrl);
+                    }
+                }
+            }
+            $this->assertSame($beforeSettings, service('settings')->getMany($settingKeys));
+            $this->assertSame($beforeTemplate, $templates->get('invitation', 'en'));
+            $this->assertSame($beforeQueue, db_connect()->table('queue_jobs')->countAllResults());
+            $this->get('/en/admin/settings/roles')->assertRedirect();
+        } finally {
+            setting('AuthGroups.matrix', $originalMatrix);
+        }
+    }
+
+    public static function provideRoleGrantOnlyOpensItsOwnFeature(): iterable
+    {
+        return [
+            ['users.manage-admins', '/en/admin/users'],
+            ['email-settings.manage', '/en/admin/settings/email'],
+            ['email-deliveries.view', '/en/admin/mail/deliveries'],
+            ['email-templates.manage', '/en/admin/mail/templates'],
+            ['operation-audit.view', '/en/admin/audit'],
+            ['microsoft-settings.manage', '/en/admin/settings/microsoft'],
+        ];
+    }
+
+    public function testLegacySettingsGrantDoesNotOpenFeaturePages(): void
+    {
+        $this->loginAs('developer');
+
+        foreach (self::provideRoleGrantOnlyOpensItsOwnFeature() as [$permission, $featurePath]) {
+            $this->get($featurePath)->assertRedirect();
+        }
+    }
+
+    public function testMicrosoftSettingsPermissionCannotManageBindings(): void
+    {
+        $originalMatrix  = setting('AuthGroups.matrix');
+        $matrix          = $originalMatrix;
+        $matrix['admin'] = ['microsoft-settings.manage'];
+        setting('AuthGroups.matrix', $matrix);
+
+        try {
+            $this->loginAs('admin');
+            $links   = new MicrosoftLinks();
+            $tenant  = '11111111-2222-3333-4444-555555555555';
+            $linked  = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+            $pending = 'cccccccc-dddd-eeee-ffff-000000000000';
+            $this->assertTrue($links->bind(auth()->user(), $tenant, $linked));
+            $this->assertTrue($links->request($tenant, $pending, null));
+            $requests  = $links->pending();
+            $requestId = $requests[0]['id'];
+            $userId    = auth()->id();
+            $page      = $this->get('/en/admin/settings/microsoft');
+            $page->assertOK();
+            $this->assertStringNotContainsString('/requests/' . $requestId . '/approve', $page->response()->getBody());
+            $this->assertStringNotContainsString('/users/' . $userId . '/revoke', $page->response()->getBody());
+
+            foreach (['/requests/' . $requestId . '/approve', '/requests/' . $requestId . '/reject', '/users/' . $userId . '/revoke'] as $action) {
+                $this->post('/en/admin/settings/microsoft' . $action, [csrf_token() => csrf_hash(), 'user_id' => $userId])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
+                $this->assertSame($requests, $links->pending());
+                $this->assertSame($userId, $links->findUser($tenant, $linked)?->id);
+                $this->assertNull($links->findUser($tenant, $pending));
+            }
+        } finally {
+            setting('AuthGroups.matrix', $originalMatrix);
+        }
+    }
+
+    public function testPermissionDomainsAreLocalizedAndKeepCustomDescriptions(): void
+    {
+        $this->loginAs('superadmin');
+        $permissions                          = setting('AuthGroups.permissions');
+        $original                             = $permissions;
+        $permissions['email-settings.manage'] = 'Custom scope';
+        setting('AuthGroups.permissions', $permissions);
+
+        try {
+            foreach (['en' => 'Email delivery settings', 'zh-Hans' => '邮件发送设置', 'zh-Hant' => '郵件寄送設定'] as $locale => $label) {
+                $page = $this->get('/' . $locale . '/admin/settings/roles?role=admin');
+                $page->assertOK();
+                $page->assertSee($label);
+                $page->assertSee('Custom scope');
+                $domainLabels = lang('Admin.permissionDomainLabels');
+
+                foreach (array_keys($permissions) as $permission) {
+                    $domain = explode('.', $permission, 2)[0];
+                    $this->assertArrayHasKey($domain, $domainLabels);
+                    $this->assertStringContainsString('<legend class="h4 border-bottom pb-2 mb-3">' . esc($domainLabels[$domain]) . '</legend>', $page->response()->getBody());
+                }
+                $this->assertStringContainsString('<span class="form-check-label text-break">email-settings.manage</span>', $page->response()->getBody());
+                $this->assertStringContainsString('value="email-settings.manage"', $page->response()->getBody());
+                $this->get('/' . $locale . '/admin/settings/roles?role=superadmin')->assertSee($label);
+            }
+            $this->get('/zh-Hans/admin/settings/roles?view=permissions')->assertSee('邮件发送设置');
+        } finally {
+            setting('AuthGroups.permissions', $original);
+        }
     }
 
     public function testPermissionChangeRequiresCsrf(): void

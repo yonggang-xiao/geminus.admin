@@ -28,31 +28,43 @@ use Geminus\Admin\Config\AdminMenu;
             </li>
         <?php endif; ?>
     <?php endforeach; ?>
-    <?php if (auth()->user()?->can('admin.settings')): ?>
+    <?php if (auth()->user()?->can('operation-audit.view')): ?>
         <li class="nav-item<?= url_is('*/admin/audit') ? ' active' : '' ?>">
             <a class="nav-link<?= url_is('*/admin/audit') ? ' active' : '' ?>" href="<?= route_to('admin/audit') ?>"<?= url_is('*/admin/audit') ? ' aria-current="page"' : '' ?>>
                 <i class="ti ti-history nav-link-icon icon" aria-hidden="true"></i>
                 <span class="nav-link-title"><?= esc(lang('Admin.operationAudit')) ?></span>
             </a>
         </li>
+    <?php endif; ?>
+    <?php if (auth()->user()?->can('email-deliveries.view') || auth()->user()?->can('email-templates.manage')): ?>
         <li class="nav-item dropdown<?= url_is('*/admin/mail/*') ? ' active' : '' ?>">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="<?= url_is('*/admin/mail/*') ? 'true' : 'false' ?>">
                 <i class="ti ti-mail nav-link-icon icon" aria-hidden="true"></i>
                 <span class="nav-link-title"> <?= esc(lang('Admin.mail')) ?> </span>
             </a>
             <div class="dropdown-menu<?= url_is('*/admin/mail/*') ? ' show' : '' ?>">
+                <?php if (auth()->user()?->can('email-deliveries.view')): ?>
                 <a class="dropdown-item<?= url_is('*/admin/mail/deliveries') ? ' active' : '' ?>" href="<?= route_to('admin/mail/deliveries') ?>"<?= url_is('*/admin/mail/deliveries') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailDeliveries')) ?></a>
+                <?php endif; ?>
+                <?php if (auth()->user()?->can('email-templates.manage')): ?>
                 <a class="dropdown-item<?= url_is('*/admin/mail/templates') ? ' active' : '' ?>" href="<?= route_to('admin/mail/templates') ?>"<?= url_is('*/admin/mail/templates') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.mailTemplates')) ?></a>
+                <?php endif; ?>
             </div>
         </li>
+    <?php endif; ?>
+    <?php if (auth()->user()?->can('email-settings.manage') || auth()->user()?->can('microsoft-settings.manage') || auth()->user()?->inGroup('superadmin')): ?>
         <li class="nav-item dropdown<?= url_is('*/admin/settings/*') ? ' active' : '' ?>">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="<?= url_is('*/admin/settings/*') ? 'true' : 'false' ?>">
                 <i class="ti ti-settings nav-link-icon icon" aria-hidden="true"></i>
                 <span class="nav-link-title"> <?= esc(lang('Admin.systemSettings')) ?> </span>
             </a>
             <div class="dropdown-menu<?= url_is('*/admin/settings/*') ? ' show' : '' ?>">
+                <?php if (auth()->user()?->can('email-settings.manage')): ?>
                 <a class="dropdown-item<?= url_is('*/admin/settings/email') ? ' active' : '' ?>" href="<?= route_to('admin/settings/email') ?>"<?= url_is('*/admin/settings/email') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.emailDelivery')) ?></a>
+                <?php endif; ?>
+                <?php if (auth()->user()?->can('microsoft-settings.manage')): ?>
                 <a class="dropdown-item<?= url_is('*/admin/settings/microsoft') ? ' active' : '' ?>" href="<?= route_to('admin/settings/microsoft') ?>"<?= url_is('*/admin/settings/microsoft') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.microsoftLogin')) ?></a>
+                <?php endif; ?>
                 <?php if (auth()->user()?->inGroup('superadmin')): ?>
                     <a class="dropdown-item<?= url_is('*/admin/settings/roles') ? ' active' : '' ?>" href="<?= route_to('admin/settings/roles') ?>"<?= url_is('*/admin/settings/roles') ? ' aria-current="page"' : '' ?>><?= esc(lang('Admin.roleSettings')) ?></a>
                 <?php endif; ?>

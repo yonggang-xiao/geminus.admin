@@ -14,7 +14,7 @@ class MicrosoftSettings extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('microsoft-settings.manage')) {
             return $this->response->setStatusCode(403);
         }
 
@@ -44,7 +44,7 @@ class MicrosoftSettings extends BaseController
 
     public function update(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('microsoft-settings.manage')) {
             return $this->response->setStatusCode(403);
         }
 

@@ -14,7 +14,7 @@ class OperationAudit extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('operation-audit.view')) {
             return $this->response->setStatusCode(403);
         }
 

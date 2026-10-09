@@ -531,7 +531,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $originalMatrix    = setting('AuthGroups.matrix');
         $matrix            = $originalMatrix;
         $matrix['admin'][] = 'users.manage-admins';
-        $matrix['admin'][] = 'admin.settings';
+        $matrix['admin'][] = 'microsoft-settings.manage';
         setting('AuthGroups.matrix', $matrix);
 
         try {

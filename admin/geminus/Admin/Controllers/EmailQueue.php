@@ -14,7 +14,7 @@ class EmailQueue extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('admin.settings')) {
+        if (! auth()->user()?->can('email-deliveries.view')) {
             return $this->response->setStatusCode(403);
         }
 

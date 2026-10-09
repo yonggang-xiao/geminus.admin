@@ -70,6 +70,7 @@ class RoleSettings extends BaseController
             'permissions'               => $permissions,
             'editingPermission'         => $editingPermission,
             'permissionGroups'          => $permissionGroups,
+            'permissionDomainLabels'    => lang('Admin.permissionDomainLabels'),
             'effectivePermissionGroups' => $effectivePermissionGroups,
             'checked'                   => $checked,
             'extraGrants'               => $extraGrants,
