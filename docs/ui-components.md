@@ -4,7 +4,7 @@
 
 - 业务模块可以复用筛选栏、排序表头、列表空态、分页摘要、日期控件、附件区域和导入报告，减少重复模板并保持一致的 Tabler 界面。
 - 采用开发者配置式，使用 CI4 受控 View Cells 封装具有参数或展示逻辑的界面片段；不提供在线配置、整页 CRUD、任意 HTML 插槽或业务回调。
-- 当前已接入用户列表、用户附件、用户 CSV 导入、个人中心、邮件队列与投递记录、操作审计；公告示例模块复用列表空态与分页，尚未接入通用数据管理的筛选、导入或附件能力。
+- 当前已接入用户列表、用户附件、用户 CSV 导入、个人中心、邮件队列与投递记录、操作审计；公告示例模块复用筛选栏、排序表头、日期控件、列表空态与分页、导入报告和附件区域，展示独立业务模块的组合方式。
 - 资源权限、字段规则和业务写入仍由接入模块负责；隐藏操作按钮不代替服务端权限检查。
 
 ## 实现设计
@@ -68,7 +68,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 附件区域
 
-`AttachmentsCell` 已接入用户附件页。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。
+`AttachmentsCell` 已接入用户附件页与公告附件页。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。
 
 - `uploadUrl`：受控 POST 上传地址；为空时不显示上传表单。
 - `downloadRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$userId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。
@@ -80,7 +80,7 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 导入报告
 
-`ImportReportCell` 已接入用户 CSV 导入。组件接收 `title`、`rowLabel`、`resultLabel`、`reasonLabel`、`columns`、`rows`、`resultLabels` 和 `reasonLabels`。
+`ImportReportCell` 已接入用户与公告 CSV 导入。组件接收 `title`、`rowLabel`、`resultLabel`、`reasonLabel`、`columns`、`rows`、`resultLabels` 和 `reasonLabels`。
 
 `columns` 是报告字段到显示文案的映射；每条 `rows` 包含 `row`、`result`、`reason` 及对应列的标量值，可选 `errors` 提供字段错误文案数组。`resultLabels`、`reasonLabels` 将业务原因码映射为本地化文本，未映射值作为纯文本显示。组件统计各结果数量，不执行 CSV 解析、字段验证或业务处理。
 

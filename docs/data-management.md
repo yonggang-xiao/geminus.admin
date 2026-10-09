@@ -4,7 +4,7 @@
 
 - 业务模块可以复用列表筛选、排序与分页、CSV 导入导出及安全文件存储能力，不需要在各模块重复实现；资源权限、字段规则和业务写入仍由接入模块负责。
 - 第一版采用开发者配置式，不提供独立的“通用数据管理”菜单、在线建表、自动生成 CRUD 页面或 Excel 导入导出。
-- 当前已在 Admin 内部接入用户列表、用户 CSV 导入导出、用户附件和个人头像；用户管理是首个接入场景，公告示例模块尚未接入。
+- 当前已在 Admin 内部接入用户列表、用户 CSV 导入导出、用户附件和个人头像；独立的[公告示例模块](example-business-module.md)接入关键词与日期区间筛选、排序分页、CSV 导入导出和公告附件，展示业务模块如何调用底座能力。
 - 附件用于将文件关联到业务记录。具有 `users.manage-admins` 权限的管理员可以管理用户附件，不依赖账号是否可编辑；账号资料编辑、角色修改和邀请仍遵循用户管理的保护规则。
 
 ## 实现设计
@@ -46,6 +46,8 @@ $rows = $model->paginate($query->perPage);
 
 用户模块继续限制上传文件为 CSV、最大 1 MB、最多 500 条数据；导出最多 10000 人，超过上限返回 HTTP 413。权限检查、文件扩展名和实际 MIME 检查、下载响应头均由控制器负责。
 
+公告模块采用相同的文件及行数限制，固定表头为 `title,body`，复用新建表单的标题与正文校验规则；每个有效行创建一条公告，无效行报告错误并继续处理。标题不要求唯一，因此重复导入会创建新记录，不更新或跳过同名公告。导出最多 10000 条，复用列表的关键词、UTC 创建日期区间和排序，不受当前分页限制；CSV 的公式防护及重新导入语义与上述组件一致。
+
 `CsvImport::import($stream, $columns, $process, $maxRows = 500, $rules = [])` 提供字段映射、可选 CI4 验证、逐行执行和统一报告。处理器接收字段数组；配置验证规则时只接收 `getValidated()` 的字段。返回 `['result' => 'created|skipped|error', 'reason' => '业务原因码']`。统一报告包含 `row`、`data`、`result`、`reason`、`errors`，列数或验证失败不调用处理器；处理器异常记日志，并返回 `processing` 后继续下一行，不泄露异常内容。
 
 行数和表头在处理任何记录前检查。每行事务、查重和业务副作用由处理器负责，不能假设处理器异常时通用执行器会回滚已执行的业务写入。用户模块已接入执行器，同时保留其原有邮箱查重和报告格式。
@@ -70,6 +72,8 @@ $rows = $model->paginate($query->perPage);
 
 ## 运行约束
 
+公告附件关联使用 `resource_type = announcement`，所有页面与接口沿用 `announcements.manage` 权限，路径为 `{locale}/admin/announcements/{announcementId}/attachments`。模块先确认公告存在，下载及移除再核对资源类型、公告 ID 与附件 ID；跨公告、跨资源类型或缺失文件返回 404。上传与移除为 POST 并受全局 CSRF 保护，下载使用私有缓存与 `nosniff`；文件策略复用 `Attachments`，不另建存储目录或附件表。示例没有公告删除流程，扩展删除时须由模块处理附件清理。
+
 部署前在仓库根目录运行数据库迁移，创建附件元数据表：
 
 ```sh
@@ -79,5 +83,5 @@ docker compose -f docker/docker-compose.yaml exec -T geminus-admin php spark mig
 在仓库根目录使用已配置的独立测试数据库运行：
 
 ```sh
-docker compose -f docker/docker-compose.yaml exec -T geminus-admin vendor/bin/phpunit --no-coverage tests/unit/DataManagementTest.php tests/unit/UsersTest.php tests/unit/UserCsvImportTest.php tests/unit/ProfileAccessTest.php
+docker compose -f docker/docker-compose.yaml exec -T geminus-admin vendor/bin/phpunit --no-coverage tests/unit/DataManagementTest.php tests/unit/UsersTest.php tests/unit/UserCsvImportTest.php tests/unit/ProfileAccessTest.php tests/unit/AnnouncementsTest.php
 ```
