@@ -55,7 +55,17 @@ final class UsersTest extends CIUnitTestCase
         $this->assertFalse($sections[0]['unavailable']);
         $this->assertSame(1, $sections[0]['items'][0]['value']);
         $this->assertSame(0, $sections[1]['items'][0]['value']);
+        $this->assertSame('progress', $sections[1]['items'][2]['type']);
+        $this->assertSame(0, $sections[1]['items'][2]['value']);
+        $this->assertSame(0, $sections[1]['items'][2]['max']);
         $this->assertSame([], $sections[2]['items'][0]['rows']);
+        $html     = view_cell('Geminus\Admin\Cells\DashboardCell', ['sections' => $sections, 'locale' => 'en', 'timezone' => 'UTC']);
+        $document = new DOMDocument();
+        @$document->loadHTML('<?xml encoding="UTF-8">' . $html);
+        $xpath = new DOMXPath($document);
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="email:success-rate"]'));
+        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="email:success-rate"]//*[@role="progressbar"]'));
+        $this->assertStringContainsString('No items to track.', $html);
         $viewer->removePermission('users.view', 'users.create', 'email-deliveries.view', 'operation-audit.view');
         $this->assertSame([], service('dashboard')->sections($viewer, 'en'));
     }
@@ -84,6 +94,8 @@ final class UsersTest extends CIUnitTestCase
         $deliveries->markQueueFailed($failed);
         $sent = $deliveries->createQueued('sent@example.com', 'Sent mail', null);
         $deliveries->recordAttempt($sent, 1, null);
+        $this->assertSame(['queued' => 2, 'failed' => 1, 'sent' => 1, 'total' => 4], $deliveries->dashboardCounts());
+        $this->assertStringContainsString('GROUP BY', (string) $deliveries->db->getLastQuery());
 
         for ($index = 0; $index < 7; $index++) {
             db_connect()->table('operation_audit_logs')->insert(['actor_id' => null, 'action' => 'POST', 'target_type' => 'users', 'target_id' => (string) $index,
@@ -94,6 +106,10 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(7, $userItems[0]['value']);
         $this->assertSame(1, $userItems[1]['value']);
         $rows = $userItems[2]['rows'];
+        $this->assertSame('status-list', $userItems[2]['type']);
+        $this->assertSame(['Dashboard.userNormal', 'Dashboard.userBanned', 'Dashboard.userNormal', 'Dashboard.userNormal', 'Dashboard.userNormal'], array_column($rows, 'status'));
+        $this->assertSame('danger', $rows[1]['tone']);
+        $this->assertSame('ban', $rows[1]['icon']);
         $this->assertSame(['dashboard0', 'dashboard6', 'dashboard5', 'dashboard4', 'dashboard3'], array_column($rows, 'title'));
         $this->assertSame('2026-10-11T02:00:00Z', $rows[0]['time']);
         $this->assertStringContainsString('LIMIT 5', (string) $users->db->getLastQuery());
@@ -105,7 +121,10 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(1, $sections['email']['items'][1]['value']);
         $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=queued', $sections['email']['items'][0]['link']['url']);
         $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=failed', $sections['email']['items'][1]['link']['url']);
-        $this->assertSame(['queued', 'failed'], array_column($sections['email']['items'], 'id'));
+        $this->assertSame(['queued', 'failed', 'success-rate'], array_column($sections['email']['items'], 'id'));
+        $this->assertSame(1, $sections['email']['items'][2]['value']);
+        $this->assertSame(4, $sections['email']['items'][2]['max']);
+        $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=sent', $sections['email']['items'][2]['link']['url']);
         $this->assertSame('/zh-Hans/admin/users?q=dashboard0', $sections['users']['items'][2]['rows'][0]['link']['url']);
         $this->assertSame('/zh-Hans/admin/audit?type=users&target=0', $sections['audit']['items'][0]['rows'][0]['link']['url']);
         auth()->login($viewer);
@@ -122,7 +141,15 @@ final class UsersTest extends CIUnitTestCase
         $xpath = new DOMXPath($document);
         $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="email:queued"]'));
         $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="email:failed"]'));
-        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="email:queue"] | //*[@id="dashboard-email"]'));
+        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="email:queue"]'));
+        $this->assertCount(1, $xpath->query('//*[@id="dashboard-email"]'));
+        $progress = $xpath->query('//*[@data-dashboard-item="email:success-rate"]//*[@role="progressbar"]')->item(0);
+        $this->assertSame('1', $progress->getAttribute('aria-valuenow'));
+        $this->assertSame('4', $progress->getAttribute('aria-valuemax'));
+        $this->assertSame('width: 25.0%', $progress->getAttribute('style'));
+        $this->assertSame('已完成 1 / 4', $progress->getAttribute('aria-valuetext'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="users:recent"]//span[contains(@class,"bg-red-lt")]/span[text()="已禁用"]'));
+        $this->assertCount(4, $xpath->query('//*[@data-dashboard-item="users:recent"]//span[contains(@class,"bg-green-lt")]/span[text()="正常"]'));
 
         foreach (['private-path-', '192.0.2.123', 'PrivateDashboardAgent', 'queued-one@example.com', 'failed@example.com'] as $privateValue) {
             $this->assertStringNotContainsString($privateValue, $dashboard->response()->getBody());
@@ -136,6 +163,11 @@ final class UsersTest extends CIUnitTestCase
         $audit = $this->get('/zh-Hans/admin/audit?type=users&target=0');
         $audit->assertSee('private-path-0');
         $audit->assertDontSee('private-path-3');
+        $deliveries->recordAttempt($failed, 2, null);
+        $updated = service('emaildashboardprovider')->items($viewer);
+        $this->assertSame(0, $updated[1]['value']);
+        $this->assertSame(2, $updated[2]['value']);
+        $this->assertSame(4, $updated[2]['max']);
         $viewer->removePermission('users.view', 'email-deliveries.view', 'operation-audit.view');
         $this->assertSame([], service('dashboard')->sections($viewer, 'zh-Hans'));
         $revoked = $this->get('/zh-Hans/admin/dashboard');
@@ -159,6 +191,7 @@ final class UsersTest extends CIUnitTestCase
         $users->expects($this->never())->method('dashboardRecent');
         $email = $this->createMock(EmailDeliveryLogModel::class);
         $email->expects($this->never())->method('dashboardStatusCount');
+        $email->expects($this->never())->method('dashboardCounts');
         $audit = $this->createMock(OperationAuditModel::class);
         $audit->expects($this->never())->method('dashboardRecent');
         $this->assertSame([], (new UserDashboardProvider($users))->items($viewer));
@@ -170,7 +203,7 @@ final class UsersTest extends CIUnitTestCase
         }
 
         foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
-            foreach (['usersTotal', 'usersScope', 'usersBanned', 'usersBannedScope', 'usersRecent', 'usersEmpty', 'emailQueued', 'emailQueuedScope', 'emailFailed', 'emailFailedScope', 'emailQueue', 'auditRecent', 'auditEmpty'] as $key) {
+            foreach (['usersTotal', 'usersScope', 'usersBanned', 'usersBannedScope', 'usersRecent', 'usersEmpty', 'userNormal', 'userBanned', 'emailSuccessRate', 'emailSuccessScope', 'emailQueued', 'emailQueuedScope', 'emailFailed', 'emailFailedScope', 'auditRecent', 'auditEmpty'] as $key) {
                 $this->assertNotSame('Dashboard.' . $key, lang('Dashboard.' . $key, [], $locale));
             }
         }

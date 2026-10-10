@@ -18,6 +18,22 @@ class EmailDeliveryLogModel extends Model
         return $this->where('status', $status)->countAllResults();
     }
 
+    public function dashboardCounts(): array
+    {
+        $counts = ['queued' => 0, 'failed' => 0, 'sent' => 0];
+        $total  = 0;
+
+        foreach ($this->select('status')->selectCount('id', 'count')->groupBy('status')->findAll() as $row) {
+            $count = (int) $row['count'];
+            $total += $count;
+            if (array_key_exists($row['status'], $counts)) {
+                $counts[$row['status']] = $count;
+            }
+        }
+
+        return $counts + ['total' => $total];
+    }
+
     public function createQueued(string $recipient, string $subject, ?int $invitedUserId): int
     {
         $auditId = $this->insert([

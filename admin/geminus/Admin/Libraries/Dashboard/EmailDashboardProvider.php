@@ -19,13 +19,18 @@ class EmailDashboardProvider implements DashboardProvider
             return [];
         }
 
+        $counts = $this->deliveries->dashboardCounts();
+
         return [
             ['id'       => 'queued', 'type' => 'metric', 'title' => 'Dashboard.emailQueued', 'order' => 10,
-                'value' => $this->deliveries->dashboardStatusCount('queued'), 'description' => 'Dashboard.emailQueuedScope',
+                'value' => $counts['queued'], 'description' => 'Dashboard.emailQueuedScope',
                 'link'  => ['route' => 'admin/mail/deliveries', 'query' => ['view' => 'logs', 'status' => 'queued']]],
             ['id'       => 'failed', 'type' => 'metric', 'title' => 'Dashboard.emailFailed', 'order' => 20,
-                'value' => $this->deliveries->dashboardStatusCount('failed'), 'description' => 'Dashboard.emailFailedScope',
+                'value' => $counts['failed'], 'description' => 'Dashboard.emailFailedScope',
                 'link'  => ['route' => 'admin/mail/deliveries', 'query' => ['view' => 'logs', 'status' => 'failed']]],
+            ['id'       => 'success-rate', 'type' => 'progress', 'title' => 'Dashboard.emailSuccessRate', 'order' => 30,
+                'value' => $counts['sent'], 'max' => $counts['total'], 'description' => 'Dashboard.emailSuccessScope', 'tone' => 'success', 'icon' => 'mail-check',
+                'link'  => ['route' => 'admin/mail/deliveries', 'query' => ['view' => 'logs', 'status' => 'sent']]],
         ];
     }
 }

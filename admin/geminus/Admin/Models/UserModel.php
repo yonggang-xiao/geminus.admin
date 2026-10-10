@@ -22,7 +22,7 @@ class UserModel extends ShieldUserModel
 
     public function dashboardRecent(): array
     {
-        return $this->select('id, username, created_at')->asArray()->orderBy('created_at', 'DESC')->orderBy('id', 'DESC')->findAll(5);
+        return $this->select('id, username, status, created_at')->asArray()->orderBy('created_at', 'DESC')->orderBy('id', 'DESC')->findAll(5);
     }
 
     protected function initialize(): void

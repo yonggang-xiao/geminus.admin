@@ -25,13 +25,16 @@ class UserDashboardProvider implements DashboardProvider
             $rows = [];
 
             foreach ($this->users->dashboardRecent() as $user) {
-                $row = ['title' => $user['username'], 'link' => ['route' => 'admin/users', 'query' => ['q' => $user['username']]]];
+                $banned = $user['status'] === 'banned';
+                $row    = ['title' => $user['username'], 'link' => ['route' => 'admin/users', 'query' => ['q' => $user['username']]],
+                    'status'       => $banned ? 'Dashboard.userBanned' : 'Dashboard.userNormal',
+                    'tone'         => $banned ? 'danger' : 'success', 'icon' => $banned ? 'ban' : 'check'];
                 if ($user['created_at'] !== null) {
                     $row['time'] = Time::parse($user['created_at'], 'UTC')->format('Y-m-d\TH:i:s\Z');
                 }
                 $rows[] = $row;
             }
-            $items[] = ['id' => 'recent', 'type' => 'list', 'title' => 'Dashboard.usersRecent', 'order' => 40,
+            $items[] = ['id' => 'recent', 'type' => 'status-list', 'title' => 'Dashboard.usersRecent', 'order' => 40, 'icon' => 'users',
                 'rows'       => $rows, 'emptyLabel' => 'Dashboard.usersEmpty', 'moreLink' => ['route' => 'admin/users', 'label' => 'Dashboard.viewAll']];
         }
         if ($viewer->can('users.create')) {
