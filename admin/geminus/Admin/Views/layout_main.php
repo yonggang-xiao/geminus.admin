@@ -15,16 +15,16 @@
 <body>
     <div class="page">
         <!-- Sidebar -->
-        <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+        <aside class="navbar navbar-vertical navbar-expand-lg">
             <div class="container-fluid">
                 <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-expanded="false" aria-label="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                 </span>
-                <h1 class="navbar-brand">
-                    <a href="#">
-                        <img src="/static/logo-white.png" width="110" height="32" alt="Admin" class="navbar-brand-image" />
+                <h1 class="navbar-brand navbar-brand-autodark">
+                    <a href="<?= route_to('admin/dashboard') ?>">
+                        <img src="/static/logo.svg" width="110" height="32" alt="Admin" class="navbar-brand-image" />
                     </a>
                 </h1>
                 <div class="navbar-nav flex-row d-lg-none">

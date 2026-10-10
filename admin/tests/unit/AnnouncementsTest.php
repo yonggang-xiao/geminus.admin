@@ -911,6 +911,10 @@ final class AnnouncementsTest extends CIUnitTestCase
         $dashboard = $this->get('/en/admin/dashboard');
         $dashboard->assertOK();
         $this->assertStringContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
+        $document = new DOMDocument();
+        @$document->loadHTML($dashboard->response()->getBody());
+        $xpath = new DOMXPath($document);
+        $this->assertSame(0, $xpath->query('//div[@id="sidebar-menu"]/ul/li/hr')->length);
         $this->get('/en/admin/announcements/create')->assertOK();
         $created = $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Module-only draft', 'body' => 'Module-only body']);
         $draft   = (new AnnouncementModel())->first();
@@ -997,6 +1001,12 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->get('/en/admin/announcements/create')->assertOK();
         $dashboard = $this->get('/en/admin/dashboard');
         $this->assertStringContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
+        $document = new DOMDocument();
+        @$document->loadHTML($dashboard->response()->getBody());
+        $xpath = new DOMXPath($document);
+        $this->assertSame(1, $xpath->query('//div[@id="sidebar-menu"]/ul/li/hr')->length);
+        $this->assertSame('/en/admin/announcements', $xpath->query('//div[@id="sidebar-menu"]/ul/li[hr]/preceding-sibling::li[1]/a')->item(0)->getAttribute('href'));
+        $this->assertSame('/en/admin/users', $xpath->query('//div[@id="sidebar-menu"]/ul/li[hr]/following-sibling::li[1]/a')->item(0)->getAttribute('href'));
         $this->get('/en/admin/settings/roles?role=superadmin')->assertSee('announcements.*');
     }
 

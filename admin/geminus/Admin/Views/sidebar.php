@@ -10,14 +10,6 @@ use Geminus\Admin\Config\AdminMenu;
             <span class="nav-link-title"> <?= lang('Admin.dashboard') ?> </span>
         </a>
     </li>
-    <?php if (auth()->user()?->can('users.view') || auth()->user()?->can('users.create')): ?>
-        <li class="nav-item<?= url_is('*/admin/users*') ? ' active' : '' ?>">
-            <a class="nav-link<?= url_is('*/admin/users*') ? ' active' : '' ?>" href="<?= route_to(auth()->user()->can('users.view') ? 'admin/users' : 'admin/users/create') ?>"<?= url_is('*/admin/users*') ? ' aria-current="page"' : '' ?>>
-                <i class="ti ti-users nav-link-icon icon" aria-hidden="true"></i>
-                <span class="nav-link-title"><?= esc(lang('Admin.users')) ?></span>
-            </a>
-        </li>
-    <?php endif; ?>
     <?php foreach (config(AdminMenu::class)->items as $item): ?>
         <?php if (array_any((array) $item['permission'], static fn (string $permission): bool => auth()->user()?->can($permission) ?? false)): ?>
             <li class="nav-item<?= url_is($item['active']) ? ' active' : '' ?>">
@@ -28,6 +20,19 @@ use Geminus\Admin\Config\AdminMenu;
             </li>
         <?php endif; ?>
     <?php endforeach; ?>
+    <?php if (auth()->user()?->can('users.view') || auth()->user()?->can('users.create') || auth()->user()?->can('operation-audit.view') || auth()->user()?->can('email-deliveries.view') || auth()->user()?->can('email-templates.manage') || auth()->user()?->can('email-settings.manage') || auth()->user()?->can('microsoft-settings.manage') || auth()->user()?->inGroup('superadmin')): ?>
+        <li class="nav-item">
+            <hr class="my-2 mx-3">
+        </li>
+    <?php endif; ?>
+    <?php if (auth()->user()?->can('users.view') || auth()->user()?->can('users.create')): ?>
+        <li class="nav-item<?= url_is('*/admin/users*') ? ' active' : '' ?>">
+            <a class="nav-link<?= url_is('*/admin/users*') ? ' active' : '' ?>" href="<?= route_to(auth()->user()->can('users.view') ? 'admin/users' : 'admin/users/create') ?>"<?= url_is('*/admin/users*') ? ' aria-current="page"' : '' ?>>
+                <i class="ti ti-users nav-link-icon icon" aria-hidden="true"></i>
+                <span class="nav-link-title"><?= esc(lang('Admin.users')) ?></span>
+            </a>
+        </li>
+    <?php endif; ?>
     <?php if (auth()->user()?->can('operation-audit.view')): ?>
         <li class="nav-item<?= url_is('*/admin/audit') ? ' active' : '' ?>">
             <a class="nav-link<?= url_is('*/admin/audit') ? ' active' : '' ?>" href="<?= route_to('admin/audit') ?>"<?= url_is('*/admin/audit') ? ' aria-current="page"' : '' ?>>
