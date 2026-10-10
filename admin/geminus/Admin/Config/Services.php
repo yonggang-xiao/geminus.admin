@@ -10,6 +10,9 @@ use Config\App;
 use Config\Auth;
 use Config\Database;
 use Config\Email;
+use Geminus\Admin\Libraries\Dashboard\Dashboard as DashboardLibrary;
+use Geminus\Admin\Libraries\Dashboard\DashboardItems;
+use Geminus\Admin\Libraries\Dashboard\DashboardLinks;
 use Geminus\Admin\Libraries\DataManagement\UploadHistory as UploadHistoryLibrary;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
@@ -23,6 +26,28 @@ use Geminus\Admin\Models\NotificationModel;
 
 class Services extends BaseService
 {
+    public static function dashboard(bool $getShared = false): DashboardLibrary
+    {
+        if ($getShared) {
+            return static::getSharedInstance('dashboard');
+        }
+
+        $registrations = config(Dashboard::class)->providers;
+        DashboardLibrary::validateRegistrations($registrations);
+        $providers = [];
+
+        foreach ($registrations as $identifier => $registration) {
+            $providers[$identifier] = service($registration['service'], false);
+        }
+
+        return new DashboardLibrary(
+            $registrations,
+            $providers,
+            new DashboardItems(new DashboardLinks(service('routes'))),
+            service('logger'),
+        );
+    }
+
     public static function uploadHistory(bool $getShared = false): UploadHistoryLibrary
     {
         if ($getShared) {

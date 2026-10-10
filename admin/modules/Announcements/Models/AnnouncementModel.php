@@ -17,6 +17,17 @@ class AnnouncementModel extends Model
     protected $useTimestamps = true;
     protected $returnType    = 'array';
 
+    public function dashboardDraftCount(): int
+    {
+        return $this->visibleTo(true)->where('status', 'draft')->countAllResults();
+    }
+
+    public function dashboardRecent(bool $canManage): array
+    {
+        return $this->visibleTo($canManage)->select('id, title, created_at, published_at')
+            ->orderBy($canManage ? 'created_at' : 'published_at', 'DESC')->orderBy('id', 'DESC')->findAll(5);
+    }
+
     public function publishDraft(int $announcementId): bool
     {
         if (! $this->where('status', 'draft')->update($announcementId, ['status' => 'published', 'published_at' => Time::now('UTC')->toDateTimeString()])) {

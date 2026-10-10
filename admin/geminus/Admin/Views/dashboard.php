@@ -11,5 +11,5 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
-    <p>Hello World!</p>
+    <?= view_cell('Geminus\Admin\Cells\DashboardCell', ['sections' => $sections, 'locale' => $locale, 'timezone' => $timezone]) ?>
 <?= $this->endSection() ?>

@@ -56,6 +56,147 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertStringNotContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
     }
 
+    public function testDashboardManagerAndRevokedPermissionsDoNotShareData(): void
+    {
+        $model = new AnnouncementModel();
+        $draft = $model->insert(['title' => 'Secret dashboard draft', 'body' => 'Hidden', 'status' => 'draft']);
+        $model->insert(['title' => 'Second private draft', 'body' => 'Hidden', 'status' => 'draft']);
+        $model->insert(['title' => 'Public dashboard announcement', 'body' => 'Visible', 'status' => 'published', 'published_at' => '2026-10-10 01:02:03']);
+        $this->loginAs('admin', ['announcements.manage', 'announcements.access']);
+        $result = $this->get('/zh-Hans/admin/dashboard?status=published');
+        $result->assertOK();
+        $result->assertSee('公告草稿');
+        $result->assertSee('Secret dashboard draft');
+        $result->assertSee('Public dashboard announcement');
+        $body = $result->response()->getBody();
+        $this->assertSame('2', $this->dashboardDraftValue($body));
+        $this->assertSame(2, service('dashboard')->sections(auth()->user(), 'zh-Hans')[0]['items'][0]['value']);
+        $this->assertContains('/zh-Hans/admin/announcements/' . $draft, $this->dashboardLinks($body));
+        $this->assertContains('/zh-Hans/admin/announcements?status=draft', $this->dashboardLinks($body));
+        $this->assertContains('/zh-Hans/admin/announcements/create', $this->dashboardLinks($body));
+        $this->assertStringNotContainsString('最近发布的公告', $body);
+        $this->assertStringContainsString('private', $result->response()->getHeaderLine('Cache-Control'));
+        $this->assertStringContainsString('no-store', $result->response()->getHeaderLine('Cache-Control'));
+        $this->get('/zh-Hans/admin/announcements?status=draft')->assertSee('Secret dashboard draft');
+
+        auth()->user()->removePermission('announcements.manage');
+        $reader = $this->get('/zh-Hans/admin/dashboard');
+        $reader->assertOK();
+        $reader->assertSee('Public dashboard announcement');
+        $readerBody = $reader->response()->getBody();
+        $this->assertStringNotContainsString('Secret dashboard draft', $readerBody);
+        $this->assertStringNotContainsString('Second private draft', $readerBody);
+        $this->assertStringNotContainsString('公告草稿', $readerBody);
+        $this->assertNotContains('/zh-Hans/admin/announcements/create', $this->dashboardLinks($readerBody));
+        $this->get('/zh-Hans/admin/announcements/' . $draft)->assertStatus(404);
+        $this->get('/zh-Hans/admin/announcements/create')->assertRedirect();
+
+        auth()->user()->removePermission('announcements.access');
+        $empty = $this->get('/zh-Hans/admin/dashboard');
+        $empty->assertOK();
+        $empty->assertSee('暂无可显示的仪表盘内容。');
+        $this->assertStringNotContainsString('dashboard-announcements', $empty->response()->getBody());
+        $this->get('/zh-Hans/admin/announcements')->assertRedirect();
+    }
+
+    public function testDashboardReaderHasBoundedStablePublishedRowsAndEscapedTitles(): void
+    {
+        $model = new AnnouncementModel();
+        $model->insert(['title' => 'Never visible draft', 'body' => 'Secret', 'status' => 'draft']);
+        $identifiers = [];
+
+        for ($index = 0; $index < 7; $index++) {
+            $identifiers[] = $model->insert(['title' => $index === 6 ? '<script>alert("dashboard")</script>' : 'Published row ' . $index, 'body' => 'Visible', 'status' => 'published', 'published_at' => $index === 0 ? '2026-10-11 01:02:03' : '2026-10-10 01:02:03']);
+        }
+        $this->loginAs('admin', ['announcements.access']);
+        $user           = auth()->user();
+        $user->timezone = 'Asia/Shanghai';
+        auth()->getProvider()->save($user);
+        $sections = service('dashboard')->sections($user, 'zh-Hant');
+        $rows     = $sections[0]['items'][0]['rows'];
+        $this->assertCount(5, $rows);
+        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hant/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
+        $this->assertStringContainsString('LIMIT 5', (string) $model->db->getLastQuery());
+        $result = $this->get('/zh-Hant/admin/dashboard?status=draft');
+        $result->assertOK();
+        $result->assertSee('最近發佈的公告');
+        $result->assertSee('2026-10-10 09:02:03', 'time');
+        $body  = $result->response()->getBody();
+        $times = $this->dashboardXPath($body)->query('//time[@datetime="2026-10-10T01:02:03Z"]');
+        $this->assertCount(4, $times);
+        $this->assertSame('2026-10-10 09:02:03', trim($times->item(0)->textContent));
+        $this->assertStringContainsString('&lt;script&gt;', $body);
+        $this->assertStringNotContainsString('<script>alert("dashboard")</script>', $body);
+        $this->assertStringNotContainsString('Never visible draft', $body);
+        $this->assertStringNotContainsString('Published row 1', $body);
+        $this->assertStringNotContainsString('公告草稿', $body);
+    }
+
+    public function testDashboardManagerRecentRecordsUseCreationTimeAndBoundedQuery(): void
+    {
+        $model       = new AnnouncementModel();
+        $identifiers = [];
+
+        for ($index = 0; $index < 7; $index++) {
+            $identifiers[] = $model->insert(['title' => 'Managed row ' . $index, 'body' => 'Content', 'status' => $index === 6 ? 'draft' : 'published', 'published_at' => $index === 6 ? null : '2026-10-10 01:02:03']);
+            $model->db->table('example_announcements')->where('id', $identifiers[$index])->update(['created_at' => $index === 0 ? '2026-10-11 02:00:00' : '2026-10-10 01:02:03']);
+        }
+        $this->loginAs('admin', ['announcements.manage']);
+        $sections = service('dashboard')->sections(auth()->user(), 'zh-Hans');
+        $rows     = $sections[0]['items'][2]['rows'];
+        $this->assertCount(5, $rows);
+        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hans/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
+        $this->assertSame('2026-10-11T02:00:00Z', $rows[0]['time']);
+        $this->assertStringContainsString('LIMIT 5', (string) $model->db->getLastQuery());
+        $result = $this->get('/zh-Hans/admin/dashboard');
+        $result->assertSee('Managed row 0');
+        $result->assertSee('Managed row 6');
+        $this->assertStringNotContainsString('Managed row 1', $result->response()->getBody());
+    }
+
+    public function testDashboardZeroAndEmptyPublishedAreNormalStates(): void
+    {
+        $this->loginAs('admin', ['announcements.manage', 'announcements.access']);
+        $result = $this->get('/en/admin/dashboard');
+        $result->assertOK();
+        $this->assertSame('0', $this->dashboardDraftValue($result->response()->getBody()));
+        $this->assertSame(0, service('dashboard')->sections(auth()->user(), 'en')[0]['items'][0]['value']);
+        $result->assertSee('No announcements yet.');
+        $this->assertStringNotContainsString('Temporarily unavailable', $result->response()->getBody());
+        auth()->user()->removePermission('announcements.manage');
+        $reader = $this->get('/en/admin/dashboard');
+        $reader->assertOK();
+        $reader->assertSee('No published announcements yet.');
+        $this->assertStringNotContainsString('Draft announcements', $reader->response()->getBody());
+    }
+
+    private function dashboardLinks(string $body): array
+    {
+        $links = [];
+
+        foreach ($this->dashboardXPath($body)->query('//a[@href]') as $link) {
+            $links[] = $link->getAttribute('href');
+        }
+
+        return $links;
+    }
+
+    private function dashboardXPath(string $body): DOMXPath
+    {
+        $document = new DOMDocument();
+        @$document->loadHTML('<?xml encoding="UTF-8">' . $body);
+
+        return new DOMXPath($document);
+    }
+
+    private function dashboardDraftValue(string $body): string
+    {
+        $values = $this->dashboardXPath($body)->query('//*[@data-dashboard-item="announcements:drafts"]//*[contains(concat(" ", normalize-space(@class), " "), " h1 ")]');
+        $this->assertCount(1, $values);
+
+        return trim($values->item(0)->textContent);
+    }
+
     public function testCreateRequiresCsrf(): void
     {
         $this->loginAs('superadmin', ['announcements.manage']);

@@ -15,9 +15,16 @@ class Dashboard extends BaseController
             return redirect()->to(site_url($user->language . '/admin/dashboard'));
         }
 
+        $locale   = $this->request->getLocale();
+        $sections = service('dashboard')->sections($user, $locale);
+        $this->response->setHeader('Cache-Control', 'private, no-store');
+
         return view('Geminus\Admin\Views\dashboard', [
             'me'         => $user,
             'page_title' => lang('Admin.dashboard'),
+            'sections'   => $sections,
+            'locale'     => $locale,
+            'timezone'   => $user->timezone ?: 'UTC',
         ]);
     }
 }

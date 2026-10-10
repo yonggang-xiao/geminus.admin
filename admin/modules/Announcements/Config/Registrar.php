@@ -6,6 +6,16 @@ namespace Modules\Announcements\Config;
 
 class Registrar
 {
+    public static function Dashboard(): array
+    {
+        return ['providers' => [
+            'announcements' => [
+                'service'     => 'announcementdashboardprovider', 'label' => 'Announcements.title',
+                'permissions' => ['announcements.access', 'announcements.manage'], 'order' => 100,
+            ],
+        ]];
+    }
+
     public static function UploadHistory(): array
     {
         return ['sources' => ['announcement' => 'announcementuploadsource']];
