@@ -93,7 +93,9 @@ final class UiCellsTest extends CIUnitTestCase
         $html = view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links('items'), 'total' => $pager->getTotal('items'), 'currentPage' => $pager->getCurrentPage('items'), 'perPage' => $pager->getPerPage('items'), 'totalLabel' => 'Total']);
         $this->assertStringContainsString('Total: 45', $html);
         $this->assertStringContainsString('(21 - 40)', $html);
-        $this->assertStringContainsString('page_items=', $html);
+        $document = new DOMDocument();
+        @$document->loadHTML($html);
+        $this->assertStringContainsString('page_items=', $document->getElementsByTagName('a')->item(0)->getAttribute('href'));
         $pager = Services::pager(null, null, false);
         $pager->store('default', 1, 20, 0);
         $empty = view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'totalLabel' => 'Total']);
@@ -103,6 +105,29 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertStringContainsString('(41 - 45)', $lastPage);
         $outOfRange = view_cell('Geminus\Admin\Cells\PaginationCell', ['total' => 45, 'currentPage' => 4, 'perPage' => 20, 'totalLabel' => 'Total']);
         $this->assertStringNotContainsString('(61 -', $outOfRange);
+    }
+
+    public function testPaginationUsesTablerMarkupWithoutChangingNavigation(): void
+    {
+        foreach ([1, 6, 10] as $currentPage) {
+            $pager = Services::pager(null, null, false);
+            $pager->store('items', $currentPage, 20, 200);
+            $html     = $pager->links('items');
+            $document = new DOMDocument();
+            @$document->loadHTML($html);
+            $xpath = new DOMXPath($document);
+            $this->assertSame(0, $xpath->query('//li[not(contains(concat(" ", @class, " "), " page-item "))]')->length);
+            $this->assertSame(0, $xpath->query('//a[not(contains(concat(" ", @class, " "), " page-link "))]')->length);
+            $active = $xpath->query('//li[contains(concat(" ", @class, " "), " active ")]/a[@aria-current="page"]');
+            $this->assertSame(1, $active->length);
+            $this->assertSame((string) $currentPage, trim($active->item(0)->textContent));
+
+            foreach ($xpath->query('//a') as $link) {
+                $this->assertStringContainsString('page_items=', $link->getAttribute('href'));
+            }
+            $this->assertSame($currentPage > 3 ? 1 : 0, $xpath->query('//a[@aria-label="' . lang('Pager.first') . '"]')->length);
+            $this->assertSame($currentPage < 8 ? 1 : 0, $xpath->query('//a[@aria-label="' . lang('Pager.last') . '"]')->length);
+        }
     }
 
     public function testImportReportShowsMappedColumnsSummaryAndEscapedErrors(): void

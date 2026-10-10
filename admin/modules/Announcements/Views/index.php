@@ -72,9 +72,9 @@ use CodeIgniter\I18n\Time;
                 </tbody>
             </table>
         </div>
-    </div>
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
-        <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->only(['q', 'status', 'created_from', 'created_to', 'sort', 'direction'])->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Announcements.total')]) ?>
+        <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->only(['q', 'status', 'created_from', 'created_to', 'sort', 'direction'])->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Announcements.total')]) ?>
+        </div>
     </div>
 <?= $this->endSection() ?>
 
