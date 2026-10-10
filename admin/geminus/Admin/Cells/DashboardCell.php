@@ -24,7 +24,8 @@ class DashboardCell extends Cell
         $percentages   = new NumberFormatter($this->locale, NumberFormatter::PERCENT);
         $percentages->setAttribute(NumberFormatter::MAX_FRACTION_DIGITS, 1);
 
-        foreach ($this->sections as &$section) {
+        foreach ($this->sections as $sectionIndex => &$section) {
+            $section['color']     = ['blue', 'teal', 'orange', 'azure'][$sectionIndex % 4];
             $section['label']     = lang($section['label'], [], $this->locale);
             $section['shortcuts'] = [];
             $section['panels']    = [];
@@ -34,7 +35,7 @@ class DashboardCell extends Cell
                 if ($item['type'] === 'metric') {
                     $item['value']       = $numbers->format($item['value'], NumberFormatter::TYPE_INT64);
                     $item['description'] = lang($item['description'], [], $this->locale);
-                    $this->metrics[]     = $item + ['moduleLabel' => $section['label']];
+                    $this->metrics[]     = $item + ['moduleLabel' => $section['label'], 'moduleColor' => $section['color']];
                 }
                 if ($item['type'] === 'progress') {
                     $item['description'] = lang($item['description'], [], $this->locale);

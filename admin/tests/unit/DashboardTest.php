@@ -257,7 +257,7 @@ final class DashboardTest extends CIUnitTestCase
                 $this->assertStringContainsString('bg-green', $bars->item(0)->getAttribute('class'));
                 $this->assertSame(lang('Admin.dashboard', [], $locale), $bars->item(0)->getAttribute('aria-label'));
                 $this->assertSame($expectedCount, $bars->item(0)->getAttribute('aria-valuetext'));
-                $this->assertSame($displayPercentage, $xpath->query('//*[@data-dashboard-item="example:progress"]//span[@class="ms-auto"]')->item(0)->textContent);
+                $this->assertSame($displayPercentage, $xpath->query('//*[@data-dashboard-item="example:progress"]//span[contains(@class,"h1") and contains(@class,"ms-auto")]')->item(0)->textContent);
             }
             $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="example:progress"]//h4/i[contains(@class,"ti-check") and @aria-hidden="true"]'));
             $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="example:states"]//h4/i[contains(@class,"ti-list-check") and @aria-hidden="true"]'));
@@ -417,6 +417,8 @@ final class DashboardTest extends CIUnitTestCase
             $this->assertSame('/' . $locale . '/admin/dashboard', $metricLink->getAttribute('href'));
             $this->assertSame(lang('Dashboard.viewList', [], $locale) . ': ' . lang('Announcements.title', [], $locale) . ': ' . lang('Admin.dashboard', [], $locale), $metricLink->getAttribute('aria-label'));
             $this->assertCount(1, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]'));
+            $this->assertCount(1, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]/span[contains(@class,"invisible")]'));
+            $this->assertCount(0, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]//a | //section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]//*[@tabindex]'));
             $this->assertCount(0, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]//*[@data-dashboard-item]'));
         }
     }
@@ -439,6 +441,20 @@ final class DashboardTest extends CIUnitTestCase
         @$document->loadHTML('<?xml encoding="UTF-8">' . $html);
         $xpath = new DOMXPath($document);
         $this->assertCount(2, $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " card-sm ")]'));
+        $this->assertCount(2, $xpath->query('//*[@data-dashboard-item="mixed:count" or @data-dashboard-item="metric-only:count"]/parent::div[contains(@class,"col-lg-3")]'));
+        $this->assertCount(2, $xpath->query('//*[@data-dashboard-item="mixed:count" or @data-dashboard-item="metric-only:count"]//div[contains(@class,"h1") and contains(@class,"mb-0")]'));
+        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="mixed:count" or @data-dashboard-item="metric-only:count"]//div[contains(@class,"row")]//div[contains(@class,"h1")]'));
+        $this->assertCount(2, $xpath->query('//*[@data-dashboard-item="mixed:count" or @data-dashboard-item="metric-only:count"]//h3[contains(@class,"fw-normal")]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="mixed:count"]/div[contains(@class,"card-status-top") and contains(@class,"bg-blue") and @aria-hidden="true"]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="metric-only:count"]/div[contains(@class,"card-status-top") and contains(@class,"bg-teal") and @aria-hidden="true"]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="mixed:count"]//div[contains(@class,"h1") and contains(@class,"text-blue")]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="mixed:recent"]/div[contains(@class,"card-status-top") and contains(@class,"bg-blue")]'));
+        $this->assertCount(1, $xpath->query('//a[@data-dashboard-item="mixed:create" and contains(@class,"btn-primary")]'));
+        $this->assertCount(2, $xpath->query('//*[@data-dashboard-item="mixed:count" or @data-dashboard-item="metric-only:count"]//p[contains(@class,"small")]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="mixed:recent"]/ul[contains(@class,"card-list-group")]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="mixed:recent"]/ul[contains(@class,"list-group-hoverable")]'));
+        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="mixed:recent"]//a[contains(@class,"list-group-item-action")]'));
+        $this->assertCount(1, $xpath->query('//*[@id="dashboard-mixed" and contains(@class,"subheader")]'));
         $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="metric-only:count"]//span[contains(@class,"invisible") and @aria-hidden="true"]'));
         $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="metric-only:count"]//a | //*[@data-dashboard-item="metric-only:count"]//*[@tabindex]'));
         $this->assertCount(0, $xpath->query('//section//*[@data-dashboard-item="mixed:count"]'));
