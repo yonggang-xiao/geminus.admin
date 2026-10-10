@@ -39,12 +39,16 @@ use CodeIgniter\I18n\Time;
         </div>
     <?php endif; ?>
     <?php if ($attachments !== []): ?>
-        <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-            'attachments' => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
-            'labels'      => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
-        ]) ?>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
-            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
+        <div class="card">
+            <div class="card-body">
+                <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
+                    'attachments' => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
+                    'labels'      => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
+                ]) ?>
+            </div>
+            <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
+            </div>
         </div>
     <?php endif; ?>
 <?= $this->endSection() ?>
