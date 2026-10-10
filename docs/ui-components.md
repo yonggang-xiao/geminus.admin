@@ -70,17 +70,19 @@
 
 ### 附件区域
 
-`AttachmentsCell` 已接入公告附件页及详情页的附件区域。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。用户管理的上传记录页使用只读来源列表，显示用户在业务模块上传的文件，不调用附件上传表单组件。
+`AttachmentsCell` 已接入公告附件页及详情页的附件区域。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；启用预览时还需提供 `mime_type`。组件不执行文件读取、上传或移除。用户管理的上传记录页使用只读来源列表，显示用户在业务模块上传的文件，不调用附件上传表单组件。
 
 组件直接放在 `.card` 内，外层不包裹 `.card-body`。组件输出的上传表单自带 `.card-body` 内边距，表格使用 `.table-responsive > .table.card-table` 贴齐卡片边缘；窄屏下表格在容器内横向滚动，文件名保持单行。分页组件放在同一卡片的 `.card-footer` 内，详情页的只读附件区域沿用相同结构。
 
 - `uploadUrl`：受控 POST 上传地址；为空时不显示上传表单。
-- `downloadRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$announcementId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。
+- `downloadRoute`、`previewRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$announcementId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。预览还要求 MIME 在 `AttachmentPreview` 白名单中，否则仅保留下载。
 - `accept`、`hint`：接入模块提供的上传格式及提示；这些前端信息不代替服务端 MIME、扩展名和大小检查。
 - `error`：当前文件字段的错误；`inputId` 默认 `attachment-file`，同页多实例时需指定不同 ID。
-- `labels`：传入 `file`、`size`、`actions`、`upload`、`download`、`remove`、`empty` 的本地化文案。
+- `labels`：传入 `file`、`size`、`actions`、`upload`、`download`、`remove`、`empty` 的本地化文案；可选 `preview`，默认使用 `Admin.attachmentPreview`。
 
-上传和移除表单固定使用 POST 并包含 CSRF 字段，下载使用链接。资源存在性、附件关联和操作权限仍由业务接口检查；组件不能根据提供的路由自行推断授权。分页由外部 `PaginationCell` 组合，附件区域本身不查询记录。
+上传和移除表单固定使用 POST 并包含 CSRF 字段，下载使用链接。预览链接由共享脚本增强为页内 Modal，顶部显示文件名、下载、新标签页打开及关闭按钮，窄屏为全屏 Modal；未启用 JavaScript 或使用组合键时仍在新标签页打开。使用预览的页面通过 `section('javascript')` 在有附件记录时引入一次 `attachment_preview` partial，partial 包含共享弹窗及脚本；主布局不依赖业务数据决定资源加载。组件通过 `data-attachment-preview`、`data-preview-name`、`data-preview-download` 提供入口数据。内容仅在打开时加载，显示加载或失败状态，关闭后卸载内容并归还焦点。PDF 和 JPEG、PNG、WebP 图片由浏览器直接显示，TXT、CSV 按纯文本显示；不支持类型的预览接口返回 415。资源存在性、附件关联和操作权限仍由业务接口检查；组件不能根据提供的路由自行推断授权。分页由外部 `PaginationCell` 组合，附件区域本身不查询记录。
+
+图片入口还通过 `data-preview-mime` 传入 MIME，以 `<img>` 等比完整显示；PDF 和文本以 iframe 显示。所有内容都通过受控预览地址加载，格式支持仍取决于浏览器。
 
 ### 导入报告
 

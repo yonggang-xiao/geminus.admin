@@ -7,6 +7,7 @@ namespace Modules\Announcements\Controllers;
 use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
+use Geminus\Admin\Libraries\DataManagement\AttachmentPreview;
 use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
@@ -53,6 +54,16 @@ class AnnouncementAttachments extends BaseController
 
     public function download(int $announcementId, int $attachmentId): ResponseInterface
     {
+        return $this->fileResponse($announcementId, $attachmentId, false);
+    }
+
+    public function preview(int $announcementId, int $attachmentId): ResponseInterface
+    {
+        return $this->fileResponse($announcementId, $attachmentId, true);
+    }
+
+    private function fileResponse(int $announcementId, int $attachmentId, bool $preview): ResponseInterface
+    {
         if ((new AnnouncementModel())->visibleTo(auth()->user()->can('announcements.manage'))->find($announcementId) === null) {
             return $this->response->setStatusCode(404);
         }
@@ -63,8 +74,21 @@ class AnnouncementAttachments extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        return $this->response->download($path, null)->setFileName($attachment['original_name'])
+        $mime = AttachmentPreview::mimeType($attachment['mime_type']);
+        if ($preview && $mime === null) {
+            return $this->response->setStatusCode(415);
+        }
+
+        $response = $this->response->download($path, null)->setFileName($attachment['original_name'])
             ->setHeader('Cache-Control', 'private, no-store')->setHeader('X-Content-Type-Options', 'nosniff');
+
+        if ($preview) {
+            $response->inline()->setContentType($mime, $mime === 'text/plain' ? 'UTF-8' : '')
+                ->setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
+                ->setHeader('X-Frame-Options', 'SAMEORIGIN');
+        }
+
+        return $response;
     }
 
     public function remove(int $announcementId, int $attachmentId): RedirectResponse|ResponseInterface

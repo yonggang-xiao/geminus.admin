@@ -22,6 +22,12 @@ use CodeIgniter\I18n\Time;
     </div>
 <?= $this->endSection() ?>
 
+<?= $this->section('javascript') ?>
+    <?php if ($attachments !== []): ?>
+        <?= $this->include('Geminus\Admin\Views\attachment_preview') ?>
+    <?php endif; ?>
+<?= $this->endSection() ?>
+
 <?= $this->section('content') ?>
     <div class="row justify-content-center">
         <div class="col-lg-9 col-xl-8">
@@ -47,8 +53,9 @@ use CodeIgniter\I18n\Time;
             <?php if ($attachments !== []): ?>
                 <div class="card">
                     <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-                        'attachments' => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
-                        'labels'      => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
+                        'attachments'  => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
+                        'previewRoute' => 'admin/announcements/attachments/preview',
+                        'labels'       => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
                     ]) ?>
                     <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>

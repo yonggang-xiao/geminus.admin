@@ -133,12 +133,21 @@ final class UiCellsTest extends CIUnitTestCase
         $html   = view_cell('Geminus\Admin\Cells\AttachmentsCell', [
             'uploadUrl'     => route_to('admin/announcements/attachments/upload', 12),
             'downloadRoute' => 'admin/announcements/attachments/download', 'removeRoute' => 'admin/announcements/attachments/remove', 'routeArguments' => [12],
+            'previewRoute'  => 'admin/announcements/attachments/preview',
             'labels'        => $labels, 'accept' => '.pdf', 'hint' => 'PDF only', 'error' => '<Invalid file>',
-            'attachments'   => [['id' => 34, 'original_name' => '<script>.pdf', 'size_bytes' => 2048]],
+            'attachments'   => [['id' => 34, 'original_name' => '<script>.pdf', 'size_bytes' => 2048, 'mime_type' => 'application/pdf']],
         ]);
         $this->assertSame(2, substr_count($html, 'method="post"'));
         $this->assertSame(2, substr_count($html, 'name="' . csrf_token() . '"'));
         $this->assertStringContainsString('href="' . route_to('admin/announcements/attachments/download', 12, 34) . '"', $html);
+        $this->assertStringContainsString('href="' . route_to('admin/announcements/attachments/preview', 12, 34) . '" target="_blank" rel="noopener noreferrer"', $html);
+        $this->assertStringContainsString('aria-label="' . lang('Admin.attachmentPreview') . '"', $html);
+        $document = new DOMDocument();
+        @$document->loadHTML($html);
+        $preview = (new DOMXPath($document))->query('//a[@data-attachment-preview]')->item(0);
+        $this->assertSame('<script>.pdf', $preview->getAttribute('data-preview-name'));
+        $this->assertSame('application/pdf', $preview->getAttribute('data-preview-mime'));
+        $this->assertSame(route_to('admin/announcements/attachments/download', 12, 34), $preview->getAttribute('data-preview-download'));
         $this->assertStringContainsString('action="' . route_to('admin/announcements/attachments/remove', 12, 34) . '"', $html);
         $this->assertStringContainsString('enctype="multipart/form-data"', $html);
         $this->assertStringContainsString('aria-describedby="attachment-file-hint attachment-file-error"', $html);
@@ -150,5 +159,34 @@ final class UiCellsTest extends CIUnitTestCase
         $empty = view_cell('Geminus\Admin\Cells\AttachmentsCell', ['labels' => $labels]);
         $this->assertStringContainsString('Empty', $empty);
         $this->assertStringNotContainsString('file.pdf', $empty);
+    }
+
+    public function testAttachmentPreviewModalHasAccessibleControlsAndNoEagerFrame(): void
+    {
+        $html     = view('Geminus\Admin\Views\attachment_preview');
+        $document = new DOMDocument();
+        @$document->loadHTML($html);
+        $xpath = new DOMXPath($document);
+        $this->assertSame(1, $xpath->query('//*[@id="attachment-preview" and @aria-labelledby="attachment-preview-title"]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-preview-open and @target="_blank" and @rel="noopener noreferrer"]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-preview-download]')->length);
+        $this->assertSame(1, $xpath->query('//button[@data-bs-dismiss="modal" and @aria-label]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-preview-loading and @role="status"]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-preview-error and @role="alert"]')->length);
+        $this->assertSame(0, $xpath->query('//iframe')->length);
+        $this->assertStringContainsString('modal-fullscreen-sm-down', $html);
+    }
+
+    public function testAttachmentsHidePreviewForUnsupportedOrMissingMime(): void
+    {
+        foreach (['text/html', 'image/svg+xml', 'application/octet-stream', ''] as $mime) {
+            $html = view_cell('Geminus\Admin\Cells\AttachmentsCell', [
+                'previewRoute' => 'admin/announcements/attachments/preview', 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [12],
+                'labels'       => ['file' => 'File', 'size' => 'Size', 'actions' => 'Actions', 'download' => 'Download', 'empty' => 'Empty'],
+                'attachments'  => [['id' => 34, 'original_name' => 'file.pdf', 'size_bytes' => 2048, 'mime_type' => $mime]],
+            ]);
+            $this->assertStringNotContainsString('/preview', $html);
+            $this->assertStringContainsString('ti-download', $html);
+        }
     }
 }

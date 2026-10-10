@@ -1,6 +1,7 @@
 <?php
 
 use CodeIgniter\I18n\Time;
+use Geminus\Admin\Libraries\DataManagement\AttachmentPreview;
 
 ?><?= $this->extend('Geminus\Admin\Views\layout_main') ?>
 
@@ -31,7 +32,12 @@ use CodeIgniter\I18n\Time;
                             <td class="text-break" data-label="<?= esc(lang('Admin.attachmentRecord'), 'attr') ?>"><a href="<?= esc(route_to($attachment['source']['recordRoute'], ...$attachment['source']['recordArguments'])) ?>"><?= esc($attachment['source']['title']) ?></a></td>
                             <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentSize'), 'attr') ?>"><?= esc(number_format($attachment['size_bytes'] / 1024, 1)) ?> KB</td>
                             <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentUploadedAt'), 'attr') ?>"><?= esc($me->formatDateTime(Time::parse($attachment['created_at'], 'UTC'))) ?></td>
-                            <td class="text-end" data-label="<?= esc(lang('Admin.userActions'), 'attr') ?>"><span class="d-inline-flex"><a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc(route_to($attachment['source']['downloadRoute'], ...[...$attachment['source']['downloadArguments'], $attachment['id']])) ?>" aria-label="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a></span></td>
+                            <td class="text-end" data-label="<?= esc(lang('Admin.userActions'), 'attr') ?>"><div class="btn-list justify-content-end flex-nowrap">
+                                <?php if (! empty($attachment['source']['previewRoute']) && AttachmentPreview::mimeType($attachment['mime_type']) !== null): ?>
+                                    <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc(route_to($attachment['source']['previewRoute'], ...[...$attachment['source']['downloadArguments'], $attachment['id']])) ?>" target="_blank" rel="noopener noreferrer" data-attachment-preview data-preview-name="<?= esc($attachment['original_name'], 'attr') ?>" data-preview-mime="<?= esc($attachment['mime_type'], 'attr') ?>" data-preview-download="<?= esc(route_to($attachment['source']['downloadRoute'], ...[...$attachment['source']['downloadArguments'], $attachment['id']]), 'attr') ?>" aria-label="<?= esc(lang('Admin.attachmentPreview'), 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></a>
+                                <?php endif; ?>
+                                <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc(route_to($attachment['source']['downloadRoute'], ...[...$attachment['source']['downloadArguments'], $attachment['id']])) ?>" aria-label="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a>
+                            </div></td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if ($attachments === []): ?>
@@ -44,4 +50,10 @@ use CodeIgniter\I18n\Time;
             <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.uploadHistory')]) ?>
         </div>
     </div>
+<?= $this->endSection() ?>
+
+<?= $this->section('javascript') ?>
+    <?php if ($attachments !== []): ?>
+        <?= $this->include('Geminus\Admin\Views\attachment_preview') ?>
+    <?php endif; ?>
 <?= $this->endSection() ?>

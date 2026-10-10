@@ -64,7 +64,11 @@ $rows = $model->paginate($query->perPage);
 
 `Attachments` 负责附件文件和 `admin_attachments` 元数据，按 `resource_type`、`resource_id` 关联业务资源。默认支持 PDF、TXT、CSV、JPEG、PNG 和 WebP，最大 10 MB，同时核对扩展名对应的实际 MIME，原始文件名去除路径及危险字符，存储名随机生成。
 
-业务先验证资源存在和权限，再调用 `upload()`、`find()`、`remove()`。`find()` 和 `remove()` 必须同时提供资源类型、资源 ID、附件 ID；下载需通过 `path()` 获取受控路径。文件上传后元数据保存失败会清理新文件；移除先删除关联再清理文件，清理失败写日志，附件仍不可经业务接口下载。资源生命周期的批量清理和每行业务事务由接入模块负责。
+业务先验证资源存在和权限，再调用 `upload()`、`find()`、`remove()`。`find()` 和 `remove()` 必须同时提供资源类型、资源 ID、附件 ID；下载及预览需通过 `path()` 获取受控路径。文件上传后元数据保存失败会清理新文件；移除先删除关联再清理文件，清理失败写日志，附件仍不可经业务接口下载或预览。资源生命周期的批量清理和每行业务事务由接入模块负责。
+
+`AttachmentPreview::mimeType()` 定义浏览器预览白名单：PDF、JPEG、PNG、WebP 保留对应 MIME；TXT、CSV（包括检测为 `application/vnd.ms-excel` 的 CSV）使用 `text/plain`。公告预览接口 `{locale}/admin/announcements/{announcementId}/attachments/{attachmentId}/preview` 与下载复用权限、公告可见性及资源关联检查，流式返回 `inline` 响应，带私有禁止存储缓存、`nosniff` 和限制性 CSP；`frame-ancestors 'self'` 与 `X-Frame-Options: SAMEORIGIN` 仅允许同源页面嵌入。不支持的 MIME 返回 415，资源不可见、关联不匹配或文件缺失返回 404。公告详情、附件管理及用户上传记录提供页内 Modal 预览，保留下载和新标签页打开入口，原下载仍为附件响应。PDF 显示依赖浏览器内置 PDF 查看器，CSV 不执行公式或转换为表格。
+
+上传记录来源的 `describe()` 可提供可选的 `previewRoute` 命名路由，复用 `downloadArguments` 并由页面追加附件 ID；未提供路由或 MIME 不支持时隐藏预览。来源模块负责预览接口的授权，底座不增加通用文件读取接口。
 
 用户列表按目标账号的查看授权显示上传记录入口，具备查看权限时用户编辑页也显示快捷入口；上传记录页返回用户列表，不依赖用户编辑页面。只读分页列表位于 `{locale}/admin/users/{userId}/attachments`，按 `uploaded_by = userId` 查询，按附件 ID 降序排列，每页 20 条。显示文件名、大小、所属业务、关联记录和上传时间，提供原业务记录及附件下载入口；分页总数仅包含当前查看者可见的记录，无记录时显示相应空态。查看需要 `users.view`；目标属于 `admin` 角色时还需要 `users.manage-admins`，非超级管理员不能访问其他 `superadmin` 账号的上传记录。目标用户不存在或无目标访问权限时返回 404。
 

@@ -4,6 +4,7 @@ $routes->group('{locale}/admin/announcements', ['namespace' => 'Modules\Announce
     $routes->get('', 'Announcements::index', ['as' => 'admin/announcements']);
     $routes->get('(:num)', 'Announcements::show/$1', ['as' => 'admin/announcements/show']);
     $routes->get('(:num)/attachments/(:num)', 'AnnouncementAttachments::download/$1/$2', ['as' => 'admin/announcements/attachments/download']);
+    $routes->get('(:num)/attachments/(:num)/preview', 'AnnouncementAttachments::preview/$1/$2', ['as' => 'admin/announcements/attachments/preview']);
 });
 
 $routes->group('{locale}/admin/announcements', ['namespace' => 'Modules\Announcements\Controllers', 'filter' => 'permission:announcements.manage'], static function ($routes) {

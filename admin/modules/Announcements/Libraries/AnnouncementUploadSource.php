@@ -36,6 +36,7 @@ class AnnouncementUploadSource implements UploadSource
                 'recordRoute'       => 'admin/announcements/show',
                 'recordArguments'   => [$announcement['id']],
                 'downloadRoute'     => 'admin/announcements/attachments/download',
+                'previewRoute'      => 'admin/announcements/attachments/preview',
                 'downloadArguments' => [$announcement['id']],
             ];
         }

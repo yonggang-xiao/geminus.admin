@@ -326,6 +326,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             }
             $this->get($route)->assertRedirect();
             $this->get($route . '/1')->assertRedirect();
+            $this->get($route . '/1/preview')->assertRedirect();
             $this->post($route, [csrf_token() => csrf_hash()])->assertRedirect();
             $this->post($route . '/1/remove', [csrf_token() => csrf_hash()])->assertRedirect();
         }
@@ -333,6 +334,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->loginAs('superadmin', ['announcements.manage']);
         $this->get($route)->assertStatus(404);
         $this->get($route . '/1')->assertStatus(404);
+        $this->get($route . '/1/preview')->assertStatus(404);
         $this->post($route, [csrf_token() => csrf_hash()])->assertStatus(404);
         $this->post($route . '/1/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
     }
@@ -394,8 +396,12 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
             $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
             $this->assertStringContainsString('action="' . $route . '/' . $attachment['id'] . '/remove"', $page->response()->getBody());
+            $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '/preview"', $page->response()->getBody());
+            $this->assertSame(1, substr_count($page->response()->getBody(), 'id="attachment-preview"'));
+            $this->assertSame(1, substr_count($page->response()->getBody(), 'src="/static/js/attachment-preview.js"'));
             $otherRoute = '/en/admin/announcements/' . $other . '/attachments';
             $this->get($otherRoute . '/' . $attachment['id'])->assertStatus(404);
+            $this->get($otherRoute . '/' . $attachment['id'] . '/preview')->assertStatus(404);
             $this->post($otherRoute . '/' . $attachment['id'] . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
             $this->assertFileExists($storedPath);
             $otherPage = $this->get($otherRoute);
@@ -407,12 +413,29 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->assertStringContainsString('attachment;', $download->response()->getHeaderLine('Content-Disposition'));
             $this->assertStringContainsString('private', $download->response()->getHeaderLine('Cache-Control'));
             $this->assertSame('nosniff', $download->response()->getHeaderLine('X-Content-Type-Options'));
+            $preview = $this->get($route . '/' . $attachment['id'] . '/preview');
+            $preview->assertStatus(200);
+            $this->assertInstanceOf(DownloadResponse::class, $preview->response());
+            $preview->response()->buildHeaders();
+            $this->assertStringStartsWith('inline;', $preview->response()->getHeaderLine('Content-Disposition'));
+            $this->assertSame('text/plain; charset=UTF-8', $preview->response()->getHeaderLine('Content-Type'));
+            $this->assertStringContainsString('private', $preview->response()->getHeaderLine('Cache-Control'));
+            $this->assertStringContainsString('no-store', $preview->response()->getHeaderLine('Cache-Control'));
+            $this->assertSame('nosniff', $preview->response()->getHeaderLine('X-Content-Type-Options'));
+            $this->assertStringContainsString("default-src 'none'", $preview->response()->getHeaderLine('Content-Security-Policy'));
+            $this->assertStringContainsString("style-src 'unsafe-inline'", $preview->response()->getHeaderLine('Content-Security-Policy'));
+            $this->assertStringContainsString("frame-ancestors 'self'", $preview->response()->getHeaderLine('Content-Security-Policy'));
+            $this->assertSame('SAMEORIGIN', $preview->response()->getHeaderLine('X-Frame-Options'));
+            ob_start();
+            $preview->response()->sendBody();
+            $this->assertSame('private announcement attachment', ob_get_clean());
             $manager = auth()->user();
             auth()->logout();
             $this->loginAs('admin', ['announcements.access']);
             $reader = auth()->user();
             $this->get('/en/admin/announcements/' . $owner)->assertStatus(404);
             $this->get($route . '/' . $attachment['id'])->assertStatus(404);
+            $this->get($route . '/' . $attachment['id'] . '/preview')->assertStatus(404);
             auth()->logout();
             auth()->login($manager);
             $this->post('/en/admin/announcements/' . $owner . '/publish', [csrf_token() => csrf_hash()])->assertRedirect();
@@ -424,10 +447,14 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->assertStringContainsString('&lt;script&gt;.txt', $detail->response()->getBody());
             $this->assertStringNotContainsString('<script>.txt', $detail->response()->getBody());
             $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '"', $detail->response()->getBody());
+            $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '/preview"', $detail->response()->getBody());
+            $this->assertSame(1, substr_count($detail->response()->getBody(), 'id="attachment-preview"'));
+            $this->assertSame(1, substr_count($detail->response()->getBody(), 'src="/static/js/attachment-preview.js"'));
             $this->assertStringNotContainsString('type="file"', $detail->response()->getBody());
             $this->assertStringNotContainsString('/remove"', $detail->response()->getBody());
             $readerDownload = $this->get($route . '/' . $attachment['id']);
             $readerDownload->assertStatus(200);
+            $this->get($route . '/' . $attachment['id'] . '/preview')->assertStatus(200);
             $this->assertInstanceOf(DownloadResponse::class, $readerDownload->response());
             $this->get($otherRoute . '/' . $attachment['id'])->assertStatus(404);
             $this->post($route . '/' . $attachment['id'] . '/remove', [csrf_token() => csrf_hash()])->assertRedirect();
@@ -443,16 +470,73 @@ final class AnnouncementsTest extends CIUnitTestCase
             $model->update($owner, ['status' => 'draft', 'published_at' => null]);
             $this->get('/en/admin/announcements/' . $owner)->assertOK();
             $this->get($route . '/' . $attachment['id'])->assertStatus(200);
+            $this->get($route . '/' . $attachment['id'] . '/preview')->assertStatus(200);
             auth()->logout();
             auth()->login($manager);
             $this->post($route . '/' . $attachment['id'] . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
             $this->assertFileDoesNotExist($storedPath);
             $this->assertNull((new AttachmentModel())->find($attachment['id']));
+            $emptyBody = $this->get('/en/admin/announcements/' . $owner)->response()->getBody();
+            $this->assertStringNotContainsString('id="attachment-preview"', $emptyBody);
+            $this->assertStringNotContainsString('src="/static/js/attachment-preview.js"', $emptyBody);
             $this->get($route . '/' . $attachment['id'])->assertStatus(404);
+            $this->get($route . '/' . $attachment['id'] . '/preview')->assertStatus(404);
         } finally {
             unlink($source);
             if ($storedPath !== null && is_file($storedPath)) {
                 unlink($storedPath);
+            }
+        }
+    }
+
+    public function testAttachmentPreviewTypesAndMissingFiles(): void
+    {
+        $this->loginAs('superadmin', ['announcements.manage']);
+        $owner     = (int) (new AnnouncementModel())->insert(['title' => 'Preview types', 'body' => 'Body']);
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0770, true);
+        }
+        $filename = bin2hex(random_bytes(16)) . '.txt';
+        file_put_contents($directory . $filename, 'preview content');
+        $model        = new AttachmentModel();
+        $attachmentId = (int) $model->insert([
+            'resource_type' => 'announcement', 'resource_id' => $owner, 'filename' => $filename,
+            'original_name' => 'preview.txt', 'mime_type' => 'text/plain', 'size_bytes' => 15, 'uploaded_by' => auth()->id(),
+        ]);
+        $route = '/en/admin/announcements/' . $owner . '/attachments/' . $attachmentId;
+
+        try {
+            foreach ([
+                'application/pdf'          => 'application/pdf',
+                'image/jpeg'               => 'image/jpeg', 'image/png' => 'image/png', 'image/webp' => 'image/webp',
+                'text/plain'               => 'text/plain; charset=UTF-8', 'text/csv' => 'text/plain; charset=UTF-8',
+                'application/vnd.ms-excel' => 'text/plain; charset=UTF-8',
+                'text/html'                => null, 'image/svg+xml' => null, 'application/octet-stream' => null,
+            ] as $mime => $expected) {
+                $model->update($attachmentId, ['mime_type' => $mime]);
+                $preview = $this->get($route . '/preview');
+                $preview->assertStatus($expected === null ? 415 : 200);
+                if ($expected !== null) {
+                    $preview->response()->buildHeaders();
+                    $this->assertSame($expected, $preview->response()->getHeaderLine('Content-Type'));
+                    $this->assertStringStartsWith('inline;', $preview->response()->getHeaderLine('Content-Disposition'));
+                    $this->assertStringContainsString('filename="preview.txt"', $preview->response()->getHeaderLine('Content-Disposition'));
+                    $this->assertSame('15', $preview->response()->getHeaderLine('Content-Length'));
+                } else {
+                    $download = $this->get($route);
+                    $download->assertStatus(200);
+                    $download->response()->buildHeaders();
+                    $this->assertStringStartsWith('attachment;', $download->response()->getHeaderLine('Content-Disposition'));
+                    $this->assertSame('application/octet-stream', $download->response()->getHeaderLine('Content-Type'));
+                }
+            }
+            unlink($directory . $filename);
+            $this->get($route . '/preview')->assertStatus(404);
+            $this->get($route)->assertStatus(404);
+        } finally {
+            if (is_file($directory . $filename)) {
+                unlink($directory . $filename);
             }
         }
     }
@@ -470,6 +554,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $page  = $this->get($route);
         $page->assertDontSee('user-only.txt');
         $this->get($route . '/' . $attachment)->assertStatus(404);
+        $this->get($route . '/' . $attachment . '/preview')->assertStatus(404);
         $this->post($route . '/' . $attachment . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
         $this->assertNotNull((new AttachmentModel())->find($attachment));
     }

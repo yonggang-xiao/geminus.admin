@@ -564,6 +564,8 @@ final class UsersTest extends CIUnitTestCase
         $page->assertOK();
         $body = $page->response()->getBody();
         $this->assertStringContainsString('Upload history: 21 (1 - 20)', $body);
+        $this->assertSame(1, substr_count($body, 'id="attachment-preview"'));
+        $this->assertSame(1, substr_count($body, 'src="/static/js/attachment-preview.js"'));
         $page->assertSee('Announcements', 'td');
         $this->assertStringContainsString('visible-21.txt', $body);
         $this->assertStringNotContainsString('visible-1.txt', $body);
@@ -575,9 +577,14 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('&lt;b&gt;Published record&lt;/b&gt;', $body);
         $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '"', $body);
         $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '"', $body);
+        $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '/preview" target="_blank" rel="noopener noreferrer"', $body);
         $document = new DOMDocument();
         @$document->loadHTML($body);
-        $xpath = new DOMXPath($document);
+        $xpath   = new DOMXPath($document);
+        $preview = $xpath->query('//a[@data-attachment-preview]')->item(0);
+        $this->assertSame('visible-21.txt', $preview->getAttribute('data-preview-name'));
+        $this->assertSame('text/plain', $preview->getAttribute('data-preview-mime'));
+        $this->assertSame('/en/admin/announcements/' . $published . '/attachments/' . $ids[20], $preview->getAttribute('data-preview-download'));
         $this->assertSame(0, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " page-body ")]//form')->length);
         $this->assertStringContainsString('private, no-store', $page->response()->getHeaderLine('Cache-Control'));
         $result = service('uploadhistory')->paginate((int) $target->id, auth()->user());
