@@ -40,6 +40,16 @@
 
 管理列表右上角突出新建，导入和导出收进“CSV 工具”下拉菜单；标题进入详情，行操作提供编辑。创建后不强制上传附件，管理者可从详情的附件区域按需进入管理页，再返回详情。没有数据时管理者可新建，读者只看到已发布公告空态；筛选无结果时可清除筛选。筛选栏与表格沿用 Admin 用户列表的同一卡片组合；管理者增加状态字段，普通读者不显示管理字段。日期控件按需加载 Tabler 日历资源，提交 `YYYY-MM-DD`；筛选边界为 UTC 日期，显示时间按当前用户时区转换。
 
+### 发布事件与通知中心
+
+通知中心属于后台底座 `Geminus\Admin`，公告只是通知来源之一。通用发送接口、存储、权限及已读行为见[通知中心](notifications.md)，公告模块只负责发布事件和业务接收人筛选。
+
+[`AnnouncementPublication`](../admin/modules/Announcements/Libraries/AnnouncementPublication.php) 使用数据库条件更新完成首次发布，成功后触发 `Events::trigger('announcements.published', $announcementId, $publisherId)`，事件参数依次为公告 ID 和本次发布操作者 ID。操作者由控制器从当前登录用户取得，显式传入发布服务和事件，不从请求字段或监听器中的当前会话推断。草稿保存、CSV 导入、已发布公告编辑和重复发布不会触发该事件。当前发布操作是单条数据库更新；若未来改为显式事务，应在最外层事务提交成功后触发事件。
+
+模块的 [`Config/Events.php`](../admin/modules/Announcements/Config/Events.php) 由 CI 自动发现，监听事件并调用 [`AnnouncementNotifications`](../admin/modules/Announcements/Libraries/AnnouncementNotifications.php)。监听器向发布时未删除且具有 `announcements.access` 或 `announcements.manage` 的用户发送通知，但排除本次发布操作者；其他管理员仍正常接收。发布者通过页面的发布成功提示获得操作反馈，不接收自己触发的发布通知。这一接收人规则由公告模块负责，Admin 通知中心不判断操作者或公告业务。项目未启用注册激活流程，接收人不以 Shield 的 `active` 字段筛选。没有逐用户回填历史公告；之后新获授权的用户仍可从公告列表阅读内容。通知以接收人、来源和业务编号唯一，重复投递不会再次生成通知，也不会恢复已读。
+
+CI Events 同步执行。通知监听异常记录到错误日志，不撤销已发布状态，也不把发布响应改为失败；通知投递是尽力而为，不保证故障后的自动重试或完整投递。若需要可靠投递或耗时通知，应另行使用事务 outbox 或队列，而不是把事件等同于消息队列。
+
 ### CSV
 
 `/import` 是独立导入页，提供 `/template` 模板下载。表头必须严格为 `title,body`；CSV 最大 1 MB、最多 500 条数据，服务端检查实际 MIME 和扩展名。通用执行器完成列映射及字段校验，模块处理器每行插入公告；无效行或保存失败记入报告，其他行继续处理，不是整文件原子导入。报告显示行号、标题、结果及字段错误，不显示异常细节。

@@ -7,7 +7,6 @@ namespace Modules\Announcements\Controllers;
 use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
-use CodeIgniter\I18n\Time;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\CsvImport;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
@@ -127,7 +126,10 @@ class Announcements extends BaseController
         if ($announcement === null) {
             return $this->response->setStatusCode(404);
         }
-        if ($announcement['status'] === 'draft' && ! $model->where('status', 'draft')->update($announcementId, ['status' => 'published', 'published_at' => Time::now('UTC')->toDateTimeString()])) {
+
+        try {
+            service('announcementpublication')->publish($announcementId, (int) auth()->user()->id);
+        } catch (RuntimeException $exception) {
             return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
         }
 
