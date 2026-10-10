@@ -251,6 +251,15 @@ final class RoleSettingsTest extends CIUnitTestCase
             $catalog->assertOK();
             $catalog->assertSee('邮件发送设置');
             TableLayoutAssertions::assertTablesInCards($catalog->response()->getBody());
+            $document = new DOMDocument();
+            @$document->loadHTML($catalog->response()->getBody());
+            $buttons = (new DOMXPath($document))->query('//a[contains(@class, "btn-icon")]');
+            $this->assertGreaterThan(0, $buttons->length);
+
+            foreach ($buttons as $button) {
+                $this->assertSame('', $button->getAttribute('title'));
+                $this->assertNotSame('', $button->getAttribute('aria-label'));
+            }
         } finally {
             setting('AuthGroups.permissions', $original);
         }

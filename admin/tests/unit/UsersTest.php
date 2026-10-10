@@ -941,6 +941,17 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('Your account', $body);
         $this->assertStringContainsString('Protected account', $body);
         $this->assertStringContainsString('Enabled', $body);
+        $this->assertStringContainsString('class="form-label required" for="user-file"', $body);
+        $this->assertStringContainsString('id="user-csv-hint" class="form-hint"', $body);
+        $document = new DOMDocument();
+        @$document->loadHTML($body);
+        $buttons = (new DOMXPath($document))->query('//table//a[contains(@class, "btn-icon")] | //table//button[contains(@class, "btn-icon") and not(@data-bs-toggle)]');
+        $this->assertGreaterThan(0, $buttons->length);
+
+        foreach ($buttons as $button) {
+            $this->assertSame('', $button->getAttribute('title'));
+            $this->assertNotSame('', $button->getAttribute('aria-label'));
+        }
 
         $empty = $this->get('/en/admin/users?q=no-such-user');
         $empty->assertOK();
@@ -1251,7 +1262,9 @@ final class UsersTest extends CIUnitTestCase
         $form->assertOK();
         $this->assertStringContainsString('name="username"', $form->response()->getBody());
         $this->assertStringContainsString('aria-describedby="user-username-hint"', $form->response()->getBody());
-        $this->assertStringContainsString('id="user-username-hint" class="form-text">' . lang('Admin.usernameHint'), $form->response()->getBody());
+        $this->assertStringContainsString('id="user-username-hint" class="form-hint">' . lang('Admin.usernameHint'), $form->response()->getBody());
+        $this->assertStringContainsString('class="form-label required" for="user-role"', $form->response()->getBody());
+        $this->assertStringContainsString('class="form-label required" for="user-status"', $form->response()->getBody());
         $this->assertStringContainsString('name="email"', $form->response()->getBody());
         model(UserIdentityModel::class)->create([
             'user_id' => $user->id,
@@ -1389,7 +1402,7 @@ final class UsersTest extends CIUnitTestCase
         $form = $this->get('/en/admin/users/create');
         $form->assertOK();
         $this->assertStringContainsString('aria-describedby="new-username-hint"', $form->response()->getBody());
-        $this->assertStringContainsString('id="new-username-hint" class="form-text">' . lang('Admin.usernameHint'), $form->response()->getBody());
+        $this->assertStringContainsString('id="new-username-hint" class="form-hint">' . lang('Admin.usernameHint'), $form->response()->getBody());
         $this->post('/en/admin/users/create', [csrf_token() => csrf_hash(), 'username' => 'createduser', 'email' => 'created@example.com'])->assertRedirect();
         $user = auth()->getProvider()->findByCredentials(['email' => 'created@example.com']);
         $this->assertNotNull($user);

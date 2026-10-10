@@ -17,19 +17,19 @@
                             <input class="form-check-input" type="checkbox" name="enabled" value="1"<?= (string) old('enabled', $microsoft['MicrosoftOAuth.enabled']) === '1' ? ' checked' : '' ?> aria-describedby="microsoft-enabled-hint">
                             <span class="form-check-label"><?= esc(lang('Admin.microsoftEnabled')) ?></span>
                         </label>
-                        <div id="microsoft-enabled-hint" class="form-text"><?= esc(lang('Admin.microsoftEnabledHint')) ?></div>
+                        <div id="microsoft-enabled-hint" class="form-hint"><?= esc(lang('Admin.microsoftEnabledHint')) ?></div>
                         <?php if (session('microsoft_errors.enabled')): ?><div class="text-danger small"><?= esc(session('microsoft_errors.enabled')) ?></div><?php endif; ?>
                     </div>
                     <?php foreach (['tenant' => 'microsoftTenant', 'clientId' => 'microsoftClientId'] as $field => $label): ?>
                         <div class="mb-3">
                             <label class="form-label required" for="microsoft-<?= esc($field) ?>"><?= esc(lang('Admin.' . $label)) ?></label>
                             <input id="microsoft-<?= esc($field) ?>" name="<?= esc($field) ?>" type="text" class="form-control<?= session('microsoft_errors.' . $field) ? ' is-invalid' : '' ?>" value="<?= esc(old($field, $microsoft['MicrosoftOAuth.' . $field])) ?>" maxlength="36" required aria-describedby="microsoft-<?= esc($field) ?>-hint">
-                            <div id="microsoft-<?= esc($field) ?>-hint" class="form-text"><?= esc(lang('Admin.' . $label . 'Hint')) ?></div>
+                            <div id="microsoft-<?= esc($field) ?>-hint" class="form-hint"><?= esc(lang('Admin.' . $label . 'Hint')) ?></div>
                             <?php if (session('microsoft_errors.' . $field)): ?><div class="invalid-feedback d-block"><?= esc(session('microsoft_errors.' . $field)) ?></div><?php endif; ?>
                         </div>
                     <?php endforeach; ?>
-                    <p class="form-text mb-0"><?= esc(lang('Admin.microsoftSecretHint')) ?></p>
-                    <p class="form-text mb-0"><?= esc(lang('Admin.microsoftPendingHint')) ?></p>
+                    <p class="form-hint mb-0"><?= esc(lang('Admin.microsoftSecretHint')) ?></p>
+                    <p class="form-hint mb-0"><?= esc(lang('Admin.microsoftPendingHint')) ?></p>
                 </div>
                 <div class="card-footer"><button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveMicrosoftSettings')) ?></button></div>
             </form>
@@ -49,17 +49,17 @@
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/approve', $request['id']) ?>" class="d-flex flex-wrap gap-2 align-items-center">
                                         <?= csrf_field() ?>
                                         <label class="visually-hidden" for="microsoft-request-<?= esc($request['id']) ?>"><?= esc(lang('Admin.microsoftTargetUser')) ?></label>
-                                        <select id="microsoft-request-<?= esc($request['id']) ?>" name="user_id" class="form-select w-auto" required>
+                                        <select id="microsoft-request-<?= esc($request['id']) ?>" name="user_id" class="form-select form-select-sm w-auto mw-100" required>
                                             <option value=""><?= esc(lang('Admin.microsoftTargetUser')) ?></option>
                                             <?php foreach ($candidates as $candidate): ?>
                                                 <option value="<?= esc($candidate->id) ?>"><?= esc($candidate->username . ' (' . $candidate->email . ')') ?></option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <button type="submit" class="btn btn-primary" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><i class="ti ti-check me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftApprove')) ?></button>
+                                        <button type="submit" class="btn btn-primary btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftApprove'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><i class="ti ti-check" aria-hidden="true"></i></button>
                                     </form>
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/reject', $request['id']) ?>" class="mt-2">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="ti ti-x me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftReject')) ?></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftReject'), 'attr') ?>"><i class="ti ti-x" aria-hidden="true"></i></button>
                                     </form>
                                 </td>
                             </tr>
@@ -83,7 +83,7 @@
                                 <td class="text-end">
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/revoke', $binding['user']->id) ?>">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><i class="ti ti-unlink me-1" aria-hidden="true"></i><?= esc(lang('Admin.microsoftRevoke')) ?></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftRevoke'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><i class="ti ti-unlink" aria-hidden="true"></i></button>
                                     </form>
                                 </td>
                             </tr>

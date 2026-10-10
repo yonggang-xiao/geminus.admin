@@ -63,11 +63,11 @@
                                     <?php elseif ($editStates[$user->id] === 'protected'): ?>
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
                                     <?php elseif ($me->can('users.edit')): ?>
-                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.editUser'), 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
                                         <?php if (! $user->isBanned() && $user->email && setting('Auth.allowMagicLinkLogins')): ?>
                                             <form method="post" action="<?= route_to('admin/users/invite', $user->id) ?>">
                                                 <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" aria-label="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.userInvite'), 'attr') ?>"><i class="ti ti-mail-forward" aria-hidden="true"></i></button>
+                                                <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" aria-label="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-mail-forward" aria-hidden="true"></i></button>
                                             </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
@@ -118,9 +118,9 @@
         <?= csrf_field() ?>
         <div class="card-header"><h3 class="card-title"><?= esc(lang('Admin.importUsers')) ?></h3></div>
         <div class="card-body">
-            <label class="form-label" for="user-file"><?= esc(lang('Admin.userCsvFile')) ?></label>
+            <label class="form-label required" for="user-file"><?= esc(lang('Admin.userCsvFile')) ?></label>
             <input class="form-control" type="file" id="user-file" name="file" accept=".csv,text/csv" required aria-describedby="user-csv-hint">
-            <div id="user-csv-hint" class="form-text"><?= esc(lang('Admin.userCsvHint')) ?></div>
+            <div id="user-csv-hint" class="form-hint"><?= esc(lang('Admin.userCsvHint')) ?></div>
         </div>
         <div class="card-footer"><button type="submit" class="btn btn-primary"><i class="ti ti-file-import me-1" aria-hidden="true"></i><?= esc(lang('Admin.importUsers')) ?></button></div>
     </form>

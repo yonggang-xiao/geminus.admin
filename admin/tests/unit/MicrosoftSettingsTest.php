@@ -850,6 +850,19 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $page = $this->get('/en/admin/settings/microsoft');
         $page->assertOK();
         TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), expectedTables: 2);
+        $document = new DOMDocument();
+        @$document->loadHTML($page->response()->getBody());
+        $buttons = (new DOMXPath($document))->query('//table//button[@type="submit"]');
+        $this->assertCount(3, $buttons);
+
+        foreach ($buttons as $button) {
+            $classes = explode(' ', $button->getAttribute('class'));
+            $this->assertContains('btn-sm', $classes);
+            $this->assertContains('btn-icon', $classes);
+            $this->assertNotSame('', $button->getAttribute('aria-label'));
+            $this->assertSame('', $button->getAttribute('title'));
+            $this->assertSame('', trim($button->textContent));
+        }
         $this->assertStringContainsString('/users/' . auth()->id() . '/revoke', $page->response()->getBody());
         $this->assertStringNotContainsString('/users/' . $target->id . '/revoke', $page->response()->getBody());
 

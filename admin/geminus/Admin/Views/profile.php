@@ -24,7 +24,7 @@
                                     <label class="form-label required" for="profile-avatar"><?= esc(lang('Admin.chooseAvatar')) ?></label>
                                     <input id="profile-avatar" type="file" name="avatar" class="form-control<?= session('avatar_errors.avatar') ? ' is-invalid' : '' ?>" accept="image/jpeg,image/png,image/webp" aria-describedby="avatar-hint" required>
                                     <?php if (session('avatar_errors.avatar')): ?><div class="invalid-feedback"><?= esc(session('avatar_errors.avatar')) ?></div><?php endif; ?>
-                                    <div id="avatar-hint" class="form-text"><?= esc(lang('Admin.avatarHint')) ?></div>
+                                    <div id="avatar-hint" class="form-hint"><?= esc(lang('Admin.avatarHint')) ?></div>
                                     <button type="submit" class="btn btn-outline-primary mt-2"><i class="ti ti-upload me-1" aria-hidden="true"></i><?= esc(lang('Admin.uploadAvatar')) ?></button>
                                 </form>
                                 <?php if ($me->avatar): ?>
@@ -42,7 +42,7 @@
                             <label class="form-label required" for="profile-username"><?= esc(lang('Admin.username')) ?></label>
                             <input id="profile-username" name="username" class="form-control<?= session('profile_errors.username') ? ' is-invalid' : '' ?>" value="<?= esc(old('username', $me->username)) ?>" required maxlength="30" aria-describedby="profile-username-hint">
                             <?php if (session('profile_errors.username')): ?><div class="invalid-feedback"><?= esc(session('profile_errors.username')) ?></div><?php endif; ?>
-                            <div id="profile-username-hint" class="form-text"><?= esc(lang('Admin.usernameHint')) ?></div>
+                            <div id="profile-username-hint" class="form-hint"><?= esc(lang('Admin.usernameHint')) ?></div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="profile-email"><?= esc(lang('Admin.email')) ?></label>
@@ -84,7 +84,7 @@
                                     <label class="form-label required" for="<?= esc($field) ?>"><?= esc(lang('Admin.' . $label)) ?></label>
                                     <input id="<?= esc($field) ?>" type="password" name="<?= esc($field) ?>" class="form-control<?= session('password_errors.' . $field) ? ' is-invalid' : '' ?>" required autocomplete="<?= $field === 'current_password' ? 'current-password' : 'new-password' ?>"<?= $field === 'new_password' ? ' aria-describedby="new-password-hint"' : '' ?>>
                                     <?php if (session('password_errors.' . $field)): ?><div class="invalid-feedback"><?= esc(session('password_errors.' . $field)) ?></div><?php endif; ?>
-                                    <?php if ($field === 'new_password'): ?><div id="new-password-hint" class="form-text"><?= esc(lang('Admin.passwordHint', [$minimumPasswordLength])) ?></div><?php endif; ?>
+                                    <?php if ($field === 'new_password'): ?><div id="new-password-hint" class="form-hint"><?= esc(lang('Admin.passwordHint', [$minimumPasswordLength])) ?></div><?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
                             <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.savePassword')) ?></button>
@@ -143,7 +143,7 @@
                                     <td class="text-end">
                                         <form method="post" action="<?= route_to('admin/profile/tokens/revoke', $token->id) ?>">
                                             <?= csrf_field() ?>
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><i class="ti ti-trash me-1" aria-hidden="true"></i><?= esc(lang('Admin.revokeToken')) ?></button>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.revokeToken'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><i class="ti ti-trash" aria-hidden="true"></i></button>
                                         </form>
                                     </td>
                                 </tr>

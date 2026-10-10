@@ -98,7 +98,7 @@ Dropdowns, modals, offcanvas, tooltips, popovers, toasts, tabs and collapse use 
 
 - Reach for a Tabler component before writing custom CSS. Spacing, colour and typography come from Bootstrap utilities (`mb-3`, `text-secondary`, `fw-bold`).
 - Wrap groups of buttons, badges, avatars or tags in `.btn-list`, `.badge-list`, `.avatar-list` or `.tag-list` instead of adding margins by hand.
-- Forms use `.form-label`, `.form-control`, `.form-select`, `.form-check` and `.form-hint`, the same as Bootstrap.
+- Forms use `.form-label`, `.form-control`, `.form-select` and `.form-check`. Use Tabler's `.form-hint` for helper text, not Bootstrap's `.form-text`; give each hint a unique `id` and associate it with the control through `aria-describedby`. Keep field validation errors in `.invalid-feedback`.
 - Tables use `.table` inside `.table-responsive`, often with `.card-table` when they fill a card.
 - Keep markup accessible: real `<button>` elements, labels on inputs, `aria-label` on icon-only buttons.
 - The live demo at https://preview.tabler.io shows every layout and component in use. When unsure how pieces fit together, look at the matching demo page.

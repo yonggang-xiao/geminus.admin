@@ -414,6 +414,18 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->assertStringContainsString('&lt;script&gt;Title&lt;/script&gt;', $page->response()->getBody());
             $this->assertStringNotContainsString('<script>Title</script>', $page->response()->getBody());
             $this->assertStringNotContainsString('Admin.user', $page->response()->getBody());
+            $document = new DOMDocument();
+            @$document->loadHTML($page->response()->getBody());
+            $xpath = new DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//form[@enctype="multipart/form-data" and contains(concat(" ", normalize-space(@class), " "), " card ")]/div[@class="card-body"]//input[@id="announcement-csv" and @required and @aria-describedby="announcement-csv-hint"]')->length);
+            $this->assertSame(1, $xpath->query('//form[@enctype="multipart/form-data"]/div[@class="card-footer"]/button[@type="submit"]')->length);
+            $this->assertSame(1, $xpath->query('//label[@for="announcement-csv" and contains(concat(" ", normalize-space(@class), " "), " required ")]')->length);
+            $this->assertSame(1, $xpath->query('//*[@id="announcement-csv-hint" and @class="form-hint"]')->length);
+            $this->assertSame(1, $xpath->query('//form[@enctype="multipart/form-data"]//input[@name="' . csrf_token() . '"]')->length);
+            $invalid = $this->withSession(['errors' => ['file' => 'Invalid CSV']])->get('/en/admin/announcements/import');
+            $invalid->assertOK();
+            $this->assertStringContainsString('aria-describedby="announcement-csv-hint announcement-csv-error" aria-invalid="true"', $invalid->response()->getBody());
+            $this->assertStringContainsString('id="announcement-csv-error" class="invalid-feedback">Invalid CSV', $invalid->response()->getBody());
         } finally {
             unlink($source);
         }

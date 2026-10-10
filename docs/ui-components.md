@@ -17,6 +17,10 @@
 
 纯模板片段继续使用视图 `include()`；页面布局、业务表格行及页面操作保持在所属模块，不为静态标记创建 Cell。
 
+### 表单提示约定
+
+表单辅助提示统一使用 Tabler 的 `.form-hint`，不混用 Bootstrap 的 `.form-text`。提示元素设置唯一 `id`，通过控件的 `aria-describedby` 关联；字段校验错误继续使用 `.invalid-feedback`，不以辅助提示替代。
+
 ### 头像与时区
 
 `AvatarCell` 提供用户头像与尺寸展示，已用于个人中心和用户菜单。`TimezoneSelectorCell` 提供时区选项、选中状态及校验样式，已用于个人中心。

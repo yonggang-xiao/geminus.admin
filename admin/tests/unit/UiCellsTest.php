@@ -63,6 +63,7 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertStringContainsString('aria-invalid="true"', $html);
         $this->assertStringContainsString('aria-describedby="expires-hint expires-error"', $html);
         $this->assertStringContainsString('invalid-feedback d-block', $html);
+        $this->assertStringContainsString('class="form-hint" id="expires-hint">UTC', $html);
         $this->assertStringContainsString('&lt;Invalid&gt;', $html);
         $this->assertStringContainsString('data-bs-date-max="2027-10-09"', $html);
         $this->assertMatchesRegularExpression('/<input\b[^>]*\srequired[\s>]/', $html);
@@ -205,6 +206,7 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertStringContainsString('action="' . route_to('admin/announcements/attachments/remove', 12, 34) . '"', $html);
         $this->assertStringContainsString('enctype="multipart/form-data"', $html);
         $this->assertStringContainsString('aria-describedby="attachment-file-hint attachment-file-error"', $html);
+        $this->assertStringContainsString('class="form-hint" id="attachment-file-hint">PDF only', $html);
         $this->assertStringContainsString('&lt;Invalid file&gt;', $html);
         $this->assertStringContainsString('&lt;script&gt;.pdf', $html);
         TableLayoutAssertions::assertTablesInCards('<div class="card">' . $html . '</div>');

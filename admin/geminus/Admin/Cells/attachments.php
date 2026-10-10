@@ -6,7 +6,7 @@
             <div class="col-12 col-md">
                 <input type="file" name="file" id="<?= esc($inputId) ?>" class="form-control<?= $error !== '' ? ' is-invalid' : '' ?>" accept="<?= esc($accept) ?>" required aria-describedby="<?= esc($inputId) ?>-hint<?= $error !== '' ? ' ' . esc($inputId) . '-error' : '' ?>"<?= $error !== '' ? ' aria-invalid="true"' : '' ?>>
                 <?php if ($error !== ''): ?><div class="invalid-feedback" id="<?= esc($inputId) ?>-error"><?= esc($error) ?></div><?php endif; ?>
-                <div class="form-text" id="<?= esc($inputId) ?>-hint"><?= esc($hint) ?></div>
+                <div class="form-hint" id="<?= esc($inputId) ?>-hint"><?= esc($hint) ?></div>
             </div>
             <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary"><i class="ti ti-upload me-1" aria-hidden="true"></i><?= esc($labels['upload']) ?></button></div>
         </div>

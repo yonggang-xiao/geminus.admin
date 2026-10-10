@@ -108,7 +108,7 @@ final class ProfileAccessTest extends CIUnitTestCase
             $this->assertStringContainsString('class="form-label required" for="' . $inputId . '"', $result->response()->getBody());
         }
         $this->assertStringContainsString('aria-describedby="profile-username-hint"', $result->response()->getBody());
-        $this->assertStringContainsString('id="profile-username-hint" class="form-text">' . lang('Admin.usernameHint'), $result->response()->getBody());
+        $this->assertStringContainsString('id="profile-username-hint" class="form-hint">' . lang('Admin.usernameHint'), $result->response()->getBody());
         $this->assertStringContainsString('id="profile-timezone" name="timezone" class="form-select" required', $result->response()->getBody());
         $this->assertStringContainsString('class="form-label" for="profile-email"', $result->response()->getBody());
         $result->assertSee('JPEG, PNG or WebP, up to 2 MB.');
@@ -716,6 +716,15 @@ final class ProfileAccessTest extends CIUnitTestCase
         $result->assertSee(lang('Admin.tokenOnce'));
         TableLayoutAssertions::assertTablesInCards($result->response()->getBody());
         $result->assertSee($rawToken);
+        $document = new DOMDocument();
+        @$document->loadHTML($result->response()->getBody());
+        $buttons = (new DOMXPath($document))->query('//table//button[@type="submit"]');
+        $this->assertCount(1, $buttons);
+        $button = $buttons->item(0);
+        $this->assertContains('btn-icon', explode(' ', $button->getAttribute('class')));
+        $this->assertContains('btn-sm', explode(' ', $button->getAttribute('class')));
+        $this->assertSame(lang('Admin.revokeToken'), $button->getAttribute('aria-label'));
+        $this->assertSame('', trim($button->textContent));
 
         $result = $this->post('/en/admin/profile/tokens/' . $tokens[0]->id . '/revoke', [
             csrf_token() => csrf_hash(),

@@ -51,7 +51,7 @@
                                 <?php if (session('email_errors.SMTPCrypto')): ?><div class="invalid-feedback"><?= esc(session('email_errors.SMTPCrypto')) ?></div><?php endif; ?>
                             </div>
                         </div>
-                        <p class="form-text mb-0"><?= esc(lang('Admin.smtpPasswordHint')) ?></p>
+                        <p class="form-hint mb-0"><?= esc(lang('Admin.smtpPasswordHint')) ?></p>
                     </div>
                 </div>
                 <div class="card-footer"><button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1" aria-hidden="true"></i><?= esc(lang('Admin.saveEmailSettings')) ?></button></div>

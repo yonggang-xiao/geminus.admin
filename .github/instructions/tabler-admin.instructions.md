@@ -97,7 +97,7 @@ applyTo: 'admin/app/Views/**/*.php, admin/geminus/**/Views/**/*.php, admin/gemin
 
 - 优先渐进增强：表单保留可用的 `action`、`method` 和原生提交路径，在需要就地反馈时再由 JS 接管；接入 [Geminus.js](https://github.com/yonggang-xiao/geminus.js) 后，后台 AJAX 表单和操作优先使用其 `submitForm()`、`ajaxRequest()`。接入前核对 CSRF token 更新、JSON 响应契约及 HTTP 方法支持，不要假设该库已在项目中加载。
 - 表单包含 `csrf_field()`；使用 `old('field')` 复显输入，动态输出使用 `esc()`；字段错误展示在对应控件下方，必要时在顶部汇总。
-- 输入提示使用 Tabler 的 `.form-text` 并用 `aria-describedby` 关联控件；文件选择表单设置 `enctype="multipart/form-data"`，提示允许的格式和大小，预览复用现有 Avatar Cell。
+- 输入提示统一使用 Tabler 的 `.form-hint`，不混用 Bootstrap 的 `.form-text`；提示元素设置唯一 `id`，通过控件的 `aria-describedby` 关联。文件选择表单设置 `enctype="multipart/form-data"`，提示允许的格式和大小，预览复用现有 Avatar Cell。
 - 编辑表单按数据域分组；复杂流程分段，避免将长表单塞进弹窗。
 
 ```php

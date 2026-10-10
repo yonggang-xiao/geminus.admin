@@ -36,7 +36,7 @@
                                         <tr<?= $editingPermission === $permission ? ' class="table-active"' : '' ?>>
                                             <td class="text-nowrap"><?= esc($permission) ?></td>
                                             <td class="text-secondary"><?= esc($description) ?></td>
-                                            <td class="text-end"><a class="btn btn-outline-secondary btn-icon btn-sm" href="<?= route_to('admin/settings/roles') . '?view=permissions&role=' . rawurlencode($selectedRole) . '&permission=' . rawurlencode($permission) ?>" title="<?= esc(lang('Admin.editPermission'), 'attr') ?>" aria-label="<?= esc(lang('Admin.editPermission') . ': ' . $permission, 'attr') ?>"><i class="ti ti-pencil" aria-hidden="true"></i></a></td>
+                                            <td class="text-end"><a class="btn btn-outline-secondary btn-icon btn-sm" href="<?= route_to('admin/settings/roles') . '?view=permissions&role=' . rawurlencode($selectedRole) . '&permission=' . rawurlencode($permission) ?>" aria-label="<?= esc(lang('Admin.editPermission') . ': ' . $permission, 'attr') ?>"><i class="ti ti-pencil" aria-hidden="true"></i></a></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php endforeach; ?>
@@ -55,10 +55,10 @@
                             <?php if ($editingPermission === null): ?>
                                 <input id="permission-name" name="name" class="form-control<?= session('permission_errors.name') ? ' is-invalid' : '' ?>" value="<?= esc(old('name')) ?>" maxlength="80" pattern="[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*" required aria-describedby="permission-name-hint">
                                 <?php if (session('permission_errors.name')): ?><div class="invalid-feedback"><?= esc(session('permission_errors.name')) ?></div><?php endif; ?>
-                                <div id="permission-name-hint" class="form-text"><?= esc(lang('Admin.permissionKeyHint')) ?></div>
+                                <div id="permission-name-hint" class="form-hint"><?= esc(lang('Admin.permissionKeyHint')) ?></div>
                             <?php else: ?>
                                 <input id="permission-name" class="form-control" value="<?= esc($editingPermission, 'attr') ?>" readonly aria-describedby="permission-name-hint">
-                                <div id="permission-name-hint" class="form-text"><?= esc(lang('Admin.permissionKeyImmutable')) ?></div>
+                                <div id="permission-name-hint" class="form-hint"><?= esc(lang('Admin.permissionKeyImmutable')) ?></div>
                             <?php endif; ?>
                         </div>
                         <label class="form-label required" for="permission-description"><?= esc(lang('Admin.permissionDescription')) ?></label>
@@ -77,7 +77,7 @@
             <div class="col-12 col-lg-3">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                     <h3 class="mb-0"><?= esc(lang('Admin.userRole')) ?></h3>
-                    <a class="btn btn-outline-primary btn-icon" href="<?= route_to('admin/settings/roles') . '?view=new-role&role=' . rawurlencode($selectedRole) ?>" title="<?= esc(lang('Admin.createRole'), 'attr') ?>" aria-label="<?= esc(lang('Admin.createRole'), 'attr') ?>"><i class="ti ti-plus" aria-hidden="true"></i></a>
+                    <a class="btn btn-outline-primary btn-icon" href="<?= route_to('admin/settings/roles') . '?view=new-role&role=' . rawurlencode($selectedRole) ?>" aria-label="<?= esc(lang('Admin.createRole'), 'attr') ?>"><i class="ti ti-plus" aria-hidden="true"></i></a>
                 </div>
                 <nav class="list-group role-settings-nav" aria-label="<?= esc(lang('Admin.userRole'), 'attr') ?>">
                     <?php foreach ($groups as $name => $group): ?>
@@ -118,7 +118,7 @@
                             <div class="mb-3">
                                 <label class="form-label" for="role-name"><?= esc(lang('Admin.roleKey')) ?></label>
                                 <input id="role-name" class="form-control" value="<?= esc($selectedRole, 'attr') ?>" readonly aria-describedby="role-name-hint">
-                                <div id="role-name-hint" class="form-text"><?= esc(lang('Admin.roleKeyImmutable')) ?></div>
+                                <div id="role-name-hint" class="form-hint"><?= esc(lang('Admin.roleKeyImmutable')) ?></div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label required" for="role-title"><?= esc(lang('Admin.roleTitle')) ?></label>
@@ -136,7 +136,7 @@
                     </form>
                 <?php else: ?>
                     <?php if ($protectedRole): ?><div class="card"><?php else: ?><form class="card" method="post" action="<?= route_to('admin/settings/roles/permissions', $selectedRole) ?>" data-role-permissions><?= csrf_field() ?><?php endif; ?>
-                        <div class="card-header"><h3 class="card-title"><?= esc($groups[$selectedRole]['title']) ?> <span class="text-secondary small ms-2"><?= esc($selectedRole) ?></span></h3><a class="btn btn-outline-secondary btn-icon btn-sm ms-auto" href="<?= route_to('admin/settings/roles') . '?view=edit-role&role=' . rawurlencode($selectedRole) ?>" title="<?= esc(lang('Admin.editRole'), 'attr') ?>" aria-label="<?= esc(lang('Admin.editRole') . ': ' . $selectedRole, 'attr') ?>"><i class="ti ti-pencil" aria-hidden="true"></i></a></div>
+                        <div class="card-header"><h3 class="card-title"><?= esc($groups[$selectedRole]['title']) ?> <span class="text-secondary small ms-2"><?= esc($selectedRole) ?></span></h3><a class="btn btn-outline-secondary btn-icon btn-sm ms-auto" href="<?= route_to('admin/settings/roles') . '?view=edit-role&role=' . rawurlencode($selectedRole) ?>" aria-label="<?= esc(lang('Admin.editRole') . ': ' . $selectedRole, 'attr') ?>"><i class="ti ti-pencil" aria-hidden="true"></i></a></div>
                         <div class="card-body">
                             <?php if ($groups[$selectedRole]['description'] !== ''): ?><p class="text-secondary mb-4"><?= esc($groups[$selectedRole]['description']) ?></p><?php endif; ?>
                             <?php if ($protectedRole): ?>
