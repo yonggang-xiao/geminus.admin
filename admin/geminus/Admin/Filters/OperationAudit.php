@@ -7,18 +7,66 @@ namespace Geminus\Admin\Filters;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
+use Geminus\Admin\Config\OperationAudit as AuditConfig;
+use Geminus\Admin\Libraries\AuditSubmission;
+use stdClass;
 use Throwable;
 
 class OperationAudit implements FilterInterface
 {
     private array $flashBefore      = [];
     private array $flashStateBefore = [];
+    private array $submission       = [];
 
     public function before(RequestInterface $request, $arguments = null)
     {
+        $this->submission = [];
         if ($this->isAdminWrite($request)) {
             $this->flashBefore      = session()->getFlashdata();
             $this->flashStateBefore = session()->get('__ci_vars') ?? [];
+
+            try {
+                $collector  = new AuditSubmission(config(AuditConfig::class)->operations);
+                $router     = service('router');
+                $controller = $router->controllerName();
+                $definition = is_string($controller) ? $collector->match($controller, $router->methodName(), $request->getMethod()) : null;
+                if ($definition !== null) {
+                    $input = strtoupper($request->getMethod()) === 'POST' ? $request->getPost() : $request->getRawInput();
+                    if (preg_match('~\Aapplication/(?:[a-z0-9.-]+\+)?json(?:\s*;|\z)~i', $request->getHeaderLine('Content-Type'))) {
+                        try {
+                            $input = $request->getJSON(false, 512, JSON_THROW_ON_ERROR);
+                            $input = $input instanceof stdClass ? get_object_vars($input) : null;
+                        } catch (Throwable) {
+                            $input = null;
+                        }
+                    }
+                    if ($input !== null) {
+                        foreach ($definition['fields'] as $field) {
+                            if (! str_contains($field, '.')) {
+                                continue;
+                            }
+                            unset($input[$field]);
+                            [$fileField, $attribute] = explode('.', $field, 2);
+                            if (strtoupper($request->getMethod()) !== 'POST'
+                                || ! preg_match('~\Amultipart/form-data(?:\s*;|\z)~i', $request->getHeaderLine('Content-Type'))) {
+                                continue;
+                            }
+                            $file = $request->getFile($fileField);
+                            if ($file === null || $file->getError() !== UPLOAD_ERR_OK) {
+                                continue;
+                            }
+                            $input[$field] = match ($attribute) {
+                                'name' => basename(str_replace('\\', '/', $file->getClientName())),
+                                'size' => $file->getSize(),
+                                'type' => $file->getClientMimeType(),
+                            };
+                        }
+                    }
+                    $this->submission = $collector->capture($definition, $input, $router->params());
+                }
+            } catch (Throwable) {
+                log_message('error', 'Operation audit submission capture failed.');
+            }
         }
     }
 
@@ -58,7 +106,7 @@ class OperationAudit implements FilterInterface
         }
 
         try {
-            db_connect()->table('operation_audit_logs')->insert([
+            db_connect()->table('operation_audit_logs')->insert(array_replace([
                 'actor_id'    => $user->id,
                 'action'      => $method,
                 'target_type' => mb_substr($targetType, 0, 64),
@@ -68,7 +116,7 @@ class OperationAudit implements FilterInterface
                 'ip_address'  => $request->getIPAddress(),
                 'user_agent'  => mb_substr(preg_replace('/[\x00-\x1F\x7F]/', '', mb_scrub($request->getHeaderLine('User-Agent'), 'UTF-8')), 0, 512) ?: null,
                 'created_at'  => gmdate('Y-m-d H:i:s'),
-            ]);
+            ], $this->submission));
         } catch (Throwable $exception) {
             log_message('error', 'Operation audit failed: {exception}', ['exception' => $exception]);
         }

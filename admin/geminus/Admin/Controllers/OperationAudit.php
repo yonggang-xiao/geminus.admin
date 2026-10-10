@@ -66,13 +66,44 @@ class OperationAudit extends BaseController
             $query->join('users AS target_user', "CAST(target_user.id AS TEXT) = logs.target_id AND logs.target_type = 'users'", 'left', false)
                 ->orderBy('logs.target_type', $direction)
                 ->orderBy('COALESCE(target_user.username::text, logs.target_id)', $direction, false);
+        } elseif ($sort === 'action') {
+            $query->orderBy('COALESCE(logs.operation, logs.action)', $direction, false);
         } else {
             $query->orderBy($sort === 'actor' ? 'actor.username' : 'logs.' . $sort, $direction);
         }
         $rows = $query->orderBy('logs.id', 'DESC')->limit(20, ($page - 1) * 20)->get()->getResultArray();
 
         foreach ($rows as &$row) {
-            $row['created_at'] = new DateTimeImmutable($row['created_at'], new DateTimeZone('UTC'));
+            $row['created_at']         = new DateTimeImmutable($row['created_at'], new DateTimeZone('UTC'));
+            $row['submission_display'] = null;
+            if ($row['submission'] !== null) {
+                $summary                   = json_decode($row['submission'], true, flags: JSON_THROW_ON_ERROR);
+                $row['submission_display'] = ['fields' => [], 'notes' => []];
+                if (! is_array($summary) || ! is_array($summary['fields'] ?? null)
+                                         || ! is_array($summary['omitted'] ?? null) || ! is_array($summary['truncated'] ?? null)) {
+                    $row['submission_display']['notes'][] = lang('Admin.auditInvalidInput');
+
+                    continue;
+                }
+
+                foreach ($summary['fields'] ?? [] as $field => $value) {
+                    $row['submission_display']['fields'][$field] = is_string($value) ? $value : json_encode($value, JSON_THROW_ON_ERROR);
+                }
+
+                foreach ($summary['omitted'] ?? [] as $field => $reason) {
+                    $row['submission_display']['notes'][] = $field . ': ' . lang('Admin.auditOmitted');
+                }
+
+                foreach ($summary['truncated'] ?? [] as $field) {
+                    $row['submission_display']['notes'][] = $field . ': ' . lang('Admin.auditTruncated');
+                }
+                if (isset($summary['input'])) {
+                    $row['submission_display']['notes'][] = lang('Admin.auditInvalidInput');
+                }
+                if ($summary['limited'] ?? false) {
+                    $row['submission_display']['notes'][] = lang('Admin.auditLimited');
+                }
+            }
         }
         unset($row);
 

@@ -2,12 +2,19 @@
 
 declare(strict_types=1);
 
+use CodeIgniter\HTTP\Files\UploadedFile;
+use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\RequestInterface;
+use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
+use Config\Services;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Filters\OperationAudit;
+use Geminus\Admin\Models\AttachmentModel;
+use Modules\Announcements\Controllers\AnnouncementAttachments;
+use Modules\Announcements\Models\AnnouncementModel;
 use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
@@ -24,6 +31,416 @@ final class OperationAuditTest extends CIUnitTestCase
     {
         auth()->logout();
         parent::tearDown();
+    }
+
+    public function testConfiguredModulesCaptureOnlyDeclaredSubmissionFields(): void
+    {
+        $user        = new AdminUser(['username' => 'auditmodules']);
+        $user->email = 'auditmodules@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+
+        $this->post('/zh-Hans/admin/profile/language', [csrf_token() => csrf_hash(), 'language' => 'zh-Hans', 'password' => 'private-password'])->assertRedirect();
+        $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Audit example', 'body' => 'private-body', 'actor_id' => 999])->assertRedirect();
+        $announcement = (new AnnouncementModel())->first();
+        $this->post('/zh-Hant/admin/announcements/' . $announcement['id'] . '/edit', [csrf_token() => csrf_hash(), 'title' => '<script>alert("audit")</script>', 'body' => 'private-body'])->assertRedirect();
+
+        $logs = db_connect()->table('operation_audit_logs')->orderBy('id')->get()->getResultArray();
+        $this->assertSame(['profile.language', 'announcement.create', 'announcement.update'], array_column($logs, 'operation'));
+        $this->assertSame(['profile', 'announcement', 'announcement'], array_column($logs, 'target_type'));
+        $this->assertNull($logs[1]['target_id']);
+        $this->assertSame((string) $announcement['id'], $logs[2]['target_id']);
+        $this->assertSame(['language' => 'zh-Hans'], json_decode($logs[0]['submission'], true)['fields']);
+        $this->assertSame(['title' => 'Audit example'], json_decode($logs[1]['submission'], true)['fields']);
+        $this->assertStringNotContainsString('private-', json_encode($logs));
+        $this->assertSame((int) $user->id, (int) $logs[1]['actor_id']);
+
+        $page = $this->get('/zh-Hans/admin/audit');
+        $page->assertOK();
+        $page->assertSee('announcement.update');
+        $page->assertSee('提交内容');
+        $this->assertStringNotContainsString('<script>alert("audit")</script>', $page->response()->getBody());
+        $this->assertStringContainsString('&lt;script&gt;', $page->response()->getBody());
+
+        $this->post('/en/admin/announcements/' . $announcement['id'] . '/publish', [csrf_token() => csrf_hash()])->assertRedirect();
+        $published = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+        $this->assertNull($published['operation']);
+        $this->assertSame((string) $announcement['id'], $published['target_id']);
+        $this->assertNull($published['submission']);
+
+        $this->post('/en/admin/profile/language', [csrf_token() => csrf_hash(), 'language' => 'invalid'])->assertRedirect();
+        $failed = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+        $this->assertSame('failed', $failed['result']);
+        $this->assertSame(['language' => 'invalid'], json_decode($failed['submission'], true)['fields']);
+        $this->assertSame('zh-Hans', $users->findById($user->id)->language);
+    }
+
+    public function testAttachmentUploadCapturesMetadataWithoutContentOrStoragePath(): void
+    {
+        $user        = new AdminUser(['username' => 'auditattachment']);
+        $user->email = 'auditattachment@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+        $owner  = (int) (new AnnouncementModel())->insert(['title' => 'Attachment audit', 'body' => 'Body']);
+        $route  = '/en/admin/announcements/' . $owner . '/attachments';
+        $source = tempnam(sys_get_temp_dir(), 'audit-upload-');
+        file_put_contents($source, 'private-file-content');
+        $storedPath = null;
+
+        try {
+            foreach ([
+                ['<script>.txt', 'success', UPLOAD_ERR_OK],
+                ['rejected.exe', 'failed', UPLOAD_ERR_OK],
+                ['unselected.txt', 'failed', UPLOAD_ERR_NO_FILE],
+                ['oversized.txt', 'failed', UPLOAD_ERR_INI_SIZE],
+            ] as [$name, $expectedResult, $uploadError]) {
+                session()->remove(['alert', 'attachment_errors']);
+                $flashState = session()->get('__ci_vars') ?? [];
+                unset($flashState['alert'], $flashState['attachment_errors']);
+                session()->set('__ci_vars', $flashState);
+                $file = $this->getMockBuilder(UploadedFile::class)
+                    ->setConstructorArgs([$source, $name, 'text/client-declared', filesize($source), $uploadError])
+                    ->onlyMethods(['isValid', 'move'])->getMock();
+                $file->method('isValid')->willReturn($uploadError === UPLOAD_ERR_OK);
+                if ($expectedResult === 'success') {
+                    $file->expects($this->once())->method('move')->willReturnCallback(static function (string $directory, ?string $filename) use ($source, &$storedPath): bool {
+                        $storedPath = $directory . '/' . $filename;
+
+                        return copy($source, $storedPath);
+                    });
+                } else {
+                    $file->expects($this->never())->method('move');
+                }
+                $base    = $this->setupRequest('POST', $route);
+                $request = $this->getMockBuilder(IncomingRequest::class)
+                    ->setConstructorArgs([config('App'), $base->getUri(), null, new UserAgent()])
+                    ->onlyMethods(['getFile'])->getMock();
+                $request->setMethod('POST');
+                $request->setHeader('Content-Type', 'multipart/form-data; boundary=audit-test');
+                $request->expects($this->exactly(4))->method('getFile')->with('file')->willReturn($file);
+                $routes = service('routes');
+                $routes->loadRoutes();
+                $router = Services::router($routes, $request, false);
+                $router->handle(ltrim($route, '/'));
+                Services::injectMock('router', $router);
+                $audit = new OperationAudit();
+                $audit->before($request);
+                $controller = new AnnouncementAttachments();
+                $controller->initController($request, Services::response(null, false), service('logger'));
+                $response = $controller->upload($owner);
+                $audit->after($request, $response);
+                $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+                $this->assertSame('announcement.attachment.upload', $log['operation']);
+                $this->assertSame('announcements', $log['target_type']);
+                $this->assertSame((string) $owner, $log['target_id']);
+                $this->assertSame($expectedResult, $log['result']);
+                $fields = json_decode($log['submission'], true)['fields'];
+                ksort($fields);
+                $this->assertSame($uploadError === UPLOAD_ERR_OK ? ['file.name' => $name, 'file.size' => strlen('private-file-content'), 'file.type' => 'text/client-declared'] : [], $fields);
+                $this->assertStringNotContainsString('private-file-content', $log['submission']);
+                $this->assertStringNotContainsString($source, $log['submission']);
+                $this->assertStringNotContainsString($storedPath, $log['submission']);
+                $request->setHeader('Content-Type', 'application/json');
+                $request->setBody('{"file.name":"forged","file.size":999,"file.type":"forged"}');
+                $audit->before($request);
+                $audit->after($request, Services::response(null, false)->setStatusCode(400));
+                $forged        = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+                $forgedSummary = json_decode($forged['submission'], true, flags: JSON_THROW_ON_ERROR);
+                $this->assertSame([], $forgedSummary['fields']);
+                $this->assertArrayNotHasKey('input', $forgedSummary);
+            }
+            $this->assertSame(1, (new AttachmentModel())->countAllResults());
+            $page = $this->get('/en/admin/audit');
+            $page->assertOK();
+            $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
+            $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
+            $this->post($route, [csrf_token() => csrf_hash(), 'file.name' => 'forged', 'file.size' => 999, 'file.type' => 'forged'])->assertRedirect();
+            $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $this->assertSame('failed', $log['result']);
+            $this->assertSame([], json_decode($log['submission'], true)['fields']);
+        } finally {
+            unlink($source);
+            if ($storedPath !== null && is_file($storedPath)) {
+                unlink($storedPath);
+            }
+        }
+    }
+
+    public function testAdminBuiltInWritesCaptureOnlySafeNonEmptyFields(): void
+    {
+        foreach (config(Geminus\Admin\Config\OperationAudit::class)->operations as $definition) {
+            [$controller, $method] = explode('::', $definition['controller']);
+            $this->assertTrue(method_exists($controller, $method));
+        }
+        $users        = auth()->getProvider();
+        $actor        = new AdminUser(['username' => 'auditadmin']);
+        $actor->email = 'auditadmin@example.com';
+        $actor->setPassword('A-local-password-123!');
+        $users->save($actor);
+        $actor = $users->findById($users->getInsertID());
+        $actor->addGroup('superadmin');
+        $target        = new AdminUser(['username' => 'audittarget']);
+        $target->email = 'audittarget@example.com';
+        $target->setPassword('A-local-password-123!');
+        $users->save($target);
+        $target = $users->findById($users->getInsertID());
+        auth()->login($actor);
+        $originalSettings = service('settings')->getMany([
+            'AuthGroups.groups', 'AuthGroups.permissions', 'AuthGroups.matrix',
+            'MicrosoftOAuth.enabled', 'MicrosoftOAuth.tenant', 'MicrosoftOAuth.clientId',
+            'MailTemplates.invitation_zh_Hans_subject', 'MailTemplates.invitation_zh_Hans_body',
+        ]);
+        $template = service('mailTemplates')->get('invitation', 'zh-Hans');
+        $cases    = [
+            ['/en/admin/settings/roles', ['name' => 'audit-role', 'title' => 'Audit role', 'description' => 'Role metadata'], 'role.create', 'roles', null, 'success'],
+            ['/zh-Hans/admin/settings/roles/audit-role', ['title' => 'Updated role', 'description' => 'Updated metadata'], 'role.update', 'roles', 'audit-role', 'success'],
+            ['/zh-Hant/admin/settings/permissions', ['name' => 'audit.read', 'description' => 'Audit permission'], 'permission.create', 'permissions', null, 'success'],
+            ['/en/admin/settings/permissions/audit.read', ['description' => 'Updated permission'], 'permission.update', 'permissions', 'audit.read', 'success'],
+            ['/en/admin/users/' . $target->id . '/edit', ['role' => 'user', 'status' => 'enabled'], 'user.update', 'users', (string) $target->id, 'success'],
+            ['/en/admin/mail/templates/invitation/zh-Hans', ['subject' => 'Audit invitation'], 'email.template.update', 'templates', 'invitation', 'success'],
+            ['/en/admin/settings/microsoft', ['enabled' => '1'], 'microsoft.settings.update', 'microsoft_settings', null, 'success'],
+            ['/en/admin/settings/microsoft', ['enabled' => '0'], 'microsoft.settings.update', 'microsoft_settings', null, 'success'],
+            ['/en/admin/settings/microsoft', [], 'microsoft.settings.update', 'microsoft_settings', null, 'success'],
+            ['/en/admin/settings/microsoft/requests/42/approve', ['user_id' => '999999999'], 'microsoft.link.approve', 'requests', '42', 'failed'],
+            ['/en/admin/profile/tokens', ['name' => 'Audit token', 'expires' => '2099-01-01'], 'profile.token.create', 'tokens', null, 'redirected'],
+            ['/en/admin/profile/tokens', ['name' => 'Expired token', 'expires' => '2000-01-01'], 'profile.token.create', 'tokens', null, 'failed'],
+        ];
+
+        try {
+            foreach ($cases as [$path, $fields, $operation, $type, $targetId, $result]) {
+                $input = $fields + [
+                    csrf_token() => csrf_hash(), 'username' => $target->username, 'email' => $target->email,
+                    'body'       => $template['body'], 'tenant' => 'organizations', 'clientId' => '11111111-2222-3333-4444-555555555555',
+                    'password'   => 'private-secret', 'clientSecret' => 'private-secret', 'actor_id' => 999, 'id' => 999,
+                ];
+                $this->post($path, $input)->assertRedirect();
+                $log     = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+                $summary = json_decode($log['submission'], true, flags: JSON_THROW_ON_ERROR);
+                ksort($fields);
+                ksort($summary['fields']);
+                $this->assertSame($operation, $log['operation']);
+                $this->assertSame($type, $log['target_type']);
+                $this->assertSame($targetId, $log['target_id']);
+                $this->assertSame($fields, $summary['fields']);
+                $this->assertSame($result, $log['result']);
+                $this->assertSame((int) $actor->id, (int) $log['actor_id']);
+                $this->assertStringNotContainsString('private-secret', $log['submission']);
+                $this->assertStringNotContainsString($target->email, $log['submission']);
+                if ($operation === 'profile.token.create' && $result === 'redirected') {
+                    $rawToken = session('alert')['detail'];
+                    $this->assertNotEmpty($rawToken);
+                    $this->assertStringNotContainsString($rawToken, json_encode($log));
+                }
+            }
+            $this->post('/en/admin/settings/roles/audit-role/permissions', [csrf_token() => csrf_hash(), 'permissions' => ['users.view']])->assertRedirect();
+            $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $this->assertNull($log['operation']);
+            $this->assertNull($log['submission']);
+            $this->assertSame('audit-role', $log['target_id']);
+            $this->assertSame('success', $log['result']);
+            $before = db_connect()->table('operation_audit_logs')->countAllResults();
+            $actor->removeGroup('superadmin');
+            $this->post('/en/admin/settings/roles', [csrf_token() => csrf_hash(), 'name' => 'blocked-audit-role', 'title' => 'Blocked role'])->assertRedirect();
+            $this->assertSame($before, db_connect()->table('operation_audit_logs')->countAllResults());
+            $this->assertArrayNotHasKey('blocked-audit-role', setting('AuthGroups.groups'));
+        } finally {
+            service('settings')->setMany(array_filter($originalSettings, static fn ($value): bool => $value !== null));
+            service('settings')->forgetMany(array_keys(array_filter($originalSettings, static fn ($value): bool => $value === null)));
+            Services::resetSingle('mailtemplates');
+            Services::resetSingle('settings');
+        }
+    }
+
+    public function testJsonSubmissionUsesResolvedRouteAndDoesNotReadQuery(): void
+    {
+        $user        = new AdminUser(['username' => 'auditjson']);
+        $user->email = 'auditjson@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+        $routes = service('routes');
+        $routes->loadRoutes();
+        $routes->setHTTPVerb('POST');
+        $routerRequest = $this->setupRequest('POST', '/en/admin/profile/language');
+        $router        = Services::router($routes, $routerRequest, false);
+        $router->handle('en/admin/profile/language');
+        Services::injectMock('router', $router);
+        $audit = new OperationAudit();
+
+        foreach (['{"language":"en","password":"json-private"}' => ['language' => 'en'], '{invalid-private' => [], '["private"]' => []] as $body => $expected) {
+            $request = $this->setupRequest('POST', '/en/admin/profile/language?language=query-private');
+            $request->setHeader('Content-Type', $expected === [] ? 'application/problem+json' : 'application/json; charset=utf-8');
+            $request->setBody($body);
+            $audit->before($request);
+            $request->setBody('{"language":"mutated"}');
+            $audit->after($request, service('response')->setStatusCode(200));
+            $log     = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $summary = json_decode($log['submission'], true);
+            $this->assertSame('profile.language', $log['operation']);
+            $this->assertSame($expected, $summary['fields']);
+            if ($expected === []) {
+                $this->assertSame('invalid_json', $summary['input']);
+            }
+            $this->assertStringNotContainsString('private', json_encode($log));
+            $this->assertStringNotContainsString('mutated', $log['submission']);
+        }
+        $router->handle('en/admin/profile/password');
+        $request = $this->setupRequest('POST', '/en/admin/profile/password');
+        $audit->before($request);
+        $audit->after($request, service('response')->setStatusCode(200));
+        $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+        $this->assertNull($log['operation']);
+        $this->assertNull($log['submission']);
+    }
+
+    public function testConfiguredEmailSubmissionAndPermissionRejection(): void
+    {
+        $user        = new AdminUser(['username' => 'auditemail']);
+        $user->email = 'auditemail@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+        $this->post('/en/admin/settings/email', [
+            csrf_token() => csrf_hash(), 'protocol' => 'smtp', 'SMTPPort' => '587',
+            'SMTPCrypto' => 'tls', 'SMTPPass' => 'private-secret',
+        ])->assertRedirect();
+        $log = db_connect()->table('operation_audit_logs')->get()->getRowArray();
+        $this->assertSame('email.settings.update', $log['operation']);
+        $this->assertSame('failed', $log['result']);
+        $fields = json_decode($log['submission'], true)['fields'];
+        ksort($fields);
+        $this->assertSame(['SMTPCrypto' => 'tls', 'SMTPPort' => '587', 'protocol' => 'smtp'], $fields);
+        $this->assertStringNotContainsString('private-secret', json_encode($log));
+        $user->removeGroup('superadmin');
+        $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Rejected', 'body' => 'Rejected'])->assertRedirect();
+        $this->assertSame(1, db_connect()->table('operation_audit_logs')->countAllResults());
+    }
+
+    public function testNonPostFormSubmissionPreservesUnknownResult(): void
+    {
+        $user        = new AdminUser(['username' => 'auditforms']);
+        $user->email = 'auditforms@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+        $config               = config(Geminus\Admin\Config\OperationAudit::class);
+        $original             = $config->operations;
+        $config->operations[] = [
+            'controller' => 'Geminus\\Admin\\Controllers\\Profile::language',
+            'methods'    => ['PUT', 'PATCH', 'DELETE'], 'action' => 'profile.language',
+            'object'     => ['type' => 'profile'], 'fields' => ['language'],
+        ];
+
+        try {
+            foreach (['PUT', 'PATCH', 'DELETE'] as $httpMethod) {
+                $request = $this->setupRequest($httpMethod, '/en/admin/audit-form');
+                $request->setHeader('Content-Type', 'application/x-www-form-urlencoded');
+                $request->setBody('language=zh-Hant&password=private-secret');
+                $routes = service('routes');
+                $routes->loadRoutes();
+                $routes->{strtolower($httpMethod)}('en/admin/audit-form', '\\Geminus\\Admin\\Controllers\\Profile::language');
+                $router = Services::router($routes, $request, false);
+                $router->handle('en/admin/audit-form');
+                Services::injectMock('router', $router);
+                $audit = new OperationAudit();
+                $audit->before($request);
+                $audit->after($request, service('response')->setStatusCode(302));
+                $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+                $this->assertSame('profile.language', $log['operation']);
+                $this->assertSame(['language' => 'zh-Hant'], json_decode($log['submission'], true)['fields']);
+                $this->assertSame('redirected', $log['result']);
+                $this->assertStringNotContainsString('private-secret', json_encode($log));
+            }
+        } finally {
+            $config->operations = $original;
+        }
+    }
+
+    public function testSubmissionStatesAndMixedActionSortingAreSafe(): void
+    {
+        $user        = new AdminUser(['username' => 'auditstates']);
+        $user->email = 'auditstates@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+
+        foreach ([
+            ['post.aaa', ['fields' => ['enabled' => true, 'optional' => null], 'omitted' => ['roles' => 'complex_value'], 'truncated' => ['title'], 'input' => 'invalid_json', 'limited' => true]],
+            ['post.zzz', ['fields' => 'invalid-shape']],
+            [null, null],
+        ] as [$operation, $submission]) {
+            db_connect()->table('operation_audit_logs')->insert([
+                'action'      => 'POST', 'operation' => $operation, 'submission' => $submission === null ? null : json_encode($submission),
+                'target_type' => 'profile', 'path' => $operation ?? 'legacy-marker',
+                'result'      => 'success', 'ip_address' => '127.0.0.1', 'created_at' => '2026-10-10 00:00:00',
+            ]);
+        }
+        $page = $this->get('/zh-Hans/admin/audit?sort=action&direction=ASC');
+        $page->assertOK();
+        $body = $page->response()->getBody();
+
+        foreach (['roles: 已省略', 'title: 已截断', 'JSON 输入无效', '已达到采集上限', '>true<', '>null<'] as $text) {
+            $this->assertStringContainsString($text, $body);
+        }
+        $this->assertLessThan(strpos($body, 'post.aaa</div>'), strpos($body, 'legacy-marker</td>'));
+        $this->assertLessThan(strpos($body, 'post.zzz</div>'), strpos($body, 'post.aaa</div>'));
+    }
+
+    public function testInvalidCaptureConfigurationDoesNotChangeBusinessResponse(): void
+    {
+        $user        = new AdminUser(['username' => 'auditcapturefailure']);
+        $user->email = 'auditcapturefailure@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+        $config             = config(Geminus\Admin\Config\OperationAudit::class);
+        $original           = $config->operations;
+        $config->operations = [['controller' => 'invalid-private-input']];
+
+        try {
+            $this->post('/en/admin/profile/language', [csrf_token() => csrf_hash(), 'language' => 'zh-Hant'])->assertRedirect();
+            $this->assertSame('zh-Hant', $users->findById($user->id)->language);
+            $log = db_connect()->table('operation_audit_logs')->get()->getRowArray();
+            $this->assertNull($log['submission']);
+            $this->assertNull($log['operation']);
+            $this->assertSame('success', $log['result']);
+            $this->assertLogged('error', 'Operation audit submission capture failed.');
+        } finally {
+            $config->operations = $original;
+        }
+    }
+
+    public function testAuditMigrationCreatesNullableSubmissionFields(): void
+    {
+        $this->assertContains('operation', db_connect()->getFieldNames('operation_audit_logs'));
+        $this->assertContains('submission', db_connect()->getFieldNames('operation_audit_logs'));
+        db_connect()->table('operation_audit_logs')->insert([
+            'action' => 'POST', 'target_type' => 'profile', 'path' => 'unconfigured-audit-record',
+            'result' => 'redirected', 'ip_address' => '127.0.0.1', 'created_at' => '2026-10-10 12:00:00',
+        ]);
+        $log = db_connect()->table('operation_audit_logs')->get()->getRowArray();
+        $this->assertSame('unconfigured-audit-record', $log['path']);
+        $this->assertSame('redirected', $log['result']);
+        $this->assertNull($log['operation']);
+        $this->assertNull($log['submission']);
     }
 
     public function testLoginFailureIsNotRecordedInOperationAudit(): void
@@ -99,6 +516,8 @@ final class OperationAuditTest extends CIUnitTestCase
 
         $logs = db_connect()->table('operation_audit_logs')->orderBy('id')->get()->getResultArray();
         $this->assertSame(['failed', 'success'], array_column($logs, 'result'));
+        $this->assertSame(['profile.update', 'profile.update'], array_column($logs, 'operation'));
+        $this->assertSame(['language' => 'en', 'timezone' => 'Asia/Shanghai'], json_decode($logs[1]['submission'], true)['fields']);
     }
 
     public function testDangerAlertMarksRedirectAsFailed(): void

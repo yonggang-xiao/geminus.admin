@@ -36,7 +36,29 @@
                         <tr>
                             <td class="text-nowrap"><?= esc($me->formatDateTime($row['created_at'])) ?></td>
                             <td><?= esc($row['actor_id'] === null ? '-' : ($userNames[$row['actor_id']] ?? lang('Admin.auditDeletedUser') . ' #' . $row['actor_id'])) ?></td>
-                            <td><?= esc($row['action']) ?></td>
+                            <td class="text-wrap text-break">
+                                <div class="text-nowrap"><?= esc($row['operation'] ?? $row['action']) ?></div>
+                                <?php if ($row['submission_display'] !== null): ?>
+                                    <div class="text-secondary small"><?= esc($row['action']) ?></div>
+                                    <button type="button" class="btn btn-sm btn-ghost-secondary mt-1" data-bs-toggle="collapse" data-bs-target="#audit-submission-<?= (int) $row['id'] ?>" aria-expanded="false" aria-controls="audit-submission-<?= (int) $row['id'] ?>">
+                                        <i class="ti ti-chevron-down me-1" aria-hidden="true"></i><?= esc(lang('Admin.auditSubmission')) ?>
+                                    </button>
+                                    <div class="collapse mt-2" id="audit-submission-<?= (int) $row['id'] ?>">
+                                        <dl class="mb-0">
+                                            <?php foreach ($row['submission_display']['fields'] as $field => $value): ?>
+                                                <dt class="small text-secondary"><?= esc($field) ?></dt>
+                                                <dd class="text-wrap text-break mb-1"><?= esc($value) ?></dd>
+                                            <?php endforeach; ?>
+                                        </dl>
+                                        <?php foreach ($row['submission_display']['notes'] as $note): ?>
+                                            <div class="small text-secondary text-wrap text-break"><?= esc($note) ?></div>
+                                        <?php endforeach; ?>
+                                        <?php if ($row['submission_display']['fields'] === [] && $row['submission_display']['notes'] === []): ?>
+                                            <span class="text-secondary">-</span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?= esc($row['target_type']) ?><?= $row['target_id'] !== null ? ' · ' . esc($row['target_type'] === 'users' ? ($userNames[$row['target_id']] ?? lang('Admin.auditDeletedUser') . ' #' . $row['target_id']) : $row['target_id']) : '' ?></td>
                             <td class="text-wrap text-break"><?= esc($row['path']) ?></td>
                             <td><span class="badge <?= match ($row['result']) {

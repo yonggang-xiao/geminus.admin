@@ -14,6 +14,8 @@ class CreateOperationAuditLogs extends Migration
             'id'          => ['type' => 'BIGINT', 'auto_increment' => true],
             'actor_id'    => ['type' => 'INT', 'null' => true],
             'action'      => ['type' => 'VARCHAR', 'constraint' => 16],
+            'operation'   => ['type' => 'VARCHAR', 'constraint' => 128, 'null' => true],
+            'submission'  => ['type' => 'JSONB', 'null' => true],
             'target_type' => ['type' => 'VARCHAR', 'constraint' => 64],
             'target_id'   => ['type' => 'VARCHAR', 'constraint' => 32, 'null' => true],
             'path'        => ['type' => 'VARCHAR', 'constraint' => 512],
