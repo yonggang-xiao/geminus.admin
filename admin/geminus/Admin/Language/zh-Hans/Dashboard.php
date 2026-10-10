@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'progressCount'    => '已完成 {0} / {1}',
+    'progressEmpty'    => '暂无可统计的进度。',
     'usersTotal'       => '用户总数',
     'usersScope'       => '全部未删除的用户账号。',
     'usersBanned'      => '禁用用户',

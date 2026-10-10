@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'progressCount'    => 'Completed {0} of {1}',
+    'progressEmpty'    => 'No items to track.',
     'usersTotal'       => 'Users',
     'usersScope'       => 'All accounts excluding deleted users.',
     'usersBanned'      => 'Banned users',

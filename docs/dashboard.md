@@ -75,14 +75,14 @@ public static function Dashboard(): array
 
 ## 展示项契约
 
-第一版只支持 `metric`、`list` 和 `shortcut`，不接受模板路径、Cell 类名、脚本、回调或任意 HTML。展示项只使用明确字段，不把数据库整行记录直接传给页面。
+支持 `metric`、`list`、`shortcut`、`progress` 和 `status-list`，不接受模板路径、Cell 类名、脚本、回调或任意 HTML。展示项只使用明确字段，不把数据库整行记录直接传给页面；模块不能指定 CSS、列宽或自己的组件布局。
 
 ### 公共字段
 
 | 字段 | 契约 |
 | --- | --- |
 | `id` | 提供者内唯一的稳定标识，格式与提供者标识相同；全局键由提供者标识及此 ID 组成 |
-| `type` | `metric`、`list` 或 `shortcut` |
+| `type` | `metric`、`list`、`shortcut`、`progress` 或 `status-list` |
 | `title` | 本地化语言键，不使用用户输入作为语言键 |
 | `order` | 整数；同模块内按此值及 ID 稳定排序 |
 
@@ -107,6 +107,66 @@ public static function Dashboard(): array
 - `icon`：可选，使用开发者指定的项目 Tabler 图标名，不接受 HTML 标记。
 - 只提供 GET 导航，不在首页直接发布、删除、审批或触发其他写操作。
 
+### 进度 `progress`
+
+- `value`：已完成数量，非负整数。
+- `max`：总数量，非负整数；`value` 不能大于 `max`，不接受浮点数、数字字符串或负数。
+- `description`：必填语言键，说明进度统计口径。
+- `link`：可选，进入对应列表，沿用受控 GET 链接。
+- `tone`：可选语义颜色；`icon`：可选 Tabler 图标名。
+
+展示层按当前语言格式化完成数、总数和百分比，百分比保留最多一位小数；未开始显示 0%，全部完成显示 100%，已经开始但未完成的显示值限制在 0.1% 至 99.9%，避免四舍五入误显示为未开始或已完成。完成数/总数及可访问值说明保留实际计数。总数为零时，完成数也必须为零，展示“暂无可统计的进度”，不生成进度条、不显示为 100%，也不使用表示加载中的动画。有效进度使用明确的数量范围、标题和可访问值说明，不仅依赖颜色表达进度。
+
+模块可用 `max = 100` 表达整数百分比；业务完成状态仍由模块决定，不根据展示层四舍五入后的百分比判断。
+
+```php
+[
+    'id' => 'completion',
+    'type' => 'progress',
+    'title' => 'Example.completion',
+    'order' => 10,
+    'value' => $completedCount,
+    'max' => $totalCount,
+    'description' => 'Example.completionScope',
+    'tone' => 'success',
+    'icon' => 'check',
+]
+```
+
+### 状态列表 `status-list`
+
+沿用 `list` 的 `rows`、`emptyLabel` 和可选 `moreLink`，最多 5 条，保留受控记录链接、UTC 时间、空态和稳定排序要求。组件标题可通过可选 `icon` 指定 Tabler 图标。
+
+每条记录在纯文本 `title`、受控 `link` 和可选 `time` 之外，必须提供 `status` 语言键；可选 `tone` 指定语义颜色，`icon` 指定状态图标。状态的业务含义、授权和颜色选择由提供者决定，展示层只本地化和渲染，不推断记录是否成功或失败。
+
+```php
+[
+    'id' => 'recent-status',
+    'type' => 'status-list',
+    'title' => 'Example.recentStatus',
+    'order' => 20,
+    'emptyLabel' => 'Example.emptyStatus',
+    'icon' => 'list-check',
+    'rows' => [
+        [
+            'title' => $recordTitle,
+            'link' => $recordLink,
+            'status' => 'Example.statusReady',
+            'tone' => 'success',
+            'icon' => 'check',
+        ],
+    ],
+]
+```
+
+示例中的 `Example.*` 语言键由接入模块提供三种语言版本，变量由模块准备真实且有权读取的数据；示例不会自动注册或添加到首页。
+
+### 颜色与图标
+
+新组件的颜色仅接受 `default`、`success`、`warning`、`danger`、`info`，由 Admin 映射为 Tabler 的中性灰、绿色、黄色、红色和浅蓝色。进度使用条形填色，状态使用浅色标签，并始终保留状态文字。不能传入十六进制颜色、CSS 类、样式字符串或空值。
+
+图标使用与快捷入口相同的小写 Tabler 图标名格式，不传 SVG、HTML 或脚本。图标可省略，省略不影响内容和操作。原有 `metric`、`list` 与 `shortcut` 的契约、默认布局和样式保持不变；不提供图表、趋势指标或模块自定义列宽。
+
 ### 受控链接
 
 `link` 与 `moreLink` 使用相同结构：`route` 为有效的后台命名 GET 路由（别名以 `admin/` 开头，路径位于 `{locale}/admin` 下），`arguments` 为匹配路由的整数或字符串参数列表，`query` 为模块明确构造的标量筛选参数；`moreLink` 另带操作名称语言键 `label`。不接受外部 URL，不直接传入整个请求参数。
@@ -115,7 +175,11 @@ public static function Dashboard(): array
 
 ## 展示与异常处理
 
-模块按注册排序展示为无额外卡片外壳的独立区域，模块内指标、列表及快捷入口使用固定的 Tabler 展示方式。桌面允许多列，移动端单列；同类组件保持稳定尺寸，长标题换行，不让数量、文本及按钮重叠。
+展示层参考 [Tabler 官方 Dashboard](https://preview.tabler.io/) 与 [Card 组件](https://docs.tabler.io/ui/components/card)。指标集中在顶部总览，使用紧凑卡片并保留模块名称与统计口径；桌面每行最多 4 项，小屏每行 2 项，窄屏单列。
+
+列表与快捷入口按模块在总览下方展示，桌面两列、窄屏单列，模块区域不套额外卡片外壳。快捷入口放在模块标题旁，不单独占用卡片；列表的“查看全部”放在卡片标题旁。只有指标的模块不再重复显示空的模块区域；只有快捷入口的模块不显示空标题，仅保留操作和供辅助技术读取的区域名称，集中放在列表区域之前，不占用列表卡片位置。指标的列表链接使用标题旁的图标入口，提供本地化的可访问名称与提示。
+
+指标、仅含快捷入口的模块、含内容卡片或异常状态的模块分别沿用原有的注册排序，同类型展示项沿用展示项排序；不同类型的位置由展示层统一安排。进度、普通列表与状态列表使用模块内的统一内容卡片，按展示项排序排列；进度采用 [Tabler Progress](https://docs.tabler.io/ui/components/progress)，状态列表组合 [List Group](https://docs.tabler.io/ui/components/list-group) 与 [Badge](https://docs.tabler.io/ui/components/badge)，沿用桌面两列、窄屏单列的模块布局。长标题和状态标签换行，不让数量、文本及按钮重叠；首页不加载图表插件或为示例样式添加没有业务依据的趋势。
 
 聚合服务先对提供者执行权限初筛，再获取并校验完整返回结果；某提供者异常或返回非法展示项时，整个模块区域显示统一的本地化“暂不可用”，保留其他模块结果，不显示部分统计或错误详情。日志记录提供者标识及服务端异常诊断，不向页面暴露 SQL、堆栈或凭据。
 
@@ -131,7 +195,7 @@ Admin 通过自己的 `Config\Registrar::Dashboard()` 注册三个独立提供�
 | --- | --- | --- |
 | 用户管理 | `users.view` | 全部未删除账号总数、其中已禁用账号数量；最近 5 个未删除账号按创建时间及 ID 倒序 |
 | 用户管理 | `users.create` | 新建用户入口；只有新建权限时不提供统计或用户列表 |
-| 邮件投递 | `email-deliveries.view` | 当前 `queued` 和 `failed` 状态的投递日志计数，分别进入同状态的投递记录筛选；另提供邮件队列入口 |
+| 邮件投递 | `email-deliveries.view` | 当前 `queued` 和 `failed` 状态的投递日志计数，分别进入同状态的投递记录筛选；不单独显示邮件队列按钮 |
 | 操作审计 | `operation-audit.view` | 最近 5 条后台操作，按创建时间及 ID 倒序，显示 HTTP 方法、对象类型和对象 ID；链接到同对象的审计筛选列表 |
 
 用户最近记录链接到用户名筛选列表，不直接进入受角色保护的编辑页面。禁用数不提供链接，因为用户列表尚无禁用状态筛选；禁用指 Shield 的 `status = banned`，不以 `active` 字段判断。删除账号不计入总数、禁用数或最近列表。
@@ -158,5 +222,6 @@ Admin 通过自己的 `Config\Registrar::Dashboard()` 注册三个独立提供�
 - 验证链接 locale、参数及筛选口径，目标接口继续独立拒绝无权限或不可见资源访问。
 - 覆盖零计数、空记录、无可见模块、单模块异常及非法展示项；模块失败不使首页失败，也不显示为零。
 - 验证业务标题转义、链接编码、三种语言及用户时区；列表最多 5 条，不以读取全量记录后截断实现。
+- 进度覆盖零总数、未开始、部分完成、全部完成及大整数计数；越界、非法颜色、图标或布局字段触发整模块不可用。状态列表验证状态本地化、语义颜色、图标、空态、最多 5 条及记录链接，不接受私密整行字段或任意 HTML。
 - 浏览器检查桌面与移动端布局、长标题、键盘可访问入口及空态；首页不依赖 JavaScript 才能读取基本内容。
 - 相关行为测试位于 `admin/tests/unit/DashboardTest.php` 和 `admin/tests/unit/AnnouncementsTest.php`；实现变更需运行相关测试、PHP 格式检查及按风险分级的独立审查。

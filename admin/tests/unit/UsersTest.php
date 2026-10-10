@@ -105,7 +105,7 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(1, $sections['email']['items'][1]['value']);
         $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=queued', $sections['email']['items'][0]['link']['url']);
         $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=failed', $sections['email']['items'][1]['link']['url']);
-        $this->assertSame('/zh-Hans/admin/mail/deliveries?view=queue', $sections['email']['items'][2]['link']['url']);
+        $this->assertSame(['queued', 'failed'], array_column($sections['email']['items'], 'id'));
         $this->assertSame('/zh-Hans/admin/users?q=dashboard0', $sections['users']['items'][2]['rows'][0]['link']['url']);
         $this->assertSame('/zh-Hans/admin/audit?type=users&target=0', $sections['audit']['items'][0]['rows'][0]['link']['url']);
         auth()->login($viewer);
@@ -113,9 +113,16 @@ final class UsersTest extends CIUnitTestCase
         $dashboard->assertOK();
         $dashboard->assertSee('POST users #0');
 
-        foreach (['dashboard-users', 'dashboard-email', 'dashboard-audit'] as $region) {
+        foreach (['dashboard-users', 'dashboard-audit'] as $region) {
             $this->assertStringContainsString($region, $dashboard->response()->getBody());
         }
+
+        $document = new DOMDocument();
+        @$document->loadHTML('<?xml encoding="UTF-8">' . $dashboard->response()->getBody());
+        $xpath = new DOMXPath($document);
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="email:queued"]'));
+        $this->assertCount(1, $xpath->query('//*[@data-dashboard-item="email:failed"]'));
+        $this->assertCount(0, $xpath->query('//*[@data-dashboard-item="email:queue"] | //*[@id="dashboard-email"]'));
 
         foreach (['private-path-', '192.0.2.123', 'PrivateDashboardAgent', 'queued-one@example.com', 'failed@example.com'] as $privateValue) {
             $this->assertStringNotContainsString($privateValue, $dashboard->response()->getBody());

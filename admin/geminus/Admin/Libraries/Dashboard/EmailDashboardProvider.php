@@ -26,8 +26,6 @@ class EmailDashboardProvider implements DashboardProvider
             ['id'       => 'failed', 'type' => 'metric', 'title' => 'Dashboard.emailFailed', 'order' => 20,
                 'value' => $this->deliveries->dashboardStatusCount('failed'), 'description' => 'Dashboard.emailFailedScope',
                 'link'  => ['route' => 'admin/mail/deliveries', 'query' => ['view' => 'logs', 'status' => 'failed']]],
-            ['id'      => 'queue', 'type' => 'shortcut', 'title' => 'Dashboard.emailQueue', 'order' => 30,
-                'link' => ['route' => 'admin/mail/deliveries', 'query' => ['view' => 'queue']], 'icon' => 'mail'],
         ];
     }
 }
