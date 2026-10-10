@@ -85,7 +85,10 @@ class Profile extends BaseController
 
         $user           = auth()->user();
         $user->language = $locale;
-        auth()->getProvider()->save($user);
+        if (! auth()->getProvider()->save($user)) {
+            return redirect()->back()->with('_operation_audit_result', 'failed');
+        }
+        session()->setFlashdata('_operation_audit_result', 'success');
 
         $returnPath = $this->request->getPost('return');
         $segments   = is_string($returnPath) ? explode('/', trim($returnPath, '/')) : [];

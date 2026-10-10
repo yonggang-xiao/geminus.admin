@@ -12,6 +12,7 @@ use Composer\InstalledVersions;
 use Config\Services;
 use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Filters\OperationAudit;
 use Geminus\Admin\Libraries\AvatarFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Libraries\TableLayoutAssertions;
@@ -277,6 +278,64 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertSame('/zh-Hant/admin/profile', parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame('zh-Hant', $users->findById($user->id)->language);
         $this->get('/zh-Hant/admin/profile')->assertSee('上傳頭像');
+    }
+
+    public function testLanguageSwitchRecordsSuccessWithoutVisibleFeedback(): void
+    {
+        $user        = new AdminUser(['username' => 'languageaudit']);
+        $user->email = 'languageaudit@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        foreach (['/en/admin/profile' => '/zh-Hant/admin/profile', '//outside.example/path' => '/zh-Hant/admin/dashboard'] as $returnPath => $expectedPath) {
+            $result = $this->post('/en/admin/profile/language', [
+                csrf_token() => csrf_hash(),
+                'language'   => 'zh-Hant',
+                'return'     => $returnPath,
+            ]);
+
+            $result->assertRedirect();
+            $this->assertSame($expectedPath, parse_url($result->response()->getHeaderLine('Location'), PHP_URL_PATH));
+            $this->assertSame('zh-Hant', $users->findById($user->id)->language);
+            $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $this->assertSame('success', $log['result']);
+            $this->assertNull(session()->getFlashdata('alert'));
+        }
+    }
+
+    public function testLanguageSwitchRecordsFailedSave(): void
+    {
+        $user        = new AdminUser(['username' => 'languagefailure', 'language' => 'en']);
+        $user->email = 'languagefailure@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        auth()->login($user);
+
+        $request = $this->setupRequest('POST', '/en/admin/profile/language');
+        $request->setGlobal('post', ['language' => 'zh-Hant']);
+        $audit = new OperationAudit();
+        $audit->before($request);
+        $controller = new Profile();
+        $controller->initController($request, Services::response(null, false), Services::logger());
+        $provider = $this->getMockBuilder($users::class)->onlyMethods(['save'])->getMock();
+        $provider->expects($this->once())->method('save')->willReturn(false);
+        $providerProperty = new ReflectionProperty(Auth::class, 'userProvider');
+        $providerProperty->setValue(auth(), $provider);
+
+        try {
+            $response = $controller->language();
+            $audit->after($request, $response);
+            $log = db_connect()->table('operation_audit_logs')->get()->getRowArray();
+            $this->assertSame('failed', $log['result']);
+            $this->assertSame('en', $users->findById($user->id)->language);
+        } finally {
+            $providerProperty->setValue(auth(), $users);
+        }
     }
 
     public function testHomeUsesSavedLanguagePreference(): void

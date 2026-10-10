@@ -11,12 +11,14 @@ use Throwable;
 
 class OperationAudit implements FilterInterface
 {
-    private array $flashBefore = [];
+    private array $flashBefore      = [];
+    private array $flashStateBefore = [];
 
     public function before(RequestInterface $request, $arguments = null)
     {
         if ($this->isAdminWrite($request)) {
-            $this->flashBefore = session()->getFlashdata();
+            $this->flashBefore      = session()->getFlashdata();
+            $this->flashStateBefore = session()->get('__ci_vars') ?? [];
         }
     }
 
@@ -80,11 +82,21 @@ class OperationAudit implements FilterInterface
 
     private function redirectResult(): string
     {
-        $success = false;
+        $success    = false;
+        $flashState = session()->get('__ci_vars') ?? [];
 
         foreach (session()->getFlashdata() as $key => $value) {
-            if (array_key_exists($key, $this->flashBefore) && $this->flashBefore[$key] === $value) {
+            if (array_key_exists($key, $this->flashBefore) && $this->flashBefore[$key] === $value
+                && ($this->flashStateBefore[$key] ?? null) === ($flashState[$key] ?? null)) {
                 continue;
+            }
+
+            if ($key === '_operation_audit_result') {
+                if ($value === 'failed') {
+                    return 'failed';
+                }
+
+                $success = $success || $value === 'success';
             }
 
             if ($key === 'alert' && is_array($value)) {
@@ -92,7 +104,7 @@ class OperationAudit implements FilterInterface
                     return 'failed';
                 }
 
-                $success = ($value['type'] ?? null) === 'success';
+                $success = $success || ($value['type'] ?? null) === 'success';
             }
 
             if ($value !== null && ($key === 'error' || $key === 'errors' || str_ends_with($key, '_errors'))) {

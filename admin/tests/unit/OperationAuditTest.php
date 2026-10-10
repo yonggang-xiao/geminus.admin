@@ -145,6 +145,45 @@ final class OperationAuditTest extends CIUnitTestCase
         $this->assertSame('failed', $current['result']);
     }
 
+    public function testRepeatedFlashFeedbackClassifiesCurrentRedirect(): void
+    {
+        $user        = new AdminUser(['username' => 'auditrepeated']);
+        $user->email = 'auditrepeated@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users = auth()->getProvider();
+        $users->save($user);
+        auth()->login($users->findById($users->getInsertID()));
+
+        $request = $this->setupRequest('POST', '/en/admin/profile');
+        $audit   = new OperationAudit();
+
+        foreach ([
+            ['alert', ['type' => 'success', 'message' => 'Saved'], 'success'],
+            ['alert', ['type' => 'danger', 'message' => 'Rejected'], 'failed'],
+            ['profile_errors', ['username' => 'Rejected'], 'failed'],
+            ['_operation_audit_result', 'success', 'success'],
+            ['_operation_audit_result', 'failed', 'failed'],
+        ] as [$key, $feedback, $expected]) {
+            session()->unmarkFlashdata(['alert', 'profile_errors', '_operation_audit_result']);
+            session()->remove(['alert', 'profile_errors', '_operation_audit_result']);
+            session()->setFlashdata($key, $feedback);
+            $flashState       = session()->get('__ci_vars');
+            $flashState[$key] = 'old';
+            session()->set('__ci_vars', $flashState);
+
+            $audit->before($request);
+            $audit->after($request, service('response')->setStatusCode(302));
+            $previous = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $this->assertSame('redirected', $previous['result']);
+
+            session()->setFlashdata($key, $feedback);
+            $audit->after($request, service('response')->setStatusCode(302));
+
+            $log = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
+            $this->assertSame($expected, $log['result']);
+        }
+    }
+
     public function testRedirectFailureFeedbackTakesPrecedenceOverSuccessAlert(): void
     {
         $user        = new AdminUser(['username' => 'auditpriority']);
@@ -158,6 +197,7 @@ final class OperationAuditTest extends CIUnitTestCase
         $audit   = new OperationAudit();
         $audit->before($request);
         session()->setFlashdata('alert', ['type' => 'success', 'message' => 'Partial operation']);
+        session()->setFlashdata('_operation_audit_result', 'success');
         session()->setFlashdata('profile_errors', ['username' => 'Rejected']);
         $audit->after($request, service('response')->setStatusCode(302));
 

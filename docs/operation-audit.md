@@ -10,7 +10,9 @@
 
 **记录范围。** 全局响应后过滤器将已认证的后台 POST/PUT/PATCH/DELETE 请求写入 `operation_audit_logs`。记录操作者、HTTP 方法、对象类型及标识、请求路径、结果、IP、浏览器 User-Agent（最长 512 字符）与 UTC 时间；角色、权限和邮件模板路由额外记录首个字符串对象名（最长 32 字符）。CSRF、权限等前置过滤器拒绝的请求、未认证后台写请求及抛出异常的请求不会记入操作审计。
 
-**结果判定。** HTTP 错误状态记为 `failed`，2xx 记为 `success`；后台写操作的 3xx 重定向优先读取本次新增的反馈：`alert.type=success` 记成功，`alert.type=danger`、`error` 或 `*_errors` 记失败，且失败优先。若没有明确反馈（或与请求前已有反馈相同），仍记为 `redirected`，不能推断业务成败。
+**结果判定。** HTTP 错误状态记为 `failed`，2xx 记为 `success`；后台写操作的 3xx 重定向优先读取本次新增或更新的反馈：`alert.type=success` 记成功，`alert.type=danger`、`error` 或 `*_errors` 记失败，且失败优先。通过反馈内容和 CI4 Flashdata 生命周期标记区分本次反馈与旧反馈；本次将旧反馈重新写入时，即使内容相同也参与判定。若没有明确反馈，或仅有未更新的旧反馈，仍记为 `redirected`，不能推断业务成败。
+
+语言选择通过隐藏的 `_operation_audit_result` Flashdata 提供明确结果：偏好保存成功记为 `success`，保存返回失败记为 `failed`，不产生可见提示。该反馈同样遵循旧反馈忽略及失败优先规则。
 
 ## 运行约束
 
