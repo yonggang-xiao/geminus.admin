@@ -8,6 +8,7 @@ $routes->group('admin/avatars', ['namespace' => 'Geminus\Admin\Controllers', 'fi
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
+    $routes->post('notifications/(:num)/open', 'Notifications::open/$1', ['as' => 'admin/notifications/open', 'filter' => 'session']);
     $routes->group('users', static function ($routes) {
         $routes->group('', ['filter' => 'permission:users.view'], static function ($routes) {
             $routes->get('', 'Users::index', ['as' => 'admin/users']);

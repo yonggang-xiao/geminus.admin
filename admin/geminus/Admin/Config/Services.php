@@ -12,13 +12,24 @@ use Config\Database;
 use Config\Email;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\Notifications;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\EmailDeliveryLogModel;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
+use Geminus\Admin\Models\NotificationModel;
 
 class Services extends BaseService
 {
+    public static function notifications(bool $getShared = false): Notifications
+    {
+        if ($getShared) {
+            return static::getSharedInstance('notifications');
+        }
+
+        return new Notifications(new NotificationModel());
+    }
+
     public static function userProvisioning(bool $getShared = false): UserProvisioning
     {
         if ($getShared) {

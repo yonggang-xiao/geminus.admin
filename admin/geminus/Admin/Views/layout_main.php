@@ -27,7 +27,8 @@
                         <img src="/static/logo.svg" width="110" height="32" alt="Admin" class="navbar-brand-image" />
                     </a>
                 </h1>
-                <div class="navbar-nav flex-row d-lg-none">
+                <div class="navbar-nav flex-row d-lg-none gap-2">
+                    <?= view_cell('Geminus\Admin\Cells\NotificationsCell', ['mobile' => true]) ?>
                     <?= $this->include('Geminus\Admin\Views\user_menu') ?>
                 </div>
                 <div class="collapse navbar-collapse" id="sidebar-menu">
@@ -42,6 +43,7 @@
                 <div class="navbar-nav flex-row order-lg-last">
                     <div class="d-lg-flex gap-2">
                         <?= $this->include('Geminus\Admin\Views\theme_toggle') ?>
+                        <?= view_cell('Geminus\Admin\Cells\NotificationsCell') ?>
                         <?= $this->include('Geminus\Admin\Views\language_selector') ?>
                         <?= $this->include('Geminus\Admin\Views\user_menu') ?>
                     </div>
@@ -73,6 +75,7 @@
     <?= $this->renderSection('javascript') ?>
     <script src="/static/js/button-tooltips.js"></script>
     <script src="/static/js/form-submission.js"></script>
+    <script src="/static/js/notifications.js"></script>
 </body>
 
 </html>
