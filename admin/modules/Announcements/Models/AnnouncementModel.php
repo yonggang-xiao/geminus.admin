@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Announcements\Models;
 
+use CodeIgniter\Database\BaseBuilder;
 use CodeIgniter\I18n\Time;
 use CodeIgniter\Model;
 use RuntimeException;
@@ -27,10 +28,22 @@ class AnnouncementModel extends Model
 
     public function visibleTo(bool $canManage): self
     {
-        if (! $canManage) {
-            $this->where('status', 'published');
-        }
+        $this->applyVisibility($this->builder(), $canManage);
 
         return $this;
+    }
+
+    public function visibleIds(bool $canManage): BaseBuilder
+    {
+        return $this->applyVisibility($this->db->table($this->table), $canManage)->select('id');
+    }
+
+    private function applyVisibility(BaseBuilder $builder, bool $canManage): BaseBuilder
+    {
+        if (! $canManage) {
+            $builder->where('status', 'published');
+        }
+
+        return $builder;
     }
 }

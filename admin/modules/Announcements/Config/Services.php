@@ -6,10 +6,20 @@ namespace Modules\Announcements\Config;
 
 use CodeIgniter\Config\BaseService;
 use Modules\Announcements\Libraries\AnnouncementPublication;
+use Modules\Announcements\Libraries\AnnouncementUploadSource;
 use Modules\Announcements\Models\AnnouncementModel;
 
 class Services extends BaseService
 {
+    public static function announcementUploadSource(bool $getShared = false): AnnouncementUploadSource
+    {
+        if ($getShared) {
+            return static::getSharedInstance('announcementuploadsource');
+        }
+
+        return new AnnouncementUploadSource(new AnnouncementModel());
+    }
+
     public static function announcementPublication(bool $getShared = false): AnnouncementPublication
     {
         if ($getShared) {

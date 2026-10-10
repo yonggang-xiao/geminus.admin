@@ -10,17 +10,34 @@ use Config\App;
 use Config\Auth;
 use Config\Database;
 use Config\Email;
+use Geminus\Admin\Libraries\DataManagement\UploadHistory as UploadHistoryLibrary;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\Notifications;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Libraries\UserProvisioning;
+use Geminus\Admin\Models\AttachmentModel;
 use Geminus\Admin\Models\EmailDeliveryLogModel;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 use Geminus\Admin\Models\NotificationModel;
 
 class Services extends BaseService
 {
+    public static function uploadHistory(bool $getShared = false): UploadHistoryLibrary
+    {
+        if ($getShared) {
+            return static::getSharedInstance('uploadhistory');
+        }
+
+        $sources = [];
+
+        foreach (config(UploadHistory::class)->sources as $type => $serviceName) {
+            $sources[$type] = service($serviceName);
+        }
+
+        return new UploadHistoryLibrary(new AttachmentModel(), $sources);
+    }
+
     public static function notifications(bool $getShared = false): Notifications
     {
         if ($getShared) {

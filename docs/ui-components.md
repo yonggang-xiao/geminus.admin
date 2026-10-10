@@ -68,10 +68,10 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 ### 附件区域
 
-`AttachmentsCell` 已接入用户附件页与公告附件页。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。
+`AttachmentsCell` 已接入公告附件页及详情页的附件区域。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。用户管理的上传记录页使用只读来源列表，显示用户在业务模块上传的文件，不调用附件上传表单组件。
 
 - `uploadUrl`：受控 POST 上传地址；为空时不显示上传表单。
-- `downloadRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$userId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。
+- `downloadRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$announcementId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。
 - `accept`、`hint`：接入模块提供的上传格式及提示；这些前端信息不代替服务端 MIME、扩展名和大小检查。
 - `error`：当前文件字段的错误；`inputId` 默认 `attachment-file`，同页多实例时需指定不同 ID。
 - `labels`：传入 `file`、`size`、`actions`、`upload`、`download`、`remove`、`empty` 的本地化文案。

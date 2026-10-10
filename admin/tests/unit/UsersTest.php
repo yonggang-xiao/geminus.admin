@@ -3,7 +3,6 @@
 use CodeIgniter\Config\Services;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Files\File;
-use CodeIgniter\HTTP\DownloadResponse;
 use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\UserAgent;
@@ -16,13 +15,12 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Controllers\Users;
 use Geminus\Admin\Entities\AdminUser;
-use Geminus\Admin\Libraries\DataManagement\Attachments;
-use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\AttachmentModel;
+use Modules\Announcements\Models\AnnouncementModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -395,57 +393,53 @@ final class UsersTest extends CIUnitTestCase
         }
     }
 
-    public function testReadOnlyUserCannotChangeAttachmentsOrSeeWriteActions(): void
+    public function testUploadHistoryWithoutBusinessPermissionIsEmpty(): void
+    {
+        $this->loginAs('user');
+        auth()->user()->addPermission('users.view');
+        $announcementId = (int) (new AnnouncementModel())->insert(['title' => 'Hidden upload', 'body' => 'Body', 'status' => 'draft']);
+        (new AttachmentModel())->insert(['resource_type' => 'announcement', 'resource_id' => $announcementId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'hidden-upload.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
+        $history = service('uploadhistory');
+        $this->assertNotSame($history, service('uploadhistory'));
+        $result = $history->paginate((int) auth()->id(), auth()->user());
+        $this->assertSame([], $result['attachments']);
+        $this->assertSame(0, $result['pager']->getTotal());
+        $page = $this->get('/en/admin/users/' . auth()->id() . '/attachments');
+        $page->assertOK();
+        $page->assertSee(lang('Admin.uploadHistoryEmpty'));
+        $this->assertStringNotContainsString('enctype="multipart/form-data"', $page->response()->getBody());
+    }
+
+    public function testReadOnlyUserUploadHistoryRequiresBusinessAndTargetAccess(): void
     {
         $this->loginAs('user');
         auth()->user()->addPermission('users.view');
         $this->createUser('readonlytarget', 'readonlytarget@example.com');
-        $target    = auth()->getProvider()->findByCredentials(['email' => 'readonlytarget@example.com']);
-        $filename  = bin2hex(random_bytes(16)) . '.txt';
-        $directory = WRITEPATH . 'uploads/attachments/';
-        if (! is_dir($directory)) {
-            mkdir($directory, 0750, true);
-        }
-        file_put_contents($directory . $filename, 'content');
-        $model        = new AttachmentModel();
-        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $target->id, 'filename' => $filename, 'original_name' => 'readonly.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
-        $route        = '/en/admin/users/' . $target->id . '/attachments';
-
-        try {
-            $page = $this->get('/en/admin/users');
-            $page->assertOK();
-            $this->assertStringNotContainsString('href="/en/admin/users/create"', $page->response()->getBody());
-            $this->assertStringNotContainsString('action="/en/admin/users/import"', $page->response()->getBody());
-            $this->assertStringNotContainsString('href="/en/admin/users/' . $target->id . '/edit"', $page->response()->getBody());
-            $attachments = $this->get($route);
-            $attachments->assertOK();
-            $this->assertStringNotContainsString('enctype="multipart/form-data"', $attachments->response()->getBody());
-            $this->assertStringNotContainsString($route . '/' . $attachmentId . '/remove', $attachments->response()->getBody());
-            $this->get($route . '/' . $attachmentId)->assertStatus(200);
-            $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
-            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo(config('Auth')->permissionDeniedRedirect());
-            $this->assertNotNull($model->find($attachmentId));
-            $this->assertSame('content', file_get_contents($directory . $filename));
-
-            $target->addGroup('admin');
-            $this->get($route)->assertStatus(404);
-            $this->get($route . '/' . $attachmentId)->assertStatus(404);
-            auth()->user()->addPermission('users.edit');
-            $beforeCount = $model->countAllResults();
-            $this->post($route, [csrf_token() => csrf_hash()])->assertStatus(404);
-            $this->assertSame($beforeCount, $model->countAllResults());
-            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
-            $this->assertNotNull($model->find($attachmentId));
-            $this->assertFileExists($directory . $filename);
-            auth()->user()->addPermission('users.manage-admins');
-            $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
-            $this->assertNull($model->find($attachmentId));
-            $this->assertFileDoesNotExist($directory . $filename);
-        } finally {
-            if (is_file($directory . $filename)) {
-                unlink($directory . $filename);
-            }
-        }
+        $target         = auth()->getProvider()->findByCredentials(['email' => 'readonlytarget@example.com']);
+        $announcementId = (int) (new AnnouncementModel())->insert(['title' => 'Visible record', 'body' => 'Body', 'status' => 'published', 'published_at' => '2026-10-01 12:00:00']);
+        (new AttachmentModel())->insert(['resource_type' => 'announcement', 'resource_id' => $announcementId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'readonly.txt', 'mime_type' => 'text/plain', 'size_bytes' => 2048, 'uploaded_by' => $target->id]);
+        $route = '/en/admin/users/' . $target->id . '/attachments';
+        $list  = $this->get('/en/admin/users');
+        $list->assertOK();
+        $listBody = $list->response()->getBody();
+        $this->assertStringNotContainsString('href="/en/admin/users/create"', $listBody);
+        $this->assertStringNotContainsString('action="/en/admin/users/import"', $listBody);
+        $this->assertStringNotContainsString('href="/en/admin/users/' . $target->id . '/edit"', $listBody);
+        $attachments = $this->get($route);
+        $attachments->assertOK();
+        $this->assertStringNotContainsString('readonly.txt', $attachments->response()->getBody());
+        auth()->user()->addPermission('announcements.access');
+        $attachments = $this->get($route);
+        $attachments->assertOK();
+        $attachments->assertSee('readonly.txt');
+        $this->assertStringNotContainsString('enctype="multipart/form-data"', $attachments->response()->getBody());
+        $this->assertStringNotContainsString('/remove', $attachments->response()->getBody());
+        $target->addGroup('admin');
+        $this->get($route)->assertStatus(404);
+        auth()->user()->addPermission('users.edit');
+        $this->get($route)->assertStatus(404);
+        auth()->user()->addPermission('users.manage-admins');
+        $this->get($route)->assertOK();
     }
 
     public function testDelegatedUserManagerCannotAccessOtherSuperadminAttachments(): void
@@ -481,29 +475,17 @@ final class UsersTest extends CIUnitTestCase
         }
     }
 
-    public function testAttachmentsRequireReadAndWritePermissions(): void
+    public function testUploadHistoryRequiresUserReadPermission(): void
     {
         $this->get('/en/admin/users/1/attachments')->assertRedirect();
-        $this->post('/en/admin/users/1/attachments', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->loginAs('user');
         $this->get('/en/admin/users/1/attachments')->assertRedirect();
-        $this->get('/en/admin/users/1/attachments/1')->assertRedirect();
-        $this->post('/en/admin/users/1/attachments/1/remove', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->assertSame(0, (new AttachmentModel())->countAllResults());
         $this->loginAs('superadmin');
         $this->get('/en/admin/users/' . auth()->id() . '/attachments')->assertStatus(200);
-        $this->post('/en/admin/users/' . auth()->id() . '/attachments', [csrf_token() => csrf_hash()])->assertRedirect();
-        $this->assertNotEmpty(session('attachment_errors.file'));
     }
 
-    public function testAttachmentUploadRequiresCsrf(): void
-    {
-        $this->loginAs('superadmin');
-        $this->expectException(SecurityException::class);
-        $this->post('/en/admin/users/1/attachments');
-    }
-
-    public function testProtectedAccountsAllowAttachmentManagementButRemainUneditable(): void
+    public function testProtectedAccountsAllowUploadHistoryButRemainUneditable(): void
     {
         $this->loginAs('superadmin');
         $actorId = (int) auth()->id();
@@ -513,56 +495,21 @@ final class UsersTest extends CIUnitTestCase
         $this->createUser('multiroleattachment', 'multiroleattachment@example.com');
         $multiple = auth()->getProvider()->findByCredentials(['email' => 'multiroleattachment@example.com']);
         $multiple->addGroup('admin', 'beta');
-        $listBody = $this->get('/en/admin/users')->response()->getBody();
+        $listBody       = $this->get('/en/admin/users')->response()->getBody();
+        $announcementId = (int) (new AnnouncementModel())->insert(['title' => 'Protected user upload', 'body' => 'Body', 'status' => 'draft']);
 
         foreach ([$actorId, (int) $protected->id, (int) $multiple->id] as $resourceId) {
+            $filename = 'protected-' . $resourceId . '.txt';
+            (new AttachmentModel())->insert(['resource_type' => 'announcement', 'resource_id' => $announcementId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => $filename, 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => $resourceId]);
             $this->assertStringContainsString('href="/en/admin/users/' . $resourceId . '/attachments"', $listBody);
-            $source = tempnam(sys_get_temp_dir(), 'protected-attachment-');
-            file_put_contents($source, 'protected content');
-            $path = null;
-
-            try {
-                $upload = $this->getMockBuilder(UploadedFile::class)
-                    ->setConstructorArgs([$source, 'protected.txt', 'text/plain', filesize($source), UPLOAD_ERR_OK])
-                    ->onlyMethods(['isValid', 'move'])->getMock();
-                $upload->method('isValid')->willReturn(true);
-                $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
-                    $path = $target . '/' . $name;
-
-                    return copy($source, $path);
-                });
-                $request = $this->getMockBuilder(IncomingRequest::class)
-                    ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
-                    ->onlyMethods(['getFile'])->getMock();
-                $request->expects($this->once())->method('getFile')->with('file')->willReturn($upload);
-                $controller = new Users();
-                $controller->initController($request, Services::response(null, false), service('logger'));
-                $controller->uploadAttachment($resourceId);
-                $this->assertSame(['type' => 'success', 'message' => lang('Admin.attachmentSaved')], session('alert'));
-                $model      = new AttachmentModel();
-                $attachment = $model->forResource('user', $resourceId)->first();
-                $this->assertNotNull($attachment);
-                $attachmentId = (int) $attachment['id'];
-                $page         = $this->get('/en/admin/users/' . $resourceId . '/attachments');
-                $page->assertOK();
-                $page->assertSee('protected.txt');
-                $this->assertStringContainsString('href="/en/admin/users"', $page->response()->getBody());
-                $this->assertStringNotContainsString('/en/admin/users/' . $resourceId . '/edit', $page->response()->getBody());
-                $this->get('/en/admin/users/' . $resourceId . '/edit')->assertStatus(404);
-                $this->post('/en/admin/users/' . $resourceId, [csrf_token() => csrf_hash()])->assertStatus(404);
-                $this->post('/en/admin/users/' . $resourceId . '/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
-                $route = '/en/admin/users/' . $resourceId . '/attachments/' . $attachmentId;
-                $this->get($route)->assertStatus(200);
-                $this->assertFileExists($path);
-                $this->post($route . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo('/en/admin/users/' . $resourceId . '/attachments');
-                $this->assertNull($model->find($attachmentId));
-                $this->assertFileDoesNotExist($path);
-            } finally {
-                unlink($source);
-                if ($path !== null && is_file($path)) {
-                    unlink($path);
-                }
-            }
+            $page = $this->get('/en/admin/users/' . $resourceId . '/attachments');
+            $page->assertOK();
+            $page->assertSee($filename);
+            $this->assertStringContainsString('href="/en/admin/users"', $page->response()->getBody());
+            $this->assertStringNotContainsString('enctype="multipart/form-data"', $page->response()->getBody());
+            $this->get('/en/admin/users/' . $resourceId . '/edit')->assertStatus(404);
+            $this->post('/en/admin/users/' . $resourceId, [csrf_token() => csrf_hash()])->assertStatus(404);
+            $this->post('/en/admin/users/' . $resourceId . '/invite', [csrf_token() => csrf_hash()])->assertStatus(404);
         }
     }
 
@@ -577,173 +524,113 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(0, (new AttachmentModel())->countAllResults());
     }
 
-    public function testAttachmentRemovalRequiresCsrf(): void
+    public function testUserAttachmentWriteAndDownloadRoutesAreClosed(): void
     {
         $this->loginAs('superadmin');
-        $this->expectException(SecurityException::class);
-        $this->post('/en/admin/users/1/attachments/1/remove');
-    }
-
-    public function testAttachmentControllerUploadFailureReturnsDangerAndCleansFile(): void
-    {
-        $this->loginAs('superadmin');
-        $this->createUser('failedattachment', 'failedattachment@example.com');
-        $owner  = auth()->getProvider()->findByCredentials(['email' => 'failedattachment@example.com']);
-        $source = tempnam(sys_get_temp_dir(), 'attachment-controller-');
-        file_put_contents($source, 'content');
-        $path = null;
-
-        try {
-            $upload = $this->getMockBuilder(UploadedFile::class)
-                ->setConstructorArgs([$source, 'document.txt', 'text/plain', filesize($source), UPLOAD_ERR_OK])
-                ->onlyMethods(['isValid', 'move'])->getMock();
-            $upload->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
-            $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
-                $path = $target . '/' . $name;
-
-                return copy($source, $path);
-            });
-            $request = $this->getMockBuilder(IncomingRequest::class)
-                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
-                ->onlyMethods(['getFile'])->getMock();
-            $request->expects($this->once())->method('getFile')->with('file')->willReturn($upload);
-            $model = $this->getMockBuilder(AttachmentModel::class)->onlyMethods(['insert'])->getMock();
-            $model->expects($this->once())->method('insert')->willReturn(false);
-            $controller = new Users(new Attachments($model));
-            $controller->initController($request, Services::response(null, false), service('logger'));
-            $response = $controller->uploadAttachment($owner->id);
-            $this->assertSame('/en/admin/users/' . $owner->id . '/attachments', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
-            $this->assertSame(['type' => 'danger', 'message' => lang('Admin.attachmentFailed')], session('alert'));
-            $this->assertSame(0, (new AttachmentModel())->countAllResults());
-            $this->assertNotNull($path);
-            $this->assertFileDoesNotExist($path);
-        } finally {
-            unlink($source);
-            if ($path !== null && is_file($path)) {
-                unlink($path);
-            }
-        }
-    }
-
-    public function testAttachmentControllerRemovalFailureAndCleanupFailureHaveCorrectResponses(): void
-    {
-        $this->loginAs('superadmin');
-        $this->createUser('removeattachment', 'removeattachment@example.com');
-        $owner     = auth()->getProvider()->findByCredentials(['email' => 'removeattachment@example.com']);
-        $filename  = bin2hex(random_bytes(16)) . '.txt';
-        $directory = WRITEPATH . 'uploads/attachments/';
-        if (! is_dir($directory)) {
-            mkdir($directory, 0750, true);
-        }
-        file_put_contents($directory . $filename, 'content');
+        $route        = '/en/admin/users/' . auth()->id() . '/attachments';
         $model        = new AttachmentModel();
-        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => $owner->id, 'filename' => $filename, 'original_name' => 'document.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
-
-        try {
-            $failedModel = $this->getMockBuilder(AttachmentModel::class)->onlyMethods(['delete'])->getMock();
-            $failedModel->expects($this->once())->method('delete')->willReturn(false);
-            $controller = new Users(new Attachments($failedModel));
-            $controller->initController(service('request'), Services::response(null, false), service('logger'));
-            $controller->removeAttachment($owner->id, $attachmentId);
-            $this->assertSame(['type' => 'danger', 'message' => lang('Admin.attachmentFailed')], session('alert'));
-            $this->assertNotNull($model->find($attachmentId));
-            $this->assertFileExists($directory . $filename);
-
-            $storage    = new UploadStorage('attachments', ['text/plain'], ['txt'], 100, static fn (string $file): bool => false);
-            $controller = new Users(new Attachments($model, $storage));
-            $controller->initController(service('request'), Services::response(null, false), service('logger'));
-            $response = $controller->removeAttachment($owner->id, $attachmentId);
-            $this->assertSame('/en/admin/users/' . $owner->id . '/attachments', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
-            $this->assertSame(['type' => 'success', 'message' => lang('Admin.attachmentRemoved')], session('alert'));
-            $this->assertNull($model->find($attachmentId));
-            $this->assertFileExists($directory . $filename);
-            $this->assertLogged('error', 'Attachment file cleanup failed: RuntimeException');
-        } finally {
-            unlink($directory . $filename);
-        }
+        $attachmentId = (int) $model->insert(['resource_type' => 'user', 'resource_id' => auth()->id(), 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'legacy.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
+        $this->post($route, [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->get($route . '/' . $attachmentId)->assertStatus(404);
+        $this->post($route . '/' . $attachmentId . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
+        $this->assertNotNull($model->find($attachmentId));
+        $page = $this->get($route);
+        $page->assertOK();
+        $this->assertStringNotContainsString('legacy.txt', $page->response()->getBody());
     }
 
-    public function testAttachmentUploadDownloadAndRemovalAreResourceScoped(): void
+    public function testUploadHistoryFiltersByUploaderAndBusinessVisibilityBeforePagination(): void
     {
-        $this->loginAs('superadmin');
-        $this->createUser('attachmentowner', 'attachmentowner@example.com');
-        $this->createUser('otherowner', 'otherowner@example.com');
-        $owner = auth()->getProvider()->findByCredentials(['email' => 'attachmentowner@example.com']);
-        $other = auth()->getProvider()->findByCredentials(['email' => 'otherowner@example.com']);
-        $route = '/en/admin/users/' . $owner->id . '/attachments';
+        $this->loginAs('user');
+        auth()->user()->addPermission('users.view', 'announcements.access');
+        $this->createUser('uploadtarget', 'uploadtarget@example.com');
+        $target        = auth()->getProvider()->findByCredentials(['email' => 'uploadtarget@example.com']);
+        $announcements = new AnnouncementModel();
+        $published     = (int) $announcements->insert(['title' => '<b>Published record</b>', 'body' => 'Body', 'status' => 'published', 'published_at' => '2026-10-01 12:00:00']);
+        $draft         = (int) $announcements->insert(['title' => 'Secret draft', 'body' => 'Body', 'status' => 'draft']);
+        $model         = new AttachmentModel();
+        $ids           = [];
+
+        for ($index = 1; $index <= 21; $index++) {
+            $ids[] = (int) $model->insert(['resource_type' => 'announcement', 'resource_id' => $published, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'visible-' . $index . '.txt', 'mime_type' => 'text/plain', 'size_bytes' => 2048, 'uploaded_by' => $target->id]);
+        }
+
+        foreach ([['announcement', $draft, 'draft-only.txt', $target->id], ['announcement', 99999999, 'orphan.txt', $target->id], ['unknown', $published, 'unknown.txt', $target->id], ['announcement', $published, 'other-uploader.txt', auth()->id()]] as [$type, $resourceId, $name, $uploaderId]) {
+            $model->insert(['resource_type' => $type, 'resource_id' => $resourceId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => $name, 'mime_type' => 'text/plain', 'size_bytes' => 2048, 'uploaded_by' => $uploaderId]);
+        }
+
+        $route = '/en/admin/users/' . $target->id . '/attachments';
         $page  = $this->get($route);
         $page->assertOK();
-        $page->assertSee(lang('Admin.attachmentsEmpty'));
-        $this->assertStringContainsString('enctype="multipart/form-data"', $page->response()->getBody());
-        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo($route);
-        $this->assertNotEmpty(session('attachment_errors.file'));
-        $this->assertSame(0, (new AttachmentModel())->countAllResults());
+        $body = $page->response()->getBody();
+        $this->assertStringContainsString('Upload history: 21 (1 - 20)', $body);
+        $page->assertSee('Announcements', 'td');
+        $this->assertStringContainsString('visible-21.txt', $body);
+        $this->assertStringNotContainsString('visible-1.txt', $body);
 
-        $source = tempnam(sys_get_temp_dir(), 'user-attachment-');
-        file_put_contents($source, 'private attachment content');
-        $path = null;
-
-        try {
-            $upload = $this->getMockBuilder(UploadedFile::class)
-                ->setConstructorArgs([$source, '<script>.txt', 'text/plain', filesize($source), UPLOAD_ERR_OK])
-                ->onlyMethods(['isValid', 'move'])->getMock();
-            $upload->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
-            $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
-                $path = $target . '/' . $name;
-
-                return copy($source, $path);
-            });
-            $request = $this->getMockBuilder(IncomingRequest::class)
-                ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
-                ->onlyMethods(['getFile'])->getMock();
-            $request->expects($this->once())->method('getFile')->with('file')->willReturn($upload);
-            $controller = new Users();
-            $controller->initController($request, Services::response(null, false), service('logger'));
-            $response = $controller->uploadAttachment($owner->id);
-            $this->assertSame($route, parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
-            $attachment = (new AttachmentModel())->first();
-            $this->assertSame($owner->id, (int) $attachment['resource_id']);
-            $this->assertSame((int) auth()->id(), (int) $attachment['uploaded_by']);
-            (new AttachmentModel())->insert(['resource_type' => 'user', 'resource_id' => $other->id, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => 'other-only.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => auth()->id()]);
-            $page = $this->get($route);
-            $page->assertOK();
-            $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
-            $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
-            $this->assertStringNotContainsString('other-only.txt', $page->response()->getBody());
-            $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '"', $page->response()->getBody());
-            $this->assertStringContainsString('action="' . $route . '/' . $attachment['id'] . '/remove"', $page->response()->getBody());
-            $otherPage = $this->get('/en/admin/users/' . $other->id . '/attachments');
-            $otherPage->assertSee('other-only.txt');
-            $this->assertStringNotContainsString('&lt;script&gt;.txt', $otherPage->response()->getBody());
-            $this->assertStringNotContainsString('href="' . $route . '/', $otherPage->response()->getBody());
-            $this->assertStringNotContainsString('action="' . $route . '/', $otherPage->response()->getBody());
-            $this->assertStringNotContainsString('/attachments/' . $attachment['id'] . '"', $otherPage->response()->getBody());
-            $this->assertStringNotContainsString('/attachments/' . $attachment['id'] . '/remove"', $otherPage->response()->getBody());
-            $download = $this->get($route . '/' . $attachment['id']);
-            $download->assertStatus(200);
-            $this->assertInstanceOf(DownloadResponse::class, $download->response());
-            $download->response()->buildHeaders();
-            $this->assertStringContainsString('attachment;', $download->response()->getHeaderLine('Content-Disposition'));
-            $this->assertStringContainsString('filename="' . $attachment['original_name'] . '"', $download->response()->getHeaderLine('Content-Disposition'));
-            $this->assertStringContainsString('private', $download->response()->getHeaderLine('Cache-Control'));
-            $this->assertStringContainsString('no-store', $download->response()->getHeaderLine('Cache-Control'));
-            $this->assertSame('nosniff', $download->response()->getHeaderLine('X-Content-Type-Options'));
-            $this->assertSame('private attachment content', file_get_contents($path));
-            $otherRoute = '/en/admin/users/' . $other->id . '/attachments/' . $attachment['id'];
-            $this->get($otherRoute)->assertStatus(404);
-            $this->post($otherRoute . '/remove', [csrf_token() => csrf_hash()])->assertStatus(404);
-            $this->assertFileExists($path);
-            $this->post($route . '/' . $attachment['id'] . '/remove', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
-            $this->assertSame(1, (new AttachmentModel())->countAllResults());
-            $this->assertNull((new AttachmentModel())->find($attachment['id']));
-            $this->assertFileDoesNotExist($path);
-            $this->get($route . '/' . $attachment['id'])->assertStatus(404);
-        } finally {
-            unlink($source);
-            if ($path !== null && is_file($path)) {
-                unlink($path);
-            }
+        foreach (['draft-only.txt', 'Secret draft', 'orphan.txt', 'unknown.txt', 'other-uploader.txt'] as $hidden) {
+            $this->assertStringNotContainsString($hidden, $body);
         }
+
+        $this->assertStringContainsString('&lt;b&gt;Published record&lt;/b&gt;', $body);
+        $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '"', $body);
+        $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '"', $body);
+        $document = new DOMDocument();
+        @$document->loadHTML($body);
+        $xpath = new DOMXPath($document);
+        $this->assertSame(0, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " page-body ")]//form')->length);
+        $this->assertStringContainsString('private, no-store', $page->response()->getHeaderLine('Cache-Control'));
+        $result = service('uploadhistory')->paginate((int) $target->id, auth()->user());
+        $this->assertSame(array_reverse(array_slice($ids, 1)), array_map(static fn (array $item): int => (int) $item['id'], $result['attachments']));
+        $this->assertSame(21, $result['pager']->getTotal());
+        $secondPage = $this->get($route . '?page=2');
+        $secondPage->assertOK();
+        $secondPage->assertSee('visible-1.txt');
+        $this->assertStringNotContainsString('visible-21.txt', $secondPage->response()->getBody());
+
+        auth()->user()->removePermission('announcements.access');
+        $result = service('uploadhistory')->paginate((int) $target->id, auth()->user());
+        $this->assertSame([], $result['attachments']);
+        $this->assertSame(0, $result['pager']->getTotal());
+        auth()->user()->addPermission('announcements.manage');
+        $result = service('uploadhistory')->paginate((int) $target->id, auth()->user());
+        $this->assertSame(22, $result['pager']->getTotal());
+        $this->assertSame('draft-only.txt', $result['attachments'][0]['original_name']);
+    }
+
+    public function testUploadHistoryCombinesDifferentBusinessRecordsAndPreservesLocale(): void
+    {
+        $this->loginAs('superadmin');
+        $viewer           = auth()->user();
+        $viewer->timezone = 'Asia/Shanghai';
+        auth()->getProvider()->save($viewer);
+        auth()->logout();
+        auth()->login(auth()->getProvider()->findById($viewer->id));
+        $announcements = new AnnouncementModel();
+        $model         = new AttachmentModel();
+        $uploads       = [];
+
+        foreach (['First record', 'Second record'] as $title) {
+            $resourceId = (int) $announcements->insert(['title' => $title, 'body' => 'Body', 'status' => 'draft']);
+            $uploads[]  = (int) $model->insert(['resource_type' => 'announcement', 'resource_id' => $resourceId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => '<script>.txt', 'mime_type' => 'text/plain', 'size_bytes' => 2048, 'uploaded_by' => auth()->id()]);
+        }
+
+        $result = service('uploadhistory')->paginate((int) auth()->id(), auth()->user());
+        $this->assertSame(array_reverse($uploads), array_map(static fn (array $item): int => (int) $item['id'], $result['attachments']));
+        db_connect()->table('admin_attachments')->whereIn('id', $uploads)->update(['created_at' => '2026-10-01 12:00:00']);
+        $page = $this->get('/zh-Hans/admin/users/' . auth()->id() . '/attachments');
+        $page->assertOK();
+        $page->assertSee('First record');
+        $page->assertSee('Second record');
+        $body = $page->response()->getBody();
+        $this->assertStringContainsString('&lt;script&gt;.txt', $body);
+        $this->assertStringNotContainsString('<script>.txt', $body);
+        $this->assertStringContainsString('href="/zh-Hans/admin/announcements/', $body);
+        $this->assertStringContainsString('上传时间', $body);
+        $page->assertSee('所属业务', 'th');
+        $page->assertSee('公告', 'td');
+        $this->assertStringContainsString('2.0 KB', $body);
+        $this->assertStringContainsString('2026-10-01 20:00:00', $body);
     }
 
     public function testUserListAndExportShareSearchFilter(): void

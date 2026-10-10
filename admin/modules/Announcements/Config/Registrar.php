@@ -6,6 +6,11 @@ namespace Modules\Announcements\Config;
 
 class Registrar
 {
+    public static function UploadHistory(): array
+    {
+        return ['sources' => ['announcement' => 'announcementuploadsource']];
+    }
+
     public static function AdminMenu(): array
     {
         return ['items' => [[

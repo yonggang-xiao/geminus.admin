@@ -4,7 +4,7 @@
     <div class="row g-2 align-items-center">
         <div class="col"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
         <?php if ($me->can('users.view')): ?>
-            <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Admin.attachments')) ?></a></div>
+            <div class="col-auto"><a class="btn btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Admin.uploadHistory')) ?></a></div>
         <?php endif; ?>
     </div>
 <?= $this->endSection() ?>

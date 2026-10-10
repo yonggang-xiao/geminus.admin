@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Geminus\Admin\Models;
 
+use CodeIgniter\Database\BaseBuilder;
 use CodeIgniter\Model;
 use InvalidArgumentException;
 
@@ -22,5 +23,28 @@ class AttachmentModel extends Model
         }
 
         return $this->where('resource_type', $type)->where('resource_id', $resourceId);
+    }
+
+    public function visibleUploadedBy(int $uploaderId, array $resources): self
+    {
+        if ($uploaderId < 1) {
+            throw new InvalidArgumentException('Invalid uploader.');
+        }
+
+        $this->where('uploaded_by', $uploaderId)->groupStart();
+
+        foreach ($resources as $type => $query) {
+            if (! $query instanceof BaseBuilder) {
+                throw new InvalidArgumentException('Invalid visible resource query.');
+            }
+
+            $this->orGroupStart()->where('resource_type', $type)->whereIn('resource_id', $query)->groupEnd();
+        }
+
+        if ($resources === []) {
+            $this->where('1 = 0', null, false);
+        }
+
+        return $this->groupEnd();
     }
 }

@@ -1,4 +1,8 @@
-<?= $this->extend('Geminus\Admin\Views\layout_main') ?>
+<?php
+
+use CodeIgniter\I18n\Time;
+
+?><?= $this->extend('Geminus\Admin\Views\layout_main') ?>
 
 <?= $this->section('header') ?>
     <div class="row g-2 align-items-center">
@@ -9,16 +13,35 @@
 
 <?= $this->section('content') ?>
     <div class="card">
-        <div class="card-body">
-            <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-                'uploadUrl'     => $me->can('users.edit') ? route_to('admin/users/attachments/upload', $user->id) : '',
-                'downloadRoute' => 'admin/users/attachments/download', 'removeRoute' => $me->can('users.edit') ? 'admin/users/attachments/remove' : '', 'routeArguments' => [$user->id],
-                'attachments'   => $attachments, 'accept' => $accept, 'hint' => lang('Admin.attachmentHint'), 'error' => (string) session('attachment_errors.file'),
-                'labels'        => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
-            ]) ?>
+        <div class="table-responsive">
+            <table class="table card-table table-vcenter table-mobile-lg">
+                <thead><tr>
+                    <th scope="col"><?= esc(lang('Admin.attachmentFile')) ?></th>
+                    <th scope="col"><?= esc(lang('Admin.attachmentSource')) ?></th>
+                    <th scope="col"><?= esc(lang('Admin.attachmentRecord')) ?></th>
+                    <th scope="col"><?= esc(lang('Admin.attachmentSize')) ?></th>
+                    <th scope="col"><?= esc(lang('Admin.attachmentUploadedAt')) ?></th>
+                    <th scope="col" class="text-end"><?= esc(lang('Admin.userActions')) ?></th>
+                </tr></thead>
+                <tbody>
+                    <?php foreach ($attachments as $attachment): ?>
+                        <tr>
+                            <td class="text-break" data-label="<?= esc(lang('Admin.attachmentFile'), 'attr') ?>"><?= esc($attachment['original_name']) ?></td>
+                            <td data-label="<?= esc(lang('Admin.attachmentSource'), 'attr') ?>"><?= esc(lang($attachment['source']['label'])) ?></td>
+                            <td class="text-break" data-label="<?= esc(lang('Admin.attachmentRecord'), 'attr') ?>"><a href="<?= esc(route_to($attachment['source']['recordRoute'], ...$attachment['source']['recordArguments'])) ?>"><?= esc($attachment['source']['title']) ?></a></td>
+                            <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentSize'), 'attr') ?>"><?= esc(number_format($attachment['size_bytes'] / 1024, 1)) ?> KB</td>
+                            <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentUploadedAt'), 'attr') ?>"><?= esc($me->formatDateTime(Time::parse($attachment['created_at'], 'UTC'))) ?></td>
+                            <td class="text-end" data-label="<?= esc(lang('Admin.userActions'), 'attr') ?>"><span class="d-inline-flex"><a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc(route_to($attachment['source']['downloadRoute'], ...[...$attachment['source']['downloadArguments'], $attachment['id']])) ?>" aria-label="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if ($attachments === []): ?>
+                        <tr><td colspan="6"><?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.uploadHistoryEmpty')]) ?></td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
+            <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.uploadHistory')]) ?>
         </div>
     </div>
 <?= $this->endSection() ?>

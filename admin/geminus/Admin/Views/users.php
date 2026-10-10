@@ -72,7 +72,7 @@
                                         <?php endif; ?>
                                     <?php endif; ?>
                                     <?php if ($attachmentAccess[$user->id]): ?>
-                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.attachments') . ': ' . $user->username, 'attr') ?>" title="<?= esc(lang('Admin.attachments'), 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.uploadHistory') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
                                     <?php endif; ?>
                                     <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.viewUserPermissions'), 'attr') ?>">
                                         <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></button>

@@ -10,12 +10,11 @@ use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserModel;
-use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
+use Geminus\Admin\Libraries\DataManagement\UploadHistory;
 use Geminus\Admin\Libraries\UserCsvImport;
 use Geminus\Admin\Libraries\UserManagementPolicy;
-use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
 use Throwable;
 
@@ -23,7 +22,7 @@ class Users extends BaseController
 {
     private const EXPORT_LIMIT = 10000;
 
-    public function __construct(private readonly ?Attachments $attachments = null)
+    public function __construct(private readonly ?UploadHistory $uploadHistory = null)
     {
     }
 
@@ -122,69 +121,13 @@ class Users extends BaseController
         if ($user === null) {
             return $this->response->setStatusCode(404);
         }
-        $model = new AttachmentModel();
         $this->response->setHeader('Cache-Control', 'private, no-store');
+        $page    = filter_var($this->request->getGet('page'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+        $history = ($this->uploadHistory ?? service('uploadhistory'))->paginate($userId, auth()->user(), $page);
 
         return view('Geminus\Admin\Views\user_attachments', [
-            'me'          => auth()->user(), 'user' => $user, 'page_title' => lang('Admin.attachments'),
-            'attachments' => $model->forResource('user', $userId)->orderBy('id', 'DESC')->paginate(20),
-            'pager'       => $model->pager,
-            'accept'      => implode(',', array_map(static fn (string $extension): string => '.' . $extension, array_keys(Attachments::FILE_TYPES))),
-        ]);
-    }
-
-    public function uploadAttachment(int $userId): RedirectResponse|ResponseInterface
-    {
-        if ($this->attachmentUser($userId, 'users.edit') === null) {
-            return $this->response->setStatusCode(404);
-        }
-
-        try {
-            ($this->attachments ?? new Attachments())->upload('user', $userId, $this->request->getFile('file'), (int) auth()->id());
-        } catch (InvalidArgumentException $exception) {
-            return redirect()->to(route_to('admin/users/attachments', $userId))->with('attachment_errors', ['file' => lang('Admin.attachmentInvalid')]);
-        } catch (Throwable $exception) {
-            log_message('error', 'Attachment upload failed: {type}', ['type' => $exception::class]);
-
-            return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'danger', 'message' => lang('Admin.attachmentFailed')]);
-        }
-
-        return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'success', 'message' => lang('Admin.attachmentSaved')]);
-    }
-
-    public function downloadAttachment(int $userId, int $attachmentId): ResponseInterface
-    {
-        if ($this->attachmentUser($userId) === null) {
-            return $this->response->setStatusCode(404);
-        }
-        $service    = $this->attachments ?? new Attachments();
-        $attachment = $service->find('user', $userId, $attachmentId);
-        $path       = $attachment === null ? null : $service->path($attachment);
-        if ($path === null) {
-            return $this->response->setStatusCode(404);
-        }
-
-        return $this->response->download($path, null)->setFileName($attachment['original_name'])
-            ->setHeader('Cache-Control', 'private, no-store')->setHeader('X-Content-Type-Options', 'nosniff');
-    }
-
-    public function removeAttachment(int $userId, int $attachmentId): RedirectResponse|ResponseInterface
-    {
-        if ($this->attachmentUser($userId, 'users.edit') === null) {
-            return $this->response->setStatusCode(404);
-        }
-
-        try {
-            if (! ($this->attachments ?? new Attachments())->remove('user', $userId, $attachmentId)) {
-                return $this->response->setStatusCode(404);
-            }
-        } catch (Throwable $exception) {
-            log_message('error', 'Attachment removal failed: {type}', ['type' => $exception::class]);
-
-            return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'danger', 'message' => lang('Admin.attachmentFailed')]);
-        }
-
-        return redirect()->to(route_to('admin/users/attachments', $userId))->with('alert', ['type' => 'success', 'message' => lang('Admin.attachmentRemoved')]);
+            'me' => auth()->user(), 'user' => $user, 'page_title' => lang('Admin.uploadHistory'),
+        ] + $history);
     }
 
     public function store(): RedirectResponse|ResponseInterface
@@ -377,9 +320,9 @@ class Users extends BaseController
         ], 'created_at');
     }
 
-    private function attachmentUser(int $userId, string $permission = 'users.view'): ?User
+    private function attachmentUser(int $userId): ?User
     {
-        if (! auth()->user()?->can($permission)) {
+        if (! auth()->user()?->can('users.view')) {
             return null;
         }
 

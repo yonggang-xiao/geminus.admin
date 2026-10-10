@@ -131,15 +131,15 @@ final class UiCellsTest extends CIUnitTestCase
     {
         $labels = ['file' => 'File', 'size' => 'Size', 'actions' => 'Actions', 'upload' => 'Upload', 'download' => 'Download', 'remove' => 'Remove', 'empty' => 'Empty'];
         $html   = view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-            'uploadUrl'     => '/en/admin/users/12/attachments/upload',
-            'downloadRoute' => 'admin/users/attachments/download', 'removeRoute' => 'admin/users/attachments/remove', 'routeArguments' => [12],
+            'uploadUrl'     => route_to('admin/announcements/attachments/upload', 12),
+            'downloadRoute' => 'admin/announcements/attachments/download', 'removeRoute' => 'admin/announcements/attachments/remove', 'routeArguments' => [12],
             'labels'        => $labels, 'accept' => '.pdf', 'hint' => 'PDF only', 'error' => '<Invalid file>',
             'attachments'   => [['id' => 34, 'original_name' => '<script>.pdf', 'size_bytes' => 2048]],
         ]);
         $this->assertSame(2, substr_count($html, 'method="post"'));
         $this->assertSame(2, substr_count($html, 'name="' . csrf_token() . '"'));
-        $this->assertStringContainsString('href="' . route_to('admin/users/attachments/download', 12, 34) . '"', $html);
-        $this->assertStringContainsString('action="' . route_to('admin/users/attachments/remove', 12, 34) . '"', $html);
+        $this->assertStringContainsString('href="' . route_to('admin/announcements/attachments/download', 12, 34) . '"', $html);
+        $this->assertStringContainsString('action="' . route_to('admin/announcements/attachments/remove', 12, 34) . '"', $html);
         $this->assertStringContainsString('enctype="multipart/form-data"', $html);
         $this->assertStringContainsString('aria-describedby="attachment-file-hint attachment-file-error"', $html);
         $this->assertStringContainsString('&lt;Invalid file&gt;', $html);

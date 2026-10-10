@@ -2,14 +2,19 @@
 
 use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\Model;
+use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\CsvImport;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
+use Geminus\Admin\Libraries\DataManagement\UploadHistory;
+use Geminus\Admin\Libraries\DataManagement\UploadSource;
 use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Models\AttachmentModel;
+use Modules\Announcements\Libraries\AnnouncementUploadSource;
+use Modules\Announcements\Models\AnnouncementModel;
 
 /**
  * @internal
@@ -19,6 +24,80 @@ final class DataManagementTest extends CIUnitTestCase
     use DatabaseTestTrait;
 
     protected $namespace;
+
+    public function testUploadHistoryCombinesVisibleSourcesWithoutMixingDescriptions(): void
+    {
+        $database   = db_connect();
+        $resourceId = (int) (new AnnouncementModel())->insert(['title' => 'Shared ID', 'body' => 'Body', 'status' => 'draft']);
+        $model      = new AttachmentModel();
+        $ids        = [];
+
+        foreach ([['first', 1], ['second', 1], ['second', 2], ['blocked', 1], ['unknown', 1]] as [$type, $uploaderId]) {
+            $ids[] = (int) $model->insert(['resource_type' => $type, 'resource_id' => $resourceId, 'filename' => bin2hex(random_bytes(16)) . '.txt', 'original_name' => $type . '.txt', 'mime_type' => 'text/plain', 'size_bytes' => 7, 'uploaded_by' => $uploaderId]);
+        }
+
+        $sources = [];
+
+        foreach (['first', 'second'] as $type) {
+            $source = $this->createStub(UploadSource::class);
+            $source->method('visibleResources')->willReturnCallback(static fn () => $database->table('example_announcements')->select('id'));
+            $source->method('describe')->willReturn([$resourceId => ['label' => $type, 'title' => $type . ' record']]);
+            $sources[$type] = $source;
+        }
+
+        $blocked = $this->createStub(UploadSource::class);
+        $blocked->method('visibleResources')->willReturn(null);
+        $sources = ['blocked' => $blocked] + $sources;
+        $result  = (new UploadHistory(new AttachmentModel(), $sources))->paginate(1, new User());
+        $this->assertSame([$ids[1], $ids[0]], array_map(static fn (array $item): int => (int) $item['id'], $result['attachments']));
+        $this->assertSame(['second', 'first'], array_column(array_column($result['attachments'], 'source'), 'label'));
+        $this->assertSame(2, $result['pager']->getTotal());
+        $result = (new UploadHistory(new AttachmentModel(), ['second' => $blocked, 'first' => $sources['first']]))->paginate(1, new User());
+        $this->assertSame([$ids[0]], array_map(static fn (array $item): int => (int) $item['id'], $result['attachments']));
+        $this->assertSame(1, $result['pager']->getTotal());
+    }
+
+    public function testUploadHistoryRejectsInvalidSourcesAndRequests(): void
+    {
+        $source = $this->createStub(UploadSource::class);
+
+        foreach ([['invalid/type' => $source], ['first' => new stdClass()], [1 => $source]] as $sources) {
+            try {
+                new UploadHistory(new AttachmentModel(), $sources);
+                $this->fail('Invalid sources must be rejected.');
+            } catch (InvalidArgumentException $exception) {
+                $this->assertSame('Invalid upload history source.', $exception->getMessage());
+            }
+        }
+
+        foreach ([[0, 1], [1, 0]] as [$uploaderId, $page]) {
+            try {
+                (new UploadHistory(new AttachmentModel(), []))->paginate($uploaderId, new User(), $page);
+                $this->fail('Invalid requests must be rejected.');
+            } catch (InvalidArgumentException $exception) {
+                $this->assertSame('Invalid upload history request.', $exception->getMessage());
+            }
+        }
+    }
+
+    public function testAnnouncementUploadSourceUsesIndependentVisibilityQueries(): void
+    {
+        $model     = new AnnouncementModel();
+        $draft     = (int) $model->insert(['title' => 'Draft', 'body' => 'Body', 'status' => 'draft']);
+        $published = (int) $model->insert(['title' => 'Published', 'body' => 'Body', 'status' => 'published', 'published_at' => '2026-10-01 12:00:00']);
+        $reader    = $this->createStub(User::class);
+        $reader->method('can')->willReturnMap([['announcements.access', true], ['announcements.manage', false]]);
+        $manager = $this->createStub(User::class);
+        $manager->method('can')->willReturnMap([['announcements.access', false], ['announcements.manage', true]]);
+        $source       = new AnnouncementUploadSource($model);
+        $readerQuery  = $source->visibleResources($reader);
+        $managerQuery = $source->visibleResources($manager);
+        $this->assertSame([$published], array_map(static fn (array $row): int => (int) $row['id'], $readerQuery->get()->getResultArray()));
+        $this->assertSame(2, $managerQuery->countAllResults());
+        $this->assertSame(2, $model->countAllResults());
+        $this->assertSame('Draft', $model->find($draft)['title']);
+        $this->assertSame('Published', $source->describe([$published])[$published]['title']);
+    }
 
     public function testDateAndNumericRangesAreInclusiveAndRejectInvalidBounds(): void
     {

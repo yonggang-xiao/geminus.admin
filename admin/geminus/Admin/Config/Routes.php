@@ -14,7 +14,6 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
             $routes->get('', 'Users::index', ['as' => 'admin/users']);
             $routes->get('export', 'Users::export', ['as' => 'admin/users/export']);
             $routes->get('(:num)/attachments', 'Users::attachments/$1', ['as' => 'admin/users/attachments']);
-            $routes->get('(:num)/attachments/(:num)', 'Users::downloadAttachment/$1/$2', ['as' => 'admin/users/attachments/download']);
         });
         $routes->group('', ['filter' => 'permission:users.create'], static function ($routes) {
             $routes->get('create', 'Users::create', ['as' => 'admin/users/create']);
@@ -26,8 +25,6 @@ $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], s
             $routes->get('(:num)/edit', 'Users::edit/$1', ['as' => 'admin/users/edit']);
             $routes->post('(:num)/edit', 'Users::update/$1', ['as' => 'admin/users/update']);
             $routes->post('(:num)/invite', 'Users::invite/$1', ['as' => 'admin/users/invite']);
-            $routes->post('(:num)/attachments', 'Users::uploadAttachment/$1', ['as' => 'admin/users/attachments/upload']);
-            $routes->post('(:num)/attachments/(:num)/remove', 'Users::removeAttachment/$1/$2', ['as' => 'admin/users/attachments/remove']);
         });
     });
     $routes->group('settings/email', ['filter' => 'permission:email-settings.manage'], static function ($routes) {
