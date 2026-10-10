@@ -10,9 +10,12 @@ use Config\App;
 use Config\Auth;
 use Config\Database;
 use Config\Email;
+use Geminus\Admin\Libraries\Dashboard\AuditDashboardProvider;
 use Geminus\Admin\Libraries\Dashboard\Dashboard as DashboardLibrary;
 use Geminus\Admin\Libraries\Dashboard\DashboardItems;
 use Geminus\Admin\Libraries\Dashboard\DashboardLinks;
+use Geminus\Admin\Libraries\Dashboard\EmailDashboardProvider;
+use Geminus\Admin\Libraries\Dashboard\UserDashboardProvider;
 use Geminus\Admin\Libraries\DataManagement\UploadHistory as UploadHistoryLibrary;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
@@ -23,9 +26,38 @@ use Geminus\Admin\Models\AttachmentModel;
 use Geminus\Admin\Models\EmailDeliveryLogModel;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 use Geminus\Admin\Models\NotificationModel;
+use Geminus\Admin\Models\OperationAuditModel;
+use Geminus\Admin\Models\UserModel;
 
 class Services extends BaseService
 {
+    public static function userDashboardProvider(bool $getShared = false): UserDashboardProvider
+    {
+        if ($getShared) {
+            return static::getSharedInstance('userdashboardprovider');
+        }
+
+        return new UserDashboardProvider(new UserModel());
+    }
+
+    public static function emailDashboardProvider(bool $getShared = false): EmailDashboardProvider
+    {
+        if ($getShared) {
+            return static::getSharedInstance('emaildashboardprovider');
+        }
+
+        return new EmailDashboardProvider(new EmailDeliveryLogModel());
+    }
+
+    public static function auditDashboardProvider(bool $getShared = false): AuditDashboardProvider
+    {
+        if ($getShared) {
+            return static::getSharedInstance('auditdashboardprovider');
+        }
+
+        return new AuditDashboardProvider(new OperationAuditModel());
+    }
+
     public static function dashboard(bool $getShared = false): DashboardLibrary
     {
         if ($getShared) {

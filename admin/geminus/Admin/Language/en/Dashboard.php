@@ -1,8 +1,21 @@
 <?php
 
 return [
-    'empty'       => 'No dashboard items available.',
-    'unavailable' => 'Temporarily unavailable.',
-    'viewAll'     => 'View all',
-    'viewList'    => 'View list',
+    'usersTotal'       => 'Users',
+    'usersScope'       => 'All accounts excluding deleted users.',
+    'usersBanned'      => 'Banned users',
+    'usersBannedScope' => 'Banned accounts excluding deleted users.',
+    'usersRecent'      => 'Recently created users',
+    'usersEmpty'       => 'No users yet.',
+    'emailQueued'      => 'Queued deliveries',
+    'emailQueuedScope' => 'Delivery records currently marked queued, not queue tasks.',
+    'emailFailed'      => 'Failed deliveries',
+    'emailFailedScope' => 'Delivery records currently marked failed, including queue submission failures.',
+    'emailQueue'       => 'Email queue',
+    'auditRecent'      => 'Recent admin operations',
+    'auditEmpty'       => 'No admin operations recorded yet.',
+    'empty'            => 'No dashboard items available.',
+    'unavailable'      => 'Temporarily unavailable.',
+    'viewAll'          => 'View all',
+    'viewList'         => 'View list',
 ];

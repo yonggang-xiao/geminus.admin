@@ -70,7 +70,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $result->assertSee('Public dashboard announcement');
         $body = $result->response()->getBody();
         $this->assertSame('2', $this->dashboardDraftValue($body));
-        $this->assertSame(2, service('dashboard')->sections(auth()->user(), 'zh-Hans')[0]['items'][0]['value']);
+        $this->assertSame(2, array_column(service('dashboard')->sections(auth()->user(), 'zh-Hans'), null, 'id')['announcements']['items'][0]['value']);
         $this->assertContains('/zh-Hans/admin/announcements/' . $draft, $this->dashboardLinks($body));
         $this->assertContains('/zh-Hans/admin/announcements?status=draft', $this->dashboardLinks($body));
         $this->assertContains('/zh-Hans/admin/announcements/create', $this->dashboardLinks($body));
@@ -94,7 +94,10 @@ final class AnnouncementsTest extends CIUnitTestCase
         auth()->user()->removePermission('announcements.access');
         $empty = $this->get('/zh-Hans/admin/dashboard');
         $empty->assertOK();
-        $empty->assertSee('暂无可显示的仪表盘内容。');
+        $remaining = service('dashboard')->sections(auth()->user(), 'zh-Hans');
+        $this->assertNotEmpty($remaining);
+        $this->assertNotContains('announcements', array_column($remaining, 'id'));
+        $this->assertStringContainsString('dashboard-' . $remaining[0]['id'], $empty->response()->getBody());
         $this->assertStringNotContainsString('dashboard-announcements', $empty->response()->getBody());
         $this->get('/zh-Hans/admin/announcements')->assertRedirect();
     }
@@ -113,7 +116,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $user->timezone = 'Asia/Shanghai';
         auth()->getProvider()->save($user);
         $sections = service('dashboard')->sections($user, 'zh-Hant');
-        $rows     = $sections[0]['items'][0]['rows'];
+        $rows     = array_column($sections, null, 'id')['announcements']['items'][0]['rows'];
         $this->assertCount(5, $rows);
         $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hant/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
         $this->assertStringContainsString('LIMIT 5', (string) $model->db->getLastQuery());
@@ -143,7 +146,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         }
         $this->loginAs('admin', ['announcements.manage']);
         $sections = service('dashboard')->sections(auth()->user(), 'zh-Hans');
-        $rows     = $sections[0]['items'][2]['rows'];
+        $rows     = array_column($sections, null, 'id')['announcements']['items'][2]['rows'];
         $this->assertCount(5, $rows);
         $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hans/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
         $this->assertSame('2026-10-11T02:00:00Z', $rows[0]['time']);
@@ -160,7 +163,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $result = $this->get('/en/admin/dashboard');
         $result->assertOK();
         $this->assertSame('0', $this->dashboardDraftValue($result->response()->getBody()));
-        $this->assertSame(0, service('dashboard')->sections(auth()->user(), 'en')[0]['items'][0]['value']);
+        $this->assertSame(0, array_column(service('dashboard')->sections(auth()->user(), 'en'), null, 'id')['announcements']['items'][0]['value']);
         $result->assertSee('No announcements yet.');
         $this->assertStringNotContainsString('Temporarily unavailable', $result->response()->getBody());
         auth()->user()->removePermission('announcements.manage');

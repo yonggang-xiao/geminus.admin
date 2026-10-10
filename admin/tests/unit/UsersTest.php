@@ -9,17 +9,24 @@ use CodeIgniter\HTTP\UserAgent;
 use CodeIgniter\Queue\Interfaces\QueueInterface;
 use CodeIgniter\Queue\QueuePushResult;
 use CodeIgniter\Security\Exceptions\SecurityException;
+use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Controllers\Users;
 use Geminus\Admin\Entities\AdminUser;
+use Geminus\Admin\Libraries\Dashboard\AuditDashboardProvider;
+use Geminus\Admin\Libraries\Dashboard\EmailDashboardProvider;
+use Geminus\Admin\Libraries\Dashboard\UserDashboardProvider;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\QueuedEmail;
 use Geminus\Admin\Libraries\UserProvisioning;
 use Geminus\Admin\Models\AttachmentModel;
+use Geminus\Admin\Models\EmailDeliveryLogModel;
+use Geminus\Admin\Models\OperationAuditModel;
+use Geminus\Admin\Models\UserModel;
 use Modules\Announcements\Models\AnnouncementModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -32,6 +39,135 @@ final class UsersTest extends CIUnitTestCase
     use FeatureTestTrait;
 
     protected $namespace;
+
+    public function testAdminDashboardProvidersRespectIndependentPermissions(): void
+    {
+        $this->assertSame('created', service('userProvisioning')->create('dashboardviewer', 'dashboardviewer@example.com'));
+        $viewer = auth()->getProvider()->findByCredentials(['email' => 'dashboardviewer@example.com']);
+        $this->assertSame([], service('dashboard')->sections($viewer, 'en'));
+        $viewer->addPermission('users.create');
+        $sections = service('dashboard')->sections($viewer, 'en');
+        $this->assertSame(['users'], array_column($sections, 'id'));
+        $this->assertSame(['create'], array_column($sections[0]['items'], 'id'));
+        $viewer->addPermission('users.view', 'email-deliveries.view', 'operation-audit.view');
+        $sections = service('dashboard')->sections($viewer, 'en');
+        $this->assertSame(['users', 'email', 'audit'], array_column($sections, 'id'));
+        $this->assertFalse($sections[0]['unavailable']);
+        $this->assertSame(1, $sections[0]['items'][0]['value']);
+        $this->assertSame(0, $sections[1]['items'][0]['value']);
+        $this->assertSame([], $sections[2]['items'][0]['rows']);
+        $viewer->removePermission('users.view', 'users.create', 'email-deliveries.view', 'operation-audit.view');
+        $this->assertSame([], service('dashboard')->sections($viewer, 'en'));
+    }
+
+    public function testAdminDashboardCountsBoundedListsAndLinksMatchTheirPages(): void
+    {
+        $users = new UserModel();
+        $ids   = [];
+
+        for ($index = 0; $index < 7; $index++) {
+            $user = new AdminUser(['username' => 'dashboard' . $index, 'status' => $index === 6 ? 'banned' : null]);
+            $users->save($user);
+            $ids[] = $users->getInsertID();
+            $users->db->table('users')->where('id', $ids[$index])->update(['created_at' => $index === 0 ? '2026-10-11 02:00:00' : '2026-10-10 01:02:03']);
+        }
+        $deleted = new AdminUser(['username' => 'deleted-dashboard', 'status' => 'banned']);
+        $users->save($deleted);
+        $users->db->table('users')->where('id', $users->getInsertID())->update(['created_at' => '2026-10-10 01:02:03']);
+        $users->delete($users->getInsertID());
+        $viewer = $users->findById($ids[1]);
+        $viewer->addPermission('users.view', 'email-deliveries.view', 'operation-audit.view');
+        $deliveries = new EmailDeliveryLogModel();
+        $deliveries->createQueued('queued-one@example.com', 'Queued one', null);
+        $deliveries->createQueued('queued-two@example.com', 'Queued two', null);
+        $failed = $deliveries->createQueued('failed@example.com', 'Failed mail', null);
+        $deliveries->markQueueFailed($failed);
+        $sent = $deliveries->createQueued('sent@example.com', 'Sent mail', null);
+        $deliveries->recordAttempt($sent, 1, null);
+
+        for ($index = 0; $index < 7; $index++) {
+            db_connect()->table('operation_audit_logs')->insert(['actor_id' => null, 'action' => 'POST', 'target_type' => 'users', 'target_id' => (string) $index,
+                'path'                                                      => 'private-path-' . $index, 'result' => 'success', 'ip_address' => '192.0.2.123', 'user_agent' => 'PrivateDashboardAgent',
+                'created_at'                                                => $index === 0 ? '2026-10-11 02:00:00' : '2026-10-10 01:02:03']);
+        }
+        $userItems = service('userdashboardprovider')->items($viewer);
+        $this->assertSame(7, $userItems[0]['value']);
+        $this->assertSame(1, $userItems[1]['value']);
+        $rows = $userItems[2]['rows'];
+        $this->assertSame(['dashboard0', 'dashboard6', 'dashboard5', 'dashboard4', 'dashboard3'], array_column($rows, 'title'));
+        $this->assertSame('2026-10-11T02:00:00Z', $rows[0]['time']);
+        $this->assertStringContainsString('LIMIT 5', (string) $users->db->getLastQuery());
+        $auditItems = service('auditdashboardprovider')->items($viewer);
+        $this->assertSame(['POST users #0', 'POST users #6', 'POST users #5', 'POST users #4', 'POST users #3'], array_column($auditItems[0]['rows'], 'title'));
+        $this->assertStringContainsString('LIMIT 5', (string) db_connect()->getLastQuery());
+        $sections = array_column(service('dashboard')->sections($viewer, 'zh-Hans'), null, 'id');
+        $this->assertSame(2, $sections['email']['items'][0]['value']);
+        $this->assertSame(1, $sections['email']['items'][1]['value']);
+        $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=queued', $sections['email']['items'][0]['link']['url']);
+        $this->assertSame('/zh-Hans/admin/mail/deliveries?view=logs&status=failed', $sections['email']['items'][1]['link']['url']);
+        $this->assertSame('/zh-Hans/admin/mail/deliveries?view=queue', $sections['email']['items'][2]['link']['url']);
+        $this->assertSame('/zh-Hans/admin/users?q=dashboard0', $sections['users']['items'][2]['rows'][0]['link']['url']);
+        $this->assertSame('/zh-Hans/admin/audit?type=users&target=0', $sections['audit']['items'][0]['rows'][0]['link']['url']);
+        auth()->login($viewer);
+        $dashboard = $this->get('/zh-Hans/admin/dashboard');
+        $dashboard->assertOK();
+        $dashboard->assertSee('POST users #0');
+
+        foreach (['dashboard-users', 'dashboard-email', 'dashboard-audit'] as $region) {
+            $this->assertStringContainsString($region, $dashboard->response()->getBody());
+        }
+
+        foreach (['private-path-', '192.0.2.123', 'PrivateDashboardAgent', 'queued-one@example.com', 'failed@example.com'] as $privateValue) {
+            $this->assertStringNotContainsString($privateValue, $dashboard->response()->getBody());
+        }
+        $filtered = $this->get('/zh-Hans/admin/mail/deliveries?view=logs&status=failed');
+        $filtered->assertSee('Failed mail');
+        $filtered->assertDontSee('Queued one');
+        $filteredUsers = $this->get('/zh-Hans/admin/users?q=dashboard0');
+        $filteredUsers->assertSee('dashboard0');
+        $filteredUsers->assertDontSee('dashboard3');
+        $audit = $this->get('/zh-Hans/admin/audit?type=users&target=0');
+        $audit->assertSee('private-path-0');
+        $audit->assertDontSee('private-path-3');
+        $viewer->removePermission('users.view', 'email-deliveries.view', 'operation-audit.view');
+        $this->assertSame([], service('dashboard')->sections($viewer, 'zh-Hans'));
+        $revoked = $this->get('/zh-Hans/admin/dashboard');
+        $revoked->assertOK();
+        $revoked->assertSee('暂无可显示的仪表盘内容。');
+
+        foreach (['dashboard-users', 'dashboard-email', 'dashboard-audit'] as $region) {
+            $this->assertStringNotContainsString($region, $revoked->response()->getBody());
+        }
+        $this->get('/zh-Hans/admin/users')->assertRedirect();
+        $this->get('/zh-Hans/admin/mail/deliveries')->assertRedirect();
+        $this->get('/zh-Hans/admin/audit')->assertRedirect();
+    }
+
+    public function testAdminDashboardProvidersDoNotQueryWithoutBusinessPermission(): void
+    {
+        $viewer = $this->createStub(User::class);
+        $viewer->method('can')->willReturn(false);
+        $users = $this->createMock(UserModel::class);
+        $users->expects($this->never())->method('dashboardCount');
+        $users->expects($this->never())->method('dashboardRecent');
+        $email = $this->createMock(EmailDeliveryLogModel::class);
+        $email->expects($this->never())->method('dashboardStatusCount');
+        $audit = $this->createMock(OperationAuditModel::class);
+        $audit->expects($this->never())->method('dashboardRecent');
+        $this->assertSame([], (new UserDashboardProvider($users))->items($viewer));
+        $this->assertSame([], (new EmailDashboardProvider($email))->items($viewer));
+        $this->assertSame([], (new AuditDashboardProvider($audit))->items($viewer));
+
+        foreach (['userdashboardprovider', 'emaildashboardprovider', 'auditdashboardprovider'] as $name) {
+            $this->assertNotSame(service($name), service($name));
+        }
+
+        foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
+            foreach (['usersTotal', 'usersScope', 'usersBanned', 'usersBannedScope', 'usersRecent', 'usersEmpty', 'emailQueued', 'emailQueuedScope', 'emailFailed', 'emailFailedScope', 'emailQueue', 'auditRecent', 'auditEmpty'] as $key) {
+                $this->assertNotSame('Dashboard.' . $key, lang('Dashboard.' . $key, [], $locale));
+            }
+        }
+    }
 
     protected function tearDown(): void
     {

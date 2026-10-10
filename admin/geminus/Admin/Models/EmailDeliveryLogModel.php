@@ -13,6 +13,11 @@ class EmailDeliveryLogModel extends Model
     protected $returnType    = 'array';
     protected $allowedFields = ['recipient', 'subject', 'invited_user_id', 'status', 'attempts', 'created_at', 'job_id', 'failure_reason', 'processed_at'];
 
+    public function dashboardStatusCount(string $status): int
+    {
+        return $this->where('status', $status)->countAllResults();
+    }
+
     public function createQueued(string $recipient, string $subject, ?int $invitedUserId): int
     {
         $auditId = $this->insert([
