@@ -11,7 +11,9 @@
 
 通用组件位于 [admin/geminus/Admin/Cells/](../admin/geminus/Admin/Cells/)，Cell 类与对应的 snake_case 模板放在同一目录，通过完整命名空间的 `view_cell()` 调用。
 
-Controller / Service 负责查询、输入归一化、验证、资源授权及业务写入。Cell 接收已准备好的数据、翻译文案及受控链接，负责局部展示状态和 HTML 转义，不查询业务数据、不读取请求参数，也不决定当前用户的权限。
+沿用 [CI4 View Cells](https://codeigniter.com/user_guide/outgoing/view_cells.html#performing-setup-logic) 的约定，展示数据可在 Cell 的 `mount()` 或 Controller 中准备；Cell 负责局部展示逻辑和 HTML 转义，业务逻辑留在 Cell 外。输入归一化、验证、资源授权及业务写入由 Controller / Library 按职责处理。
+
+本文列出的开发者配置式通用组件采用调用方传入数据、翻译文案及受控链接的方式，不自行查询业务数据、读取请求参数或决定当前用户的权限。这是这些组件的接口约定，不是对所有 Cell 的统一限制。
 
 纯模板片段继续使用视图 `include()`；页面布局、业务表格行及页面操作保持在所属模块，不为静态标记创建 Cell。
 
