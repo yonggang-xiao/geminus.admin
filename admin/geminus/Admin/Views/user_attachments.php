@@ -14,7 +14,7 @@ use CodeIgniter\I18n\Time;
 <?= $this->section('content') ?>
     <div class="card">
         <div class="table-responsive">
-            <table class="table card-table table-vcenter table-mobile-lg">
+            <table class="table card-table table-vcenter">
                 <thead><tr>
                     <th scope="col"><?= esc(lang('Admin.attachmentFile')) ?></th>
                     <th scope="col"><?= esc(lang('Admin.attachmentSource')) ?></th>
@@ -26,7 +26,7 @@ use CodeIgniter\I18n\Time;
                 <tbody>
                     <?php foreach ($attachments as $attachment): ?>
                         <tr>
-                            <td class="text-break" data-label="<?= esc(lang('Admin.attachmentFile'), 'attr') ?>"><?= esc($attachment['original_name']) ?></td>
+                            <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentFile'), 'attr') ?>"><?= esc($attachment['original_name']) ?></td>
                             <td data-label="<?= esc(lang('Admin.attachmentSource'), 'attr') ?>"><?= esc(lang($attachment['source']['label'])) ?></td>
                             <td class="text-break" data-label="<?= esc(lang('Admin.attachmentRecord'), 'attr') ?>"><a href="<?= esc(route_to($attachment['source']['recordRoute'], ...$attachment['source']['recordArguments'])) ?>"><?= esc($attachment['source']['title']) ?></a></td>
                             <td class="text-nowrap" data-label="<?= esc(lang('Admin.attachmentSize'), 'attr') ?>"><?= esc(number_format($attachment['size_bytes'] / 1024, 1)) ?> KB</td>

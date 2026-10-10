@@ -9,14 +9,12 @@
 
 <?= $this->section('content') ?>
     <div class="card">
-        <div class="card-body">
-            <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-                'uploadUrl'     => route_to('admin/announcements/attachments/upload', $announcement['id']),
-                'downloadRoute' => 'admin/announcements/attachments/download', 'removeRoute' => 'admin/announcements/attachments/remove', 'routeArguments' => [$announcement['id']],
-                'attachments'   => $attachments, 'accept' => $accept, 'hint' => lang('Admin.attachmentHint'), 'error' => (string) session('attachment_errors.file'),
-                'labels'        => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
-            ]) ?>
-        </div>
+        <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
+            'uploadUrl'     => route_to('admin/announcements/attachments/upload', $announcement['id']),
+            'downloadRoute' => 'admin/announcements/attachments/download', 'removeRoute' => 'admin/announcements/attachments/remove', 'routeArguments' => [$announcement['id']],
+            'attachments'   => $attachments, 'accept' => $accept, 'hint' => lang('Admin.attachmentHint'), 'error' => (string) session('attachment_errors.file'),
+            'labels'        => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
+        ]) ?>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
             <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
         </div>

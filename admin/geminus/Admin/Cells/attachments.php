@@ -1,5 +1,5 @@
 <?php if ($uploadUrl !== ''): ?>
-    <form method="post" action="<?= esc($uploadUrl) ?>" enctype="multipart/form-data" class="mb-4 pb-4 border-bottom">
+    <form method="post" action="<?= esc($uploadUrl) ?>" enctype="multipart/form-data" class="card-body border-bottom">
         <?= csrf_field() ?>
         <label class="form-label required" for="<?= esc($inputId) ?>"><?= esc($labels['file']) ?></label>
         <div class="row g-2 align-items-start">
@@ -13,12 +13,12 @@
     </form>
 <?php endif; ?>
 <div class="table-responsive">
-    <table class="table table-vcenter table-mobile-md mb-0" style="table-layout: fixed">
+    <table class="table card-table table-vcenter">
         <thead><tr><th scope="col"><?= esc($labels['file']) ?></th><th scope="col" class="w-25"><?= esc($labels['size']) ?></th><th scope="col" class="w-25 text-end"><?= esc($labels['actions']) ?></th></tr></thead>
         <tbody>
             <?php foreach ($items as $item): ?>
                 <tr>
-                    <td class="text-break" data-label="<?= esc($labels['file'], 'attr') ?>"><?= esc($item['name']) ?></td>
+                    <td class="text-nowrap" data-label="<?= esc($labels['file'], 'attr') ?>"><?= esc($item['name']) ?></td>
                     <td class="text-nowrap" data-label="<?= esc($labels['size'], 'attr') ?>"><?= esc($item['size']) ?> KB</td>
                     <td data-label="<?= esc($labels['actions'], 'attr') ?>"><div class="btn-list align-items-start justify-content-end flex-nowrap">
                         <?php if ($item['downloadUrl'] !== ''): ?>

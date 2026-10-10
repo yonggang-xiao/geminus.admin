@@ -70,6 +70,8 @@ Controller / Service 负责查询、输入归一化、验证、资源授权及�
 
 `AttachmentsCell` 已接入公告附件页及详情页的附件区域。组件接收通用附件记录 `attachments`，每条包含 `id`、`original_name`、`size_bytes`；不执行文件读取、上传或移除。用户管理的上传记录页使用只读来源列表，显示用户在业务模块上传的文件，不调用附件上传表单组件。
 
+组件直接放在 `.card` 内，外层不包裹 `.card-body`。组件输出的上传表单自带 `.card-body` 内边距，表格使用 `.table-responsive > .table.card-table` 贴齐卡片边缘；窄屏下表格在容器内横向滚动，文件名保持单行。分页组件放在同一卡片的 `.card-footer` 内，详情页的只读附件区域沿用相同结构。
+
 - `uploadUrl`：受控 POST 上传地址；为空时不显示上传表单。
 - `downloadRoute`、`removeRoute`：模块提供的命名路由；`routeArguments` 是附件 ID 之前的参数，例如 `[$announcementId]`。组件追加每条附件 ID 并生成 URL；路由名为空时隐藏对应操作。
 - `accept`、`hint`：接入模块提供的上传格式及提示；这些前端信息不代替服务端 MIME、扩展名和大小检查。
