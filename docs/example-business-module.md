@@ -60,7 +60,7 @@ CI Events 同步执行。通知监听异常记录到错误日志，不撤销已�
 
 [`AnnouncementAttachments` 控制器](../admin/modules/Announcements/Controllers/AnnouncementAttachments.php) 管理 `/{announcementId}/attachments` 下的列表、POST 上传、下载和 POST 移除。附件管理需要 `announcements.manage`；下载需要 `announcements.access` 或 `announcements.manage`，仅有阅读权限的用户只能下载已发布公告的附件，管理者可下载草稿附件。先检查公告可见性，再以 `announcement` 类型、公告 ID 和附件 ID 查找关联；其他公告或用户的附件不可通过此入口访问。已发布公告的附件修改同样立即生效。
 
-文件格式与大小复用 `Attachments`：PDF、TXT、CSV、JPEG、PNG、WebP，最大 10 MB，随机文件名保存于 `writable/`。下载为附件响应，带私有缓存与 `nosniff`；缺失公告、错误关联或缺失文件返回 404。共享附件元数据表由 Admin 迁移创建，模块不另建附件表；日后添加公告删除流程时，应在模块中处理附件生命周期。
+文件格式与大小复用 `Attachments`：PDF、TXT、CSV、JPEG、PNG、WebP，大小上限读取 PHP 环境配置，随机文件名保存于 `writable/`。`Attachments::maxBytes()` 同时用于服务端校验和页面大小提示，部署时应让 `post_max_size` 高于 `upload_max_filesize`，为表单开销留出空间。下载为附件响应，带私有缓存与 `nosniff`；缺失公告、错误关联或缺失文件返回 404。共享附件元数据表由 Admin 迁移创建，模块不另建附件表；日后添加公告删除流程时，应在模块中处理附件生命周期。
 
 用户管理中的上传记录按附件的 `uploaded_by` 汇总，公告模块向底座提供公告来源、详情及下载路由和读取可见性。公告管理者可看到所查用户上传到草稿及已发布公告的附件；仅有公告阅读权限时只显示已发布公告附件；没有公告权限时不展示公告附件或其计数。汇总页只提供原业务详情和下载入口，不提供上传或移除操作，也不改变附件的公告归属。
 

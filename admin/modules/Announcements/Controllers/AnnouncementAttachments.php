@@ -30,6 +30,7 @@ class AnnouncementAttachments extends BaseController
             'attachments' => $model->forResource('announcement', $announcementId)->orderBy('id', 'DESC')->paginate(20),
             'pager'       => $model->pager,
             'accept'      => implode(',', array_map(static fn (string $extension): string => '.' . $extension, array_keys(Attachments::FILE_TYPES))),
+            'maxSize'     => (string) (Attachments::maxBytes() / (1024 * 1024)),
         ]);
     }
 
@@ -42,7 +43,7 @@ class AnnouncementAttachments extends BaseController
         try {
             (new Attachments())->upload('announcement', $announcementId, $this->request->getFile('file'), (int) auth()->id());
         } catch (InvalidArgumentException $exception) {
-            return redirect()->to(route_to('admin/announcements/attachments', $announcementId))->with('attachment_errors', ['file' => lang('Admin.attachmentInvalid')]);
+            return redirect()->to(route_to('admin/announcements/attachments', $announcementId))->with('attachment_errors', ['file' => lang('Admin.attachmentInvalid', [(string) (Attachments::maxBytes() / (1024 * 1024))])]);
         } catch (Throwable $exception) {
             log_message('error', 'Announcement attachment upload failed: {type}', ['type' => $exception::class]);
 

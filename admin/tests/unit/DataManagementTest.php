@@ -194,9 +194,29 @@ final class DataManagementTest extends CIUnitTestCase
         }
     }
 
+    public function testAttachmentLimitsParsePhpQuantitiesAndRejectInvalidLimits(): void
+    {
+        foreach ([['10M', '12M', 10485760], ['10M', '1M', 1048576], ['1M', '0', 1048576], ['1500K', '2M', 1536000], ['1024', '2048', 1024], ['1G', '2G', 1073741824]] as [$uploadLimit, $postLimit, $expected]) {
+            $this->assertSame($expected, Attachments::limitFrom($uploadLimit, $postLimit));
+        }
+
+        foreach ([['0', '8M'], ['-1', '8M'], ['1M', '-1']] as [$uploadLimit, $postLimit]) {
+            try {
+                Attachments::limitFrom($uploadLimit, $postLimit);
+                $this->fail('Invalid PHP upload limits must be rejected.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('Invalid PHP upload limits.', $exception->getMessage());
+            }
+        }
+    }
+
     public function testAttachmentsRejectUnsupportedTypesAndSizeAndSanitizeNames(): void
     {
-        foreach ([['script.html', 'small', false], ['large.txt', str_repeat('A', Attachments::MAX_BYTES + 1), false], ["../x\"\n.txt", 'content', true], [str_repeat('A', 200) . '.txt', 'content', true]] as [$clientName, $contents, $accepted]) {
+        $this->assertSame(Attachments::limitFrom((string) ini_get('upload_max_filesize'), (string) ini_get('post_max_size')), Attachments::maxBytes());
+        $text     = "Attachment boundary text.\n";
+        $contents = substr(str_repeat($text, intdiv(Attachments::maxBytes() + 1, strlen($text)) + 1), 0, Attachments::maxBytes() + 1);
+
+        foreach ([['script.html', 'small', false], ['large.txt', $contents, false], ['boundary.txt', substr($contents, 0, Attachments::maxBytes()), true], ["../x\"\n.txt", 'content', true], [str_repeat('A', 200) . '.txt', 'content', true]] as [$clientName, $contents, $accepted]) {
             $source = tempnam(sys_get_temp_dir(), 'attachment-policy-');
             file_put_contents($source, $contents);
             $path = null;
@@ -205,6 +225,7 @@ final class DataManagementTest extends CIUnitTestCase
                 $upload = $this->getMockBuilder(UploadedFile::class)
                     ->setConstructorArgs([$source, $clientName, 'text/plain', filesize($source), UPLOAD_ERR_OK])
                     ->onlyMethods(['isValid', 'move'])->getMock();
+                $this->assertSame('text/plain', $upload->getMimeType());
                 $upload->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
                 if ($accepted) {
                     $upload->expects($this->once())->method('move')->willReturnCallback(static function (string $target, ?string $name) use ($source, &$path): bool {
@@ -223,7 +244,11 @@ final class DataManagementTest extends CIUnitTestCase
                     $attachment = $service->find('user', 101, $attachmentId);
                     $this->assertDoesNotMatchRegularExpression('/[\\\\\/\r\n"]/', $attachment['original_name']);
                     $this->assertLessThanOrEqual(180, mb_strlen($attachment['original_name']));
-                    $this->assertSame($clientName === "../x\"\n.txt" ? 'x__.txt' : str_repeat('A', 180), $attachment['original_name']);
+                    $this->assertSame(match ($clientName) {
+                        'boundary.txt' => 'boundary.txt',
+                        "../x\"\n.txt" => 'x__.txt',
+                        default        => str_repeat('A', 180),
+                    }, $attachment['original_name']);
                     $service->remove('user', 101, $attachmentId);
                 } catch (InvalidArgumentException $exception) {
                     $this->assertFalse($accepted);

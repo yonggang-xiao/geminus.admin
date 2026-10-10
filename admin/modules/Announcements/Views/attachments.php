@@ -13,7 +13,7 @@
             'uploadUrl'     => route_to('admin/announcements/attachments/upload', $announcement['id']),
             'downloadRoute' => 'admin/announcements/attachments/download', 'removeRoute' => 'admin/announcements/attachments/remove', 'routeArguments' => [$announcement['id']],
             'previewRoute'  => 'admin/announcements/attachments/preview',
-            'attachments'   => $attachments, 'accept' => $accept, 'hint' => lang('Admin.attachmentHint'), 'error' => (string) session('attachment_errors.file'),
+            'attachments'   => $attachments, 'accept' => $accept, 'hint' => lang('Admin.attachmentHint', [$maxSize]), 'error' => (string) session('attachment_errors.file'),
             'labels'        => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
         ]) ?>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">

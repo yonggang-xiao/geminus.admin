@@ -62,7 +62,7 @@ $rows = $model->paginate($query->perPage);
 
 ### 附件关联与权限
 
-`Attachments` 负责附件文件和 `admin_attachments` 元数据，按 `resource_type`、`resource_id` 关联业务资源。默认支持 PDF、TXT、CSV、JPEG、PNG 和 WebP，最大 10 MB，同时核对扩展名对应的实际 MIME，原始文件名去除路径及危险字符，存储名随机生成。
+`Attachments` 负责附件文件和 `admin_attachments` 元数据，按 `resource_type`、`resource_id` 关联业务资源。默认支持 PDF、TXT、CSV、JPEG、PNG 和 WebP，上限由 `Attachments::maxBytes()` 读取 PHP 的 `upload_max_filesize` 和 `post_max_size` 后取较小值；`post_max_size=0` 时只使用单文件上限。部署时应让请求总大小上限高于单文件上限，为 multipart 表单开销留出空间。页面提示使用同一上限，同时核对扩展名对应的实际 MIME，原始文件名去除路径及危险字符，存储名随机生成。
 
 业务先验证资源存在和权限，再调用 `upload()`、`find()`、`remove()`。`find()` 和 `remove()` 必须同时提供资源类型、资源 ID、附件 ID；下载及预览需通过 `path()` 获取受控路径。文件上传后元数据保存失败会清理新文件；移除先删除关联再清理文件，清理失败写日志，附件仍不可经业务接口下载或预览。资源生命周期的批量清理和每行业务事务由接入模块负责。
 

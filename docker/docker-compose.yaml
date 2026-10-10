@@ -10,6 +10,7 @@ services:
       - "443:443/udp"
     volumes:
       - ../admin:/app
+      - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
       - caddy_data:/data
       - caddy_config:/config
     working_dir: /app

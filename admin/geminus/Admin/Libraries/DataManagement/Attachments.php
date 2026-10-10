@@ -12,7 +12,6 @@ use Throwable;
 
 final class Attachments
 {
-    public const MAX_BYTES  = 10 * 1024 * 1024;
     public const FILE_TYPES = [
         'pdf'  => ['application/pdf'],
         'txt'  => ['text/plain'],
@@ -29,7 +28,23 @@ final class Attachments
     public function __construct(?AttachmentModel $model = null, ?UploadStorage $storage = null)
     {
         $this->model   = $model ?? new AttachmentModel();
-        $this->storage = $storage ?? new UploadStorage('attachments', array_values(array_unique(array_merge(...array_values(self::FILE_TYPES)))), array_keys(self::FILE_TYPES), self::MAX_BYTES);
+        $this->storage = $storage ?? new UploadStorage('attachments', array_values(array_unique(array_merge(...array_values(self::FILE_TYPES)))), array_keys(self::FILE_TYPES), self::maxBytes());
+    }
+
+    public static function maxBytes(): int
+    {
+        return self::limitFrom((string) ini_get('upload_max_filesize'), (string) ini_get('post_max_size'));
+    }
+
+    public static function limitFrom(string $uploadLimit, string $postLimit): int
+    {
+        $uploadBytes = ini_parse_quantity($uploadLimit);
+        $postBytes   = ini_parse_quantity($postLimit);
+        if ($uploadBytes <= 0 || $postBytes < 0) {
+            throw new RuntimeException('Invalid PHP upload limits.');
+        }
+
+        return $postBytes === 0 ? $uploadBytes : min($uploadBytes, $postBytes);
     }
 
     public function upload(string $type, int $resourceId, ?UploadedFile $file, int $actorId): int
