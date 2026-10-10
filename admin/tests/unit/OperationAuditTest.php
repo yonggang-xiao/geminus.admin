@@ -8,6 +8,7 @@ use CodeIgniter\Test\DatabaseTestTrait;
 use CodeIgniter\Test\FeatureTestTrait;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Filters\OperationAudit;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -272,6 +273,7 @@ final class OperationAuditTest extends CIUnitTestCase
 
         $page = $this->get('/en/admin/audit?actor=' . $user->id . '&type=users&target=42&result=failed&from=2026-10-08&to=2026-10-08');
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
         $this->assertStringContainsString('users · ' . lang('Admin.auditDeletedUser') . ' #42</td>', $page->response()->getBody());
         $this->assertStringNotContainsString('users · ' . lang('Admin.auditDeletedUser') . ' #43</td>', $page->response()->getBody());
         $page->assertSee('auditviewer');
@@ -317,6 +319,7 @@ final class OperationAuditTest extends CIUnitTestCase
         foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
             $empty = $this->get('/' . $locale . '/admin/audit');
             $empty->assertOK();
+            TableLayoutAssertions::assertTablesInCards($empty->response()->getBody(), paginated: true);
             $empty->assertSee(lang('Admin.mailNoRecords'), 'h3');
             $this->assertStringNotContainsString('class="empty-action"', $empty->response()->getBody());
             $this->assertStringNotContainsString('(1 - 0)', $empty->response()->getBody());

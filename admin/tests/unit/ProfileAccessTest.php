@@ -14,6 +14,7 @@ use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\AvatarFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -91,6 +92,7 @@ final class ProfileAccessTest extends CIUnitTestCase
         $result = $this->get('/en/admin/profile');
 
         $result->assertOK();
+        TableLayoutAssertions::assertTablesInCards($result->response()->getBody());
         $this->assertStringContainsString('src="/static/js/form-submission.js"', $result->response()->getBody());
         $this->assertStringContainsString('href="/static/css/theme.css"', $result->response()->getBody());
         $result->assertSee('profile@example.com');
@@ -712,6 +714,7 @@ final class ProfileAccessTest extends CIUnitTestCase
 
         $result = $this->withSession($_SESSION)->get('/en/admin/profile');
         $result->assertSee(lang('Admin.tokenOnce'));
+        TableLayoutAssertions::assertTablesInCards($result->response()->getBody());
         $result->assertSee($rawToken);
 
         $result = $this->post('/en/admin/profile/tokens/' . $tokens[0]->id . '/revoke', [

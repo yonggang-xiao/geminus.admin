@@ -10,6 +10,7 @@ use Geminus\Admin\Database\Migrations\RegisterAdminFeaturePermissions;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\SuperadminGrants;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -246,7 +247,10 @@ final class RoleSettingsTest extends CIUnitTestCase
                 $this->assertStringContainsString('value="email-settings.manage"', $page->response()->getBody());
                 $this->get('/' . $locale . '/admin/settings/roles?role=superadmin')->assertSee($label);
             }
-            $this->get('/zh-Hans/admin/settings/roles?view=permissions')->assertSee('邮件发送设置');
+            $catalog = $this->get('/zh-Hans/admin/settings/roles?view=permissions');
+            $catalog->assertOK();
+            $catalog->assertSee('邮件发送设置');
+            TableLayoutAssertions::assertTablesInCards($catalog->response()->getBody());
         } finally {
             setting('AuthGroups.permissions', $original);
         }

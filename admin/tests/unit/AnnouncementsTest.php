@@ -23,6 +23,7 @@ use Modules\Announcements\Database\Migrations\AddPublicationState;
 use Modules\Announcements\Database\Migrations\GrantAnnouncementsToSuperadmin;
 use Modules\Announcements\Models\AnnouncementModel;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -317,6 +318,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             service('language')->setLocale($locale);
             $page = $this->get('/' . $locale . '/admin/announcements');
             $page->assertOK();
+            TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
             $this->assertStringContainsString('empty-title', $page->response()->getBody());
             $this->assertStringContainsString('href="/' . $locale . '/admin/announcements/create"', $page->response()->getBody());
             $page->assertSee(lang('Announcements.empty'));
@@ -328,9 +330,13 @@ final class AnnouncementsTest extends CIUnitTestCase
         Services::resetSingle('pager');
         $page = $this->get('/en/admin/announcements?page=2');
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
         $this->assertStringContainsString('(16 - 16)', $page->response()->getBody());
         $this->assertStringNotContainsString('empty-title', $page->response()->getBody());
-        $this->assertStringContainsString('announcements?page=1', $page->response()->getBody());
+        $document = new DOMDocument();
+        $document->loadHTML($page->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $this->assertCount(1, $xpath->query('//a[contains(concat(" ", normalize-space(@class), " "), " page-link ") and contains(@href, "announcements?page=1")]'));
     }
 
     public function testListFiltersAndSortsWithSafeDefaults(): void
@@ -507,6 +513,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $route = '/en/admin/announcements/' . $owner . '/attachments';
         $page  = $this->get($route);
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
         $maxSize = Attachments::maxBytes() / (1024 * 1024);
         $page->assertSee('Maximum ' . $maxSize . ' MB.');
         $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo($route);
@@ -541,6 +548,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->assertFileExists($storedPath);
             $page = $this->get($route);
             $page->assertOK();
+            TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
             $this->assertStringContainsString('&lt;script&gt;.txt', $page->response()->getBody());
             $this->assertStringNotContainsString('<script>.txt', $page->response()->getBody());
             $this->assertStringContainsString('action="' . $route . '/' . $attachment['id'] . '/remove"', $page->response()->getBody());
@@ -594,6 +602,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             $detail->assertOK();
             $this->assertStringContainsString('&lt;script&gt;.txt', $detail->response()->getBody());
             $this->assertStringNotContainsString('<script>.txt', $detail->response()->getBody());
+            TableLayoutAssertions::assertTablesInCards($detail->response()->getBody(), paginated: true);
             $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '"', $detail->response()->getBody());
             $this->assertStringContainsString('href="' . $route . '/' . $attachment['id'] . '/preview"', $detail->response()->getBody());
             $this->assertSame(1, substr_count($detail->response()->getBody(), 'id="attachment-preview"'));

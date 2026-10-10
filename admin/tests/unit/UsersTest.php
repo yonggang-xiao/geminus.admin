@@ -29,6 +29,7 @@ use Geminus\Admin\Models\OperationAuditModel;
 use Geminus\Admin\Models\UserModel;
 use Modules\Announcements\Models\AnnouncementModel;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -739,6 +740,7 @@ final class UsersTest extends CIUnitTestCase
         $page  = $this->get($route);
         $page->assertOK();
         $body = $page->response()->getBody();
+        TableLayoutAssertions::assertTablesInCards($body, paginated: true);
         $this->assertStringContainsString('Upload history: 21 (1 - 20)', $body);
         $this->assertSame(1, substr_count($body, 'id="attachment-preview"'));
         $this->assertSame(1, substr_count($body, 'src="/static/js/attachment-preview.js"'));
@@ -768,6 +770,7 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(21, $result['pager']->getTotal());
         $secondPage = $this->get($route . '?page=2');
         $secondPage->assertOK();
+        TableLayoutAssertions::assertTablesInCards($secondPage->response()->getBody(), paginated: true);
         $secondPage->assertSee('visible-1.txt');
         $this->assertStringNotContainsString('visible-21.txt', $secondPage->response()->getBody());
 
@@ -824,6 +827,7 @@ final class UsersTest extends CIUnitTestCase
 
         $page = $this->get('/en/admin/users?q=searchable%40example.com');
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
         $page->assertSee('searchable@example.com');
         $this->assertStringNotContainsString('elsewhere@example.com', $page->response()->getBody());
 
@@ -877,6 +881,7 @@ final class UsersTest extends CIUnitTestCase
         $this->loginAs('superadmin');
         $page = $this->get('/en/admin/users?created_from=2099-01-01');
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
         $page->assertSee(lang('Admin.userClear'), 'tbody');
     }
 

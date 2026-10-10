@@ -2,12 +2,39 @@
 
 use CodeIgniter\Test\CIUnitTestCase;
 use Config\Services;
+use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
  */
 final class UiCellsTest extends CIUnitTestCase
 {
+    #[DataProvider('provideTableLayoutRejectsMisplacedContainers')]
+    public function testTableLayoutRejectsMisplacedContainers(string $html): void
+    {
+        $this->expectException(AssertionFailedError::class);
+        TableLayoutAssertions::assertTablesInCards($html, paginated: true);
+    }
+
+    public static function provideTableLayoutRejectsMisplacedContainers(): iterable
+    {
+        $table  = '<div class="table-responsive"><table class="table card-table"><tbody><tr><td>Item</td></tr></tbody></table></div>';
+        $footer = '<div class="card-footer"><nav><ul class="pagination"></ul></nav></div>';
+
+        return [
+            'pagination outside card'       => ['<div class="card">' . $table . '</div>' . $footer],
+            'table inside card body'        => ['<div class="card"><div class="card-body">' . $table . '</div>' . $footer . '</div>'],
+            'pagination before table'       => ['<div class="card">' . $footer . $table . '</div>'],
+            'pagination in another card'    => ['<div class="card">' . $table . '</div><div class="card">' . $footer . '</div>'],
+            'table missing'                 => ['<div class="card">' . $footer . '</div>'],
+            'responsive container missing'  => ['<div class="card"><table class="table card-table"></table>' . $footer . '</div>'],
+            'pagination missing'            => ['<div class="card">' . $table . '<div class="card-footer"></div></div>'],
+            'extra pagination outside card' => ['<div class="card">' . $table . $footer . '</div>' . $footer],
+        ];
+    }
+
     public function testSortHeaderPreservesFiltersAndResetsPaging(): void
     {
         $html = view_cell('Geminus\Admin\Cells\SortHeaderCell', [
@@ -148,8 +175,10 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertStringContainsString('&lt;Title&gt;', $html);
         $this->assertStringContainsString('&lt;Required&gt;', $html);
         $this->assertStringNotContainsString('Email', $html);
+        TableLayoutAssertions::assertTablesInCards($html);
         $empty = view_cell('Geminus\Admin\Cells\ImportReportCell', ['rows' => [], 'resultLabels' => ['created' => 'Created']]);
         $this->assertStringContainsString('Created: 0', $empty);
+        TableLayoutAssertions::assertTablesInCards($empty);
     }
 
     public function testAttachmentsKeepPostCsrfAndConfiguredResourceRoutes(): void
@@ -178,12 +207,15 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertStringContainsString('aria-describedby="attachment-file-hint attachment-file-error"', $html);
         $this->assertStringContainsString('&lt;Invalid file&gt;', $html);
         $this->assertStringContainsString('&lt;script&gt;.pdf', $html);
+        TableLayoutAssertions::assertTablesInCards('<div class="card">' . $html . '</div>');
         $readonly = view_cell('Geminus\Admin\Cells\AttachmentsCell', ['labels' => $labels, 'attachments' => [['id' => 34, 'original_name' => 'file.pdf', 'size_bytes' => 2048]]]);
         $this->assertStringNotContainsString('<form', $readonly);
         $this->assertStringNotContainsString('<a ', $readonly);
+        TableLayoutAssertions::assertTablesInCards('<div class="card">' . $readonly . '</div>');
         $empty = view_cell('Geminus\Admin\Cells\AttachmentsCell', ['labels' => $labels]);
         $this->assertStringContainsString('Empty', $empty);
         $this->assertStringNotContainsString('file.pdf', $empty);
+        TableLayoutAssertions::assertTablesInCards('<div class="card">' . $empty . '</div>');
     }
 
     public function testAttachmentPreviewModalHasAccessibleControlsAndNoEagerFrame(): void

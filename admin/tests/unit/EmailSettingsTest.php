@@ -10,6 +10,7 @@ use Config\Services;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\MailTemplates;
 use Geminus\Admin\Libraries\QueuedEmail;
+use Tests\Support\Libraries\TableLayoutAssertions;
 
 /**
  * @internal
@@ -425,13 +426,21 @@ final class EmailSettingsTest extends CIUnitTestCase
 
         $first = $this->get('/en/admin/mail/deliveries?status=failed&recipient=paging');
         $first->assertOK();
-        $this->assertStringContainsString('page=2', $first->response()->getBody());
-        $this->assertStringContainsString('status=failed', $first->response()->getBody());
-        $this->assertStringContainsString('recipient=paging', $first->response()->getBody());
+        TableLayoutAssertions::assertTablesInCards($first->response()->getBody(), paginated: true);
+        $document = new DOMDocument();
+        $document->loadHTML($first->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $links = $xpath->query('//a[contains(concat(" ", normalize-space(@class), " "), " page-link ") and contains(@href, "page=2")]');
+        $this->assertCount(1, $links);
+        parse_str((string) parse_url($links->item(0)->getAttribute('href'), PHP_URL_QUERY), $parameters);
+        $this->assertSame('2', $parameters['page']);
+        $this->assertSame('failed', $parameters['status']);
+        $this->assertSame('paging', $parameters['recipient']);
         $first->assertSee('Total: 21 (1 - 20)');
 
         $second = $this->get('/en/admin/mail/deliveries?status=failed&recipient=paging&page=2');
         $second->assertOK();
+        TableLayoutAssertions::assertTablesInCards($second->response()->getBody(), paginated: true);
         $this->assertStringContainsString('Page 0', $second->response()->getBody());
         $this->assertStringNotContainsString('Page 20', $second->response()->getBody());
         $second->assertSee('Total: 21 (21 - 21)');
@@ -444,6 +453,7 @@ final class EmailSettingsTest extends CIUnitTestCase
         foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
             $empty = $this->get('/' . $locale . '/admin/mail/deliveries');
             $empty->assertOK();
+            TableLayoutAssertions::assertTablesInCards($empty->response()->getBody(), paginated: true);
             $empty->assertSee(lang('Admin.mailNoRecords'), 'h3');
             $this->assertStringNotContainsString('class="empty-action"', $empty->response()->getBody());
             $this->assertStringNotContainsString('(1 - 0)', $empty->response()->getBody());
@@ -458,6 +468,7 @@ final class EmailSettingsTest extends CIUnitTestCase
 
             $queue = $this->get('/' . $locale . '/admin/mail/deliveries?view=queue');
             $queue->assertOK();
+            TableLayoutAssertions::assertTablesInCards($queue->response()->getBody(), paginated: true);
             $queue->assertSee(lang('Admin.mailNoRecords'), 'h3');
             $this->assertStringNotContainsString('id="mail-recipient"', $queue->response()->getBody());
             $this->assertStringNotContainsString('class="empty-action"', $queue->response()->getBody());

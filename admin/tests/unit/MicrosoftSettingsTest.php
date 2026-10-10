@@ -16,6 +16,7 @@ use Geminus\Admin\Libraries\MicrosoftLinks;
 use Geminus\Admin\Libraries\OrganizationAzure;
 use Geminus\Admin\Models\MicrosoftLinkRequestModel;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\Libraries\TableLayoutAssertions;
 use TheNetworg\OAuth2\Client\Token\AccessToken;
 
 /**
@@ -848,6 +849,7 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
         $this->assertTrue($links->bind(auth()->user(), $tenant, $own));
         $page = $this->get('/en/admin/settings/microsoft');
         $page->assertOK();
+        TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), expectedTables: 2);
         $this->assertStringContainsString('/users/' . auth()->id() . '/revoke', $page->response()->getBody());
         $this->assertStringNotContainsString('/users/' . $target->id . '/revoke', $page->response()->getBody());
 
