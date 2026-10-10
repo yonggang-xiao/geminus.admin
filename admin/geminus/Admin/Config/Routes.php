@@ -2,13 +2,13 @@
 
 $routes->set404Override(static fn () => view('Geminus\Admin\Views\errors\404'));
 
-$routes->group('admin/avatars', ['namespace' => 'Geminus\Admin\Controllers', 'filter' => 'session'], static function ($routes) {
+$routes->group('admin/avatars', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('(:num)', 'AvatarController::show/$1', ['as' => 'admin/avatars/show']);
 });
 
 $routes->group('{locale}/admin', ['namespace' => 'Geminus\Admin\Controllers'], static function ($routes) {
     $routes->get('dashboard', 'Dashboard::index', ['as' => 'admin/dashboard']);
-    $routes->post('notifications/(:num)/open', 'Notifications::open/$1', ['as' => 'admin/notifications/open', 'filter' => 'session']);
+    $routes->post('notifications/(:num)/open', 'Notifications::open/$1', ['as' => 'admin/notifications/open']);
     $routes->group('users', static function ($routes) {
         $routes->group('', ['filter' => 'permission:users.view'], static function ($routes) {
             $routes->get('', 'Users::index', ['as' => 'admin/users']);
