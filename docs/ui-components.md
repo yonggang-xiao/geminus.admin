@@ -82,7 +82,7 @@
 
 上传和移除表单固定使用 POST 并包含 CSRF 字段，下载使用链接。预览链接由共享脚本增强为页内 Modal，顶部显示文件名、下载、新标签页打开及关闭按钮，窄屏为全屏 Modal；未启用 JavaScript 或使用组合键时仍在新标签页打开。使用预览的页面通过 `section('javascript')` 在有附件记录时引入一次 `attachment_preview` partial，partial 包含共享弹窗及脚本；主布局不依赖业务数据决定资源加载。组件通过 `data-attachment-preview`、`data-preview-name`、`data-preview-download` 提供入口数据。内容仅在打开时加载，显示加载或失败状态，关闭后卸载内容并归还焦点。PDF 和 JPEG、PNG、WebP 图片由浏览器直接显示，TXT、CSV 按纯文本显示；不支持类型的预览接口返回 415。资源存在性、附件关联和操作权限仍由业务接口检查；组件不能根据提供的路由自行推断授权。分页由外部 `PaginationCell` 组合，附件区域本身不查询记录。
 
-图片入口还通过 `data-preview-mime` 传入 MIME，以 `<img>` 等比完整显示；PDF 和文本以 iframe 显示。所有内容都通过受控预览地址加载，格式支持仍取决于浏览器。
+图片入口还通过 `data-preview-mime` 传入 MIME，以 `<img>` 等比完整显示；PDF 和文本以 iframe 显示。附件在弹窗展开动画结束后加载，PDF 使用 `view=FitH` 请求适合宽度的初始视图；具体缩放效果取决于浏览器内置查看器对该参数的支持。所有内容都通过受控预览地址加载，格式支持仍取决于浏览器。
 
 ### 导入报告
 

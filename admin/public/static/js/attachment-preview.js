@@ -75,9 +75,16 @@
             body.setAttribute('aria-busy', 'false');
             frame.classList.remove('invisible');
         });
-        frame.src = url.href;
         content.append(frame);
-        timer = setTimeout(failed, 15000);
+        const load = () => {
+            if (!frame.isConnected) return;
+            if (link.dataset.previewMime === 'application/pdf') {
+                url.hash = 'view=FitH';
+            }
+            frame.src = url.href;
+            timer = setTimeout(failed, 15000);
+        };
+        element.addEventListener('shown.bs.modal', load, {once: true});
         modal.show(link);
     });
 
