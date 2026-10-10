@@ -23,30 +23,38 @@ use CodeIgniter\I18n\Time;
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
-    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-        <?php if ($canManage): ?><span class="badge <?= $announcement['status'] === 'published' ? 'bg-success-lt' : 'bg-secondary-lt' ?>"><?= esc(lang('Announcements.status_' . $announcement['status'])) ?></span><?php endif; ?>
-        <?php if ($announcement['published_at'] !== null): ?>
-            <span class="text-secondary"><?= esc(lang('Announcements.publishedAt')) ?>: <?= esc($me->formatDateTime(Time::parse($announcement['published_at'], 'UTC'))) ?></span>
-        <?php endif; ?>
-    </div>
-    <article class="text-break mb-4"><?= nl2br(esc($announcement['body'])) ?></article>
-    <?php if ($canManage || $attachments !== []): ?>
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-            <h3 class="mb-0"><?= esc(lang('Admin.attachments')) ?></h3>
-            <?php if ($canManage): ?>
-                <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements/attachments', $announcement['id']) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Announcements.manageAttachments')) ?></a>
+    <div class="row justify-content-center">
+        <div class="col-lg-9 col-xl-8">
+            <div class="card card-lg mb-4">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-3 mb-4 text-secondary small">
+                        <?php if ($canManage): ?><span class="badge <?= $announcement['status'] === 'published' ? 'bg-success-lt' : 'bg-secondary-lt' ?>"><?= esc(lang('Announcements.status_' . $announcement['status'])) ?></span><?php endif; ?>
+                        <?php if ($announcement['published_at'] !== null): ?>
+                            <span class="text-secondary"><?= esc(lang('Announcements.publishedAt')) ?>: <?= esc($me->formatDateTime(Time::parse($announcement['published_at'], 'UTC'))) ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <article class="prose text-break"><?= nl2br(esc($announcement['body'])) ?></article>
+                </div>
+            </div>
+            <?php if ($canManage || $attachments !== []): ?>
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <h3 class="mb-0"><?= esc(lang('Admin.attachments')) ?></h3>
+                    <?php if ($canManage): ?>
+                        <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements/attachments', $announcement['id']) ?>"><i class="ti ti-paperclip me-1" aria-hidden="true"></i><?= esc(lang('Announcements.manageAttachments')) ?></a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($attachments !== []): ?>
+                <div class="card">
+                    <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
+                        'attachments' => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
+                        'labels'      => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
+                    ]) ?>
+                    <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
+                    </div>
+                </div>
             <?php endif; ?>
         </div>
-    <?php endif; ?>
-    <?php if ($attachments !== []): ?>
-        <div class="card">
-            <?= view_cell('Geminus\Admin\Cells\AttachmentsCell', [
-                'attachments' => $attachments, 'downloadRoute' => 'admin/announcements/attachments/download', 'routeArguments' => [$announcement['id']],
-                'labels'      => ['file' => lang('Admin.attachmentFile'), 'size' => lang('Admin.attachmentSize'), 'actions' => lang('Admin.userActions'), 'upload' => lang('Admin.attachmentUpload'), 'download' => lang('Admin.attachmentDownload'), 'remove' => lang('Admin.attachmentRemove'), 'empty' => lang('Admin.attachmentsEmpty')],
-            ]) ?>
-            <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <?= view_cell('Geminus\Admin\Cells\PaginationCell', ['links' => $pager->links(), 'total' => $pager->getTotal(), 'currentPage' => $pager->getCurrentPage(), 'perPage' => $pager->getPerPage(), 'totalLabel' => lang('Admin.attachments')]) ?>
-            </div>
-        </div>
-    <?php endif; ?>
+    </div>
 <?= $this->endSection() ?>
