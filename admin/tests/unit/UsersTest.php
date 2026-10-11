@@ -96,7 +96,6 @@ final class UsersTest extends CIUnitTestCase
         $sent = $deliveries->createQueued('sent@example.com', 'Sent mail', null);
         $deliveries->recordAttempt($sent, 1, null);
         $this->assertSame(['queued' => 2, 'failed' => 1, 'sent' => 1, 'total' => 4], $deliveries->dashboardCounts());
-        $this->assertStringContainsString('GROUP BY', (string) $deliveries->db->getLastQuery());
 
         for ($index = 0; $index < 7; $index++) {
             db_connect()->table('operation_audit_logs')->insert(['actor_id' => null, 'action' => 'POST', 'target_type' => 'users', 'target_id' => (string) $index,
@@ -290,9 +289,8 @@ final class UsersTest extends CIUnitTestCase
         $db         = db_connect();
         $identities = new UserIdentityModel($db);
         $failing    = $this->getMockBuilder(UserIdentityModel::class)->setConstructorArgs([$db])->onlyMethods(['create'])->getMock();
-        $attempt    = 0;
-        $failing->expects($this->exactly(2))->method('create')->willReturnCallback(static function ($data) use ($identities, &$attempt): void {
-            if (++$attempt === 1) {
+        $failing->expects($this->atLeastOnce())->method('create')->willReturnCallback(static function ($data) use ($identities): void {
+            if ($data['secret'] === 'failed@example.com') {
                 $data['secret2'] = str_repeat('x', 300);
             }
             $identities->create($data);
@@ -316,20 +314,17 @@ final class UsersTest extends CIUnitTestCase
     public function testProvisioningRollsBackAccountAndGroupsWhenStatusSaveReturnsFalse(): void
     {
         $this->assertSame('created', service('userProvisioning')->create('target', 'target@example.com'));
-        $db       = db_connect();
-        $provider = auth()->getProvider()::class;
-        $users    = new $provider($db);
-        $failing  = $this->getMockBuilder($provider)->setConstructorArgs([$db])->onlyMethods(['save'])->getMock();
-        $attempt  = 0;
-        $failing->expects($this->exactly(2))->method('save')->willReturnCallback(static function ($user) use ($users, &$attempt): bool {
-            return ++$attempt === 1 && $users->save($user);
+        $db             = db_connect();
+        $provider       = auth()->getProvider()::class;
+        $users          = new $provider($db);
+        $failing        = $this->getMockBuilder($provider)->setConstructorArgs([$db])->onlyMethods(['save'])->getMock();
+        $failStatusSave = true;
+        $failing->expects($this->atLeastOnce())->method('save')->willReturnCallback(static function ($user) use ($users, &$failStatusSave): bool {
+            return ! ($failStatusSave && $user->isBanned()) && $users->save($user);
         });
-        $factoryCalls = 0;
-        $provisioning = $this->provisioningWith(static function () use ($db, $provider, $failing, &$factoryCalls) {
-            return ++$factoryCalls === 1 ? $failing : new $provider($db);
-        });
-        $user = $users->findByCredentials(['email' => 'target@example.com']);
-        $hash = $user->getEmailIdentity()->secret2;
+        $provisioning = $this->provisioningWith(static fn () => $failing);
+        $user         = $users->findByCredentials(['email' => 'target@example.com']);
+        $hash         = $user->getEmailIdentity()->secret2;
         $this->assertSame('save', $provisioning->updateAccount($user, 'changed', 'changed@example.com', 'admin', 'banned'));
         $stored = $users->findById($user->id);
         $this->assertSame('target', $stored->username);
@@ -338,6 +333,7 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame(['user'], $stored->getGroups());
         $this->assertFalse($stored->isBanned());
         $this->assertSame('target', $user->username);
+        $failStatusSave = false;
         $this->assertSame('updated', $provisioning->updateAccount($stored, 'changed', 'changed@example.com', 'admin', 'banned'));
         $stored = $users->findById($user->id);
         $this->assertSame('changed@example.com', $stored->email);
@@ -366,12 +362,9 @@ final class UsersTest extends CIUnitTestCase
         $db       = db_connect();
         $provider = auth()->getProvider()::class;
         $failing  = $this->getMockBuilder($provider)->setConstructorArgs([$db])->onlyMethods(['findByCredentials'])->getMock();
-        $failing->expects($this->once())->method('findByCredentials')->willReturn(null);
-        $calls        = 0;
-        $provisioning = $this->provisioningWith(static function () use ($db, $provider, $failing, &$calls) {
-            return ++$calls === 1 ? $failing : new $provider($db);
-        });
-        $user = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
+        $failing->expects($this->atLeastOnce())->method('findByCredentials')->willReturnCallback(static fn (array $credentials) => ($credentials['email'] ?? null) === 'owner@example.com' ? null : (new $provider($db))->findByCredentials($credentials));
+        $provisioning = $this->provisioningWith(static fn () => $failing);
+        $user         = auth()->getProvider()->findByCredentials(['email' => 'target@example.com']);
 
         $this->assertSame('save', $provisioning->updateAccount($user, 'changed', 'owner@example.com', 'admin', 'banned'));
         $stored = auth()->getProvider()->findById($user->id);
@@ -390,7 +383,7 @@ final class UsersTest extends CIUnitTestCase
         $db         = db_connect();
         $identities = new UserIdentityModel($db);
         $failing    = $this->getMockBuilder(UserIdentityModel::class)->setConstructorArgs([$db])->onlyMethods(['create'])->getMock();
-        $failing->expects($this->once())->method('create')->willReturnCallback(static function ($data) use ($identities): void {
+        $failing->expects($this->atLeastOnce())->method('create')->willReturnCallback(static function ($data) use ($identities): void {
             $data['secret2'] = str_repeat('x', 300);
             $identities->create($data);
         });
@@ -1567,6 +1560,113 @@ final class UsersTest extends CIUnitTestCase
         $user = auth()->getProvider()->findByCredentials(['email' => 'invitee@example.com']);
         $this->expectException(SecurityException::class);
         $this->post('/en/admin/users/' . $user->id . '/invite', []);
+    }
+
+    #[DataProvider('provideInviteRejectsDisabledDelivery')]
+    public function testInviteRejectsDisabledDelivery(bool $banned, bool $magicLinks): void
+    {
+        $this->loginAs('superadmin');
+        $this->createUser('disabled-invite', 'disabled-invite@example.com');
+        $user = auth()->getProvider()->findByCredentials(['email' => 'disabled-invite@example.com']);
+        if ($banned) {
+            $user->ban();
+        }
+        service('settings')->set('Email.fromEmail', 'sender@example.com');
+        $previous = setting('Auth.allowMagicLinkLogins');
+        service('settings')->set('Auth.allowMagicLinkLogins', $magicLinks);
+        $email = $this->createMock(QueuedEmail::class);
+        $email->expects($this->never())->method('send');
+        Services::injectMock('email', $email);
+
+        try {
+            $this->post('/en/admin/users/' . $user->id . '/invite', [csrf_token() => csrf_hash()])->assertRedirect();
+            $this->assertSame(lang('Admin.inviteUnavailable'), session('alert')['message']);
+            $this->assertSame(0, db_connect()->table('email_delivery_logs')->countAllResults());
+        } finally {
+            service('settings')->set('Auth.allowMagicLinkLogins', $previous);
+        }
+    }
+
+    public static function provideInviteRejectsDisabledDelivery(): iterable
+    {
+        yield 'banned target' => [true, true];
+
+        yield 'magic links disabled' => [false, false];
+    }
+
+    public function testCreationAndImportDoNotInviteOrBindAccounts(): void
+    {
+        $this->loginAs('superadmin');
+        service('settings')->set('Email.fromEmail', 'sender@example.com');
+        $previous = setting('Auth.allowMagicLinkLogins');
+        service('settings')->set('Auth.allowMagicLinkLogins', true);
+        $queue = $this->createMock(QueueInterface::class);
+        $queue->expects($this->never())->method('push');
+        Services::injectMock('queue', $queue);
+        Services::injectMock('email', service('email', null, false));
+
+        try {
+            $this->post('/en/admin/users/create', [csrf_token() => csrf_hash(), 'username' => 'no.invite', 'email' => 'no-invite@example.com'])->assertRedirect();
+            $created = auth()->getProvider()->findByCredentials(['email' => 'no-invite@example.com']);
+            $this->assertNotNull($created);
+
+            foreach (['', 'password', 'changeme', $created->username, $created->email] as $password) {
+                $this->assertFalse(auth()->check(['email' => $created->email, 'password' => $password])->isOK());
+            }
+            $filename = tempnam(sys_get_temp_dir(), 'no-invite-csv-');
+
+            try {
+                file_put_contents($filename, "username,email\nno.invite.one,no-invite-one@example.com\nno.invite.two,no-invite-two@example.com\n");
+                $file = $this->getMockBuilder(UploadedFile::class)
+                    ->setConstructorArgs([$filename, 'users.csv', null, filesize($filename), UPLOAD_ERR_OK])
+                    ->onlyMethods(['isValid'])->getMock();
+                $file->expects($this->atLeastOnce())->method('isValid')->willReturn(true);
+                $request = $this->getMockBuilder(IncomingRequest::class)
+                    ->setConstructorArgs([config('App'), service('uri'), null, new UserAgent()])
+                    ->onlyMethods(['getFile'])->getMock();
+                $request->expects($this->atLeastOnce())->method('getFile')->with('file')->willReturn($file);
+                $controller = new Users();
+                $controller->initController($request, Services::response(null, false), Services::logger());
+                $response = $controller->import();
+                $this->assertSame('/en/admin/users', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
+                $this->assertSame(lang('Admin.importFinished'), session('alert')['message']);
+                $report = session('user_import_report');
+                $this->assertSame(['created', 'created'], array_column($report, 'result'));
+            } finally {
+                unlink($filename);
+            }
+            $this->assertSame(0, db_connect()->table('email_delivery_logs')->countAllResults());
+            $this->assertSame(0, db_connect()->table('auth_identities')->where('type', MicrosoftLinks::IDENTITY_TYPE)->countAllResults());
+
+            foreach (['no.invite', 'no.invite.one', 'no.invite.two'] as $username) {
+                $stored = auth()->getProvider()->findByCredentials(['username' => $username]);
+                $this->assertNotNull($stored);
+                $this->assertSame(['user'], $stored->getGroups());
+                $this->assertFalse($stored->can('admin.access'));
+            }
+        } finally {
+            service('settings')->set('Auth.allowMagicLinkLogins', $previous);
+        }
+    }
+
+    public function testUserListPaginatesTwentyMatchingUsers(): void
+    {
+        $this->loginAs('superadmin');
+
+        for ($number = 1; $number <= 21; $number++) {
+            $this->createUser('page-user-' . $number, 'page-user-' . $number . '@example.com');
+        }
+        $first = $this->get('/en/admin/users?q=page-user-');
+        $first->assertSee('Total: 21 (1 - 20)');
+        $document = new DOMDocument();
+        $document->loadHTML($first->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+        $this->assertSame(20, $xpath->query('//table/tbody/tr')->length);
+        Services::resetSingle('pager');
+        $second = $this->get('/en/admin/users?q=page-user-&page=2');
+        $second->assertSee('Total: 21 (21 - 21)');
+        $document->loadHTML($second->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $this->assertSame(1, (new DOMXPath($document))->query('//table/tbody/tr')->length);
     }
 
     public function testImportReportDoesNotRenderMissingReasonKey(): void

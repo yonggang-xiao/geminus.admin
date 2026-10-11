@@ -317,13 +317,23 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
 
     public function testMicrosoftCallbackCreatesPendingRequestForUnlinkedIdentity(): void
     {
-        $tenant   = '11111111-2222-3333-4444-555555555555';
-        $object   = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-        $response = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce', 'preferred_username' => 'pending@example.com']);
+        $users       = auth()->getProvider();
+        $user        = new AdminUser(['username' => 'same-email-admin']);
+        $user->email = 'pending@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('admin');
+        $userCount = $users->countAllResults();
+        $tenant    = '11111111-2222-3333-4444-555555555555';
+        $object    = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+        $response  = $this->callbackWithClaims(['tid' => $tenant, 'oid' => $object, 'nonce' => 'expected-nonce', 'preferred_username' => 'pending@example.com']);
 
         $this->assertSame('/en/login', parse_url($response->getHeaderLine('Location'), PHP_URL_PATH));
         $this->assertSame(lang('Admin.microsoftApprovalPending'), session('message'));
         $this->assertFalse(auth()->loggedIn());
+        $this->assertSame($userCount, $users->countAllResults());
+        $this->assertSame(0, db_connect()->table('auth_identities')->where('type', MicrosoftLinks::IDENTITY_TYPE)->countAllResults());
         $pending = Services::microsoftLinks()->pending();
         $this->assertCount(1, $pending);
         $this->assertSame($tenant, $pending[0]['tenant_id']);

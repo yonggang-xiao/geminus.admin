@@ -364,21 +364,31 @@ final class EmailSettingsTest extends CIUnitTestCase
             'recipient' => 'other@example.com', 'subject' => 'Other', 'status' => 'sent',
             'attempts'  => 1, 'created_at' => date('Y-m-d H:i:s'),
         ]);
+        $db->table('email_delivery_logs')->insert([
+            'recipient' => 'other-failed@example.com', 'subject' => 'Wrong recipient', 'status' => 'failed',
+            'attempts'  => 1, 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+        $db->table('email_delivery_logs')->insert([
+            'recipient' => 'target@example.com', 'subject' => 'Wrong status', 'status' => 'sent',
+            'attempts'  => 1, 'created_at' => date('Y-m-d H:i:s'),
+        ]);
         $db->table('queue_jobs')->insert([
             'queue'    => 'other', 'payload' => 'Other queue secret', 'status' => 0,
             'attempts' => 0, 'created_at' => time(), 'available_at' => time(),
         ]);
 
-        $logs = $this->get('/en/admin/mail/deliveries?status=failed&recipient=target');
+        $logs = $this->get('/en/admin/mail/deliveries?status=failed&recipient=TARGET');
         $logs->assertOK();
         $logs->assertSee('SMTP server rejected message (code 550).');
         $this->assertStringContainsString('&lt;Private subject&gt;', $logs->response()->getBody());
         $this->assertStringNotContainsString('other@example.com', $logs->response()->getBody());
+        $logs->assertDontSee('Wrong recipient');
+        $logs->assertDontSee('Wrong status');
         $this->assertStringNotContainsString('Private body', $logs->response()->getBody());
         $this->assertStringContainsString('private, no-store', $logs->response()->getHeaderLine('Cache-Control'));
         $logs->assertSee('Total: 1 (1 - 1)');
         $this->assertStringContainsString('<option value="failed" selected>', $logs->response()->getBody());
-        $this->assertStringContainsString('name="recipient" value="target" maxlength="254"', $logs->response()->getBody());
+        $this->assertStringContainsString('name="recipient" value="TARGET" maxlength="254"', $logs->response()->getBody());
 
         $queue = $this->get('/en/admin/mail/deliveries?view=queue');
         $queue->assertOK();

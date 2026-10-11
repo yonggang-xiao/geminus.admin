@@ -79,6 +79,31 @@ final class OperationAuditTest extends CIUnitTestCase
         $this->assertSame('zh-Hans', $users->findById($user->id)->language);
     }
 
+    public function testAuditDisplaysViewerTimezoneButFiltersUtcDates(): void
+    {
+        $users       = auth()->getProvider();
+        $user        = new AdminUser(['username' => 'audit-timezone', 'timezone' => 'Asia/Shanghai']);
+        $user->email = 'audit-timezone@example.com';
+        $user->setPassword('A-local-password-123!');
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addGroup('superadmin');
+        auth()->login($user);
+        db_connect()->table('operation_audit_logs')->insert([
+            'actor_id'  => $user->id, 'action' => 'POST', 'target_type' => 'users',
+            'target_id' => (string) $user->id, 'path' => 'utc-boundary-marker',
+            'result'    => 'success', 'ip_address' => '127.0.0.1', 'created_at' => '2026-10-08 23:30:00',
+        ]);
+        $page = $this->get('/en/admin/audit?from=2026-10-08&to=2026-10-08');
+        $page->assertOK();
+        $page->assertSee('utc-boundary-marker');
+        $page->assertSee('2026-10-09 07:30:00', 'td');
+        $nextDay = $this->get('/en/admin/audit?from=2026-10-09&to=2026-10-09');
+        $nextDay->assertOK();
+        $nextDay->assertDontSee('utc-boundary-marker');
+        $this->assertSame('2026-10-08 23:30:00', db_connect()->table('operation_audit_logs')->get()->getRow('created_at'));
+    }
+
     public function testAttachmentUploadCapturesMetadataWithoutContentOrStoragePath(): void
     {
         $user        = new AdminUser(['username' => 'auditattachment']);
@@ -966,9 +991,24 @@ final class OperationAuditTest extends CIUnitTestCase
         ]);
         $filtered = $this->get('/en/admin/audit?result=failed');
         $filtered->assertDontSee('audit-success-marker');
-        $this->assertStringContainsString('result=failed', $filtered->response()->getBody());
-        $second = $this->get('/en/admin/audit?result=failed&page=2');
-        $second->assertSee('audit-record-1');
+        $document = new DOMDocument();
+        $document->loadHTML($filtered->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath    = new DOMXPath($document);
+        $nextPage = null;
+
+        foreach ($xpath->query('//ul[contains(@class, "pagination")]//a[@href]') as $link) {
+            $href = $link->getAttribute('href');
+            parse_str((string) parse_url($href, PHP_URL_QUERY), $query);
+            $this->assertSame('failed', $query['result'] ?? null);
+            if (($query['page'] ?? null) === '2') {
+                $nextPage = parse_url($href, PHP_URL_PATH) . '?' . parse_url($href, PHP_URL_QUERY);
+            }
+        }
+        $this->assertNotNull($nextPage);
+        $second = $this->get($nextPage);
+        $second->assertSee('audit-record-1</td>');
+        $second->assertDontSee('audit-record-21</td>');
+        $second->assertSee('Total: 21 (21 - 21)');
         $second->assertDontSee('audit-success-marker');
     }
 
@@ -1106,11 +1146,24 @@ final class OperationAuditTest extends CIUnitTestCase
         $first = $this->get('/en/admin/audit?result=failed&sort=path&direction=ASC');
         $first->assertSee('sort-page-01');
         $first->assertDontSee('sort-page-21</td>');
-        $this->assertStringContainsString('sort=path', $first->response()->getBody());
-        $this->assertStringContainsString('direction=ASC', $first->response()->getBody());
-        $this->assertStringContainsString('result=failed', $first->response()->getBody());
+        $document = new DOMDocument();
+        $document->loadHTML($first->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath    = new DOMXPath($document);
+        $nextPage = null;
 
-        $second = $this->get('/en/admin/audit?result=failed&sort=path&direction=ASC&page=2');
+        foreach ($xpath->query('//ul[contains(@class, "pagination")]//a[@href]') as $link) {
+            $href = $link->getAttribute('href');
+            parse_str((string) parse_url($href, PHP_URL_QUERY), $query);
+
+            foreach (['result' => 'failed', 'sort' => 'path', 'direction' => 'ASC'] as $name => $value) {
+                $this->assertSame($value, $query[$name] ?? null);
+            }
+            if (($query['page'] ?? null) === '2') {
+                $nextPage = parse_url($href, PHP_URL_PATH) . '?' . parse_url($href, PHP_URL_QUERY);
+            }
+        }
+        $this->assertNotNull($nextPage);
+        $second = $this->get($nextPage);
         $second->assertSee('sort-page-21');
         $second->assertDontSee('sort-page-01</td>');
     }

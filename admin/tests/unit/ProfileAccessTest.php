@@ -265,7 +265,15 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertStringContainsString('name="return" value="/en/admin/profile"', $page->response()->getBody());
         $this->assertStringContainsString('name="language" value="zh-Hant"', $page->response()->getBody());
         $this->assertSame(3, substr_count($page->response()->getBody(), 'name="language" value="zh-Hant"'));
-        $this->assertSame(1, substr_count($page->response()->getBody(), 'aria-label="Open language selector"'));
+
+        foreach (['en' => 'Language', 'zh-Hans' => '语言', 'zh-Hant' => '語言'] as $locale => $label) {
+            $localized = $this->get('/' . $locale . '/admin/profile');
+            $localized->assertOK();
+            $document = new DOMDocument();
+            $document->loadHTML($localized->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//header//a[@data-bs-toggle="dropdown" and @data-button-tooltip="false" and @aria-label="' . $label . '" and not(@title)]')->length);
+        }
         $this->assertMatchesRegularExpression('/<div class="d-lg-none">.*?name="language" value="zh-Hant"/s', $page->response()->getBody());
 
         $result = $this->post('/en/admin/profile/language', [
@@ -333,6 +341,8 @@ final class ProfileAccessTest extends CIUnitTestCase
             $log = db_connect()->table('operation_audit_logs')->get()->getRowArray();
             $this->assertSame('failed', $log['result']);
             $this->assertSame('en', $users->findById($user->id)->language);
+            $this->assertSame(1, db_connect()->table('operation_audit_logs')->countAllResults());
+            $this->assertNull(session()->getFlashdata('alert'));
         } finally {
             $providerProperty->setValue(auth(), $users);
         }

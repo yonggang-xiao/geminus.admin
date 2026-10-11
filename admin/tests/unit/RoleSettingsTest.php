@@ -531,6 +531,38 @@ final class RoleSettingsTest extends CIUnitTestCase
         $this->assertNotContains('internal.export', setting('AuthGroups.matrix')['developer']);
     }
 
+    #[DataProvider('provideInvalidCatalogIdentifiersPreserveSettings')]
+    public function testInvalidCatalogIdentifiersPreserveSettings(string $resource, string $name): void
+    {
+        $this->loginAs('superadmin');
+        $groups      = setting('AuthGroups.groups');
+        $permissions = setting('AuthGroups.permissions');
+        $matrix      = setting('AuthGroups.matrix');
+        $payload     = $resource === 'roles' ? ['title' => 'Invalid role'] : ['description' => 'Invalid permission'];
+        $this->post('/en/admin/settings/' . $resource, [csrf_token() => csrf_hash(), 'name' => $name] + $payload)->assertRedirect();
+        $this->assertNotEmpty(session($resource === 'roles' ? 'role_errors.name' : 'permission_errors.name'));
+        $this->assertSame($groups, setting('AuthGroups.groups'));
+        $this->assertSame($permissions, setting('AuthGroups.permissions'));
+        $this->assertSame($matrix, setting('AuthGroups.matrix'));
+    }
+
+    public static function provideInvalidCatalogIdentifiersPreserveSettings(): iterable
+    {
+        yield 'uppercase role' => ['roles', 'Operator'];
+
+        yield 'underscore role' => ['roles', 'invalid_role'];
+
+        yield 'duplicate role' => ['roles', 'user'];
+
+        yield 'single segment permission' => ['permissions', 'reports'];
+
+        yield 'three segment permission' => ['permissions', 'reports.items.view'];
+
+        yield 'wildcard permission' => ['permissions', 'reports.*'];
+
+        yield 'duplicate permission' => ['permissions', 'users.create'];
+    }
+
     public function testDelegatedManagerCannotAssignMorePowerfulRole(): void
     {
         $this->loginAs('superadmin');

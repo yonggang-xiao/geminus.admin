@@ -17,10 +17,9 @@ final class UserCsvImportTest extends CIUnitTestCase
 
     public function testProcessingFailureMapsToSaveAndDoesNotStopLaterRows(): void
     {
-        $attempt      = 0;
         $provisioning = $this->getMockBuilder(UserProvisioning::class)->disableOriginalConstructor()->onlyMethods(['create'])->getMock();
-        $provisioning->expects($this->exactly(2))->method('create')->willReturnCallback(static function () use (&$attempt): string {
-            if (++$attempt === 1) {
+        $provisioning->expects($this->atLeastOnce())->method('create')->willReturnCallback(static function (string $username): string {
+            if ($username === 'failed') {
                 throw new RuntimeException('Private provisioning failure.');
             }
 
@@ -195,7 +194,13 @@ final class UserCsvImportTest extends CIUnitTestCase
         $second = auth()->getProvider()->findByCredentials(['email' => 'second@example.com']);
         $this->assertNotNull($first);
         $this->assertNotNull($second);
-        $this->assertSame($first->getEmailIdentity()->secret2, $second->getEmailIdentity()->secret2);
-        $this->assertFalse(password_verify('', $first->getEmailIdentity()->secret2));
+
+        foreach ([$first, $second] as $user) {
+            foreach (['', 'password', 'changeme', $user->username, $user->email] as $password) {
+                $this->assertFalse(password_verify($password, $user->getEmailIdentity()->secret2));
+                $this->assertFalse(auth()->attempt(['email' => $user->email, 'password' => $password])->isOK());
+                $this->assertFalse(auth()->loggedIn());
+            }
+        }
     }
 }

@@ -109,6 +109,40 @@ final class NotificationsTest extends CIUnitTestCase
         $this->assertSame(4, (new NotificationModel())->countAllResults());
     }
 
+    public function testNotificationsKeepDistinctSourcesAndNewestFirst(): void
+    {
+        $user    = $this->user('distinct-sources');
+        $service = service('notifications');
+        $service->send((int) $user->id, 'example.first', 42, 'First source', 'admin/dashboard');
+        $service->send((int) $user->id, 'example.second', 42, 'Second source', 'admin/dashboard');
+        $service->send((int) $user->id, 'example.first', 43, 'Newest notice', 'admin/dashboard');
+        $this->assertSame(['Newest notice', 'Second source', 'First source'], array_column($service->unread($user), 'title'));
+        $this->assertSame(3, (new NotificationModel())->countAllResults());
+    }
+
+    public function testNotificationDropdownDisplaysUserTimezoneWithoutChangingStorage(): void
+    {
+        $user           = $this->user('timezone-reader');
+        $user->timezone = 'Asia/Shanghai';
+        (new UserModel())->save($user);
+        $user = (new UserModel())->findById($user->id);
+        auth()->login($user);
+        service('notifications')->send((int) $user->id, 'example.completed', 42, 'Timezone notice', 'admin/dashboard');
+        $model        = new NotificationModel();
+        $notification = $model->first();
+        $model->update($notification['id'], ['created_at' => '2026-10-08 23:30:00']);
+        $page = $this->get('/en/admin/dashboard');
+        $page->assertOK();
+        $document = new DOMDocument();
+        $document->loadHTML($page->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+
+        foreach (['//header', '//aside'] as $region) {
+            $this->assertStringContainsString('2026-10-09 07:30', $xpath->query($region . '//*[@data-notification-list]')->item(0)->textContent);
+        }
+        $this->assertSame('2026-10-08 23:30:00', $model->find($notification['id'])['created_at']);
+    }
+
     public function testEventFailureDoesNotUndoPublicationOrRepeatTheEvent(): void
     {
         $publisher = $this->user('event-publisher', ['announcements.manage']);
