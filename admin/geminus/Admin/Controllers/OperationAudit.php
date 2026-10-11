@@ -14,10 +14,6 @@ class OperationAudit extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('operation-audit.view')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
         $actorId  = trim((string) $this->request->getGet('actor'));
         $targetId = trim((string) $this->request->getGet('target'));

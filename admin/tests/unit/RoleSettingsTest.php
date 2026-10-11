@@ -94,18 +94,30 @@ final class RoleSettingsTest extends CIUnitTestCase
 
     public function testOnlySuperadminCanManageRolesAndPermissions(): void
     {
-        $this->get('/en/admin/settings/roles')->assertRedirect();
-        $this->post('/en/admin/settings/roles', [csrf_token() => csrf_hash(), 'name' => 'operator', 'title' => 'Operator'])->assertRedirect();
+        $before = service('settings')->getMany(['AuthGroups.groups', 'AuthGroups.permissions', 'AuthGroups.matrix']);
 
-        $this->loginAs('developer');
-        $this->get('/en/admin/settings/roles')->assertRedirect();
-        $this->post('/en/admin/settings/roles/admin/permissions', [csrf_token() => csrf_hash(), 'permissions' => ['admin.settings']])->assertRedirect();
-        $this->post('/en/admin/settings/roles/developer', [csrf_token() => csrf_hash(), 'title' => 'Changed'])->assertRedirect();
-        $this->post('/en/admin/settings/permissions', [csrf_token() => csrf_hash(), 'name' => 'reports.view', 'description' => 'View reports'])->assertRedirect();
-        $this->post('/en/admin/settings/permissions/users.create', [csrf_token() => csrf_hash(), 'description' => 'Changed'])->assertRedirect();
-        $this->assertArrayNotHasKey('reports.view', setting('AuthGroups.permissions'));
-        $this->assertNotSame('Changed', setting('AuthGroups.permissions')['users.create']);
-        $this->assertNotSame('Changed', setting('AuthGroups.groups')['developer']['title']);
+        foreach ([null, 'developer'] as $group) {
+            if ($group !== null) {
+                $this->loginAs($group);
+            }
+            $this->get('/en/admin/settings/roles')->assertRedirect();
+
+            foreach ([
+                ['/en/admin/settings/roles', ['name' => 'operator', 'title' => 'Operator']],
+                ['/en/admin/settings/roles/admin/permissions', ['permissions' => ['admin.settings']]],
+                ['/en/admin/settings/roles/developer', ['title' => 'Changed']],
+                ['/en/admin/settings/permissions', ['name' => 'reports.view', 'description' => 'View reports']],
+                ['/en/admin/settings/permissions/users.create', ['description' => 'Changed']],
+            ] as [$route, $data]) {
+                $result = $this->post($route, [csrf_token() => csrf_hash()] + $data);
+                if ($group === null) {
+                    $result->assertRedirect();
+                } else {
+                    $result->assertRedirectTo(config('Auth')->groupDeniedRedirect());
+                }
+            }
+            $this->assertSame($before, service('settings')->getMany(array_keys($before)));
+        }
     }
 
     #[DataProvider('provideRoleGrantOnlyOpensItsOwnFeature')]

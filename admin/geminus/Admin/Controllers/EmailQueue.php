@@ -14,10 +14,6 @@ class EmailQueue extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('email-deliveries.view')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         $view     = $this->request->getGet('view') === 'queue' ? 'queue' : 'logs';

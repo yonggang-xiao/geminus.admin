@@ -15,10 +15,6 @@ class EmailSettings extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('email-settings.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         return view('Geminus\Admin\Views\settings_email', [
@@ -33,10 +29,6 @@ class EmailSettings extends BaseController
 
     public function update(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('email-settings.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $rules      = [
             'fromEmail' => ['label' => 'Admin.senderEmail', 'rules' => 'required|valid_email|max_length[254]'],
@@ -92,10 +84,6 @@ class EmailSettings extends BaseController
 
     public function sendTest(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('email-settings.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules([
             'test_email' => ['label' => 'Admin.testRecipient', 'rules' => 'required|valid_email|max_length[254]'],

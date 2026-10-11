@@ -48,6 +48,7 @@ applyTo: 'admin/app/**/*.php, admin/geminus/**/*.php, admin/modules/**/*.php, ad
 - JSON 表单接口成功时返回 `{ message, data }`，失败时返回 `{ message, errors }`，并使用相应的 HTTP 状态码。
 - 使用 Geminus.js 的 AJAX 接口在 CSRF token 重新生成后，将新 token 放入成功及可处理的失败 JSON 响应的 `csrf: { name, hash }` 字段，以便客户端更新后续请求使用的 token。
 - 新增或修改数据的请求必须在服务端验证输入并检查当前用户的操作权限；表单中的 CSRF 字段和前端校验不能替代服务端检查。
+- 路由过滤器负责入口认证和功能权限，业务代码负责目标对象、数据范围及业务条件的授权。所有 HTTP 入口已由相同权限的路由过滤器保护时，控制器不重复检查该入口权限；目标账号保护、资源所有权及可见性等对象级授权必须保留。移除重复检查前核对所有入口的 `filter:check` 结果，并通过启用过滤器的 HTTP 测试验证未授权请求被拦截，不能只直接调用控制器方法验证授权。
 - `admin/app/Config/Filters.php` 已在全局 `before` 启用 CSRF；不要在每条写入路由上重复声明 `filter => csrf`。新增写入路由时仍用 `php spark filter:check <方法> <路径>` 核对覆盖范围；例外需说明原因并测试。表单保留 `csrf_field()`，测试分别覆盖缺少令牌被拒绝和携带令牌后到达业务逻辑。
 - 表单与 JSON 请求按明确的字段规则验证，写入 Model 时只使用验证器 `getValidated()` 返回的字段，不直接传入整个请求数组；JSON 数据使用 Strict Rules，不改用 Traditional Rules。
 - 上传文件要在服务端限制大小、实际 MIME 类型及扩展名，使用随机文件名并保存于 `writable/`；更新用户关联记录成功后再清理旧文件，且只删除该用户关联的受控文件。上传流程至少覆盖缺失或无效文件、成功上传及移除的测试。

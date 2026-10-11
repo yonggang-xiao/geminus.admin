@@ -41,6 +41,7 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->get('/en/admin/mail/deliveries')->assertRedirect();
         $this->get('/en/admin/mail/templates')->assertRedirect();
         $this->post('/en/admin/mail/templates/invitation/en', [csrf_token() => csrf_hash(), 'subject' => 'Hi', 'body' => '{link}'])->assertRedirect();
+        $this->post('/en/admin/mail/templates/invitation/en/reset', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->post('/en/admin/settings/email', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
     }
@@ -48,14 +49,19 @@ final class EmailSettingsTest extends CIUnitTestCase
     public function testUserWithoutSettingsPermissionCannotReadOrSave(): void
     {
         $this->loginAs('admin');
+        service('mailTemplates')->save('invitation', 'en', 'Protected invitation', 'Protected {link}');
+        $denied   = config('Auth')->permissionDeniedRedirect();
+        $template = service('mailTemplates')->get('invitation', 'en');
 
-        $this->get('/en/admin/settings/email')->assertRedirect();
-        $this->get('/en/admin/mail/deliveries')->assertRedirect();
-        $this->get('/en/admin/mail/templates')->assertRedirect();
-        $this->post('/en/admin/mail/templates/invitation/en', [csrf_token() => csrf_hash(), 'subject' => 'Hi', 'body' => '{link}'])->assertRedirect();
-        $this->post('/en/admin/settings/email', $this->validSettings())->assertRedirect();
-        $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirect();
+        $this->get('/en/admin/settings/email')->assertRedirectTo($denied);
+        $this->get('/en/admin/mail/deliveries')->assertRedirectTo($denied);
+        $this->get('/en/admin/mail/templates')->assertRedirectTo($denied);
+        $this->post('/en/admin/mail/templates/invitation/en', [csrf_token() => csrf_hash(), 'subject' => 'Hi', 'body' => '{link}'])->assertRedirectTo($denied);
+        $this->post('/en/admin/mail/templates/invitation/en/reset', [csrf_token() => csrf_hash()])->assertRedirectTo($denied);
+        $this->post('/en/admin/settings/email', $this->validSettings())->assertRedirectTo($denied);
+        $this->post('/en/admin/settings/email/test', [csrf_token() => csrf_hash(), 'test_email' => 'recipient@example.com'])->assertRedirectTo($denied);
         $this->assertSame('', service('settings')->get('Email.fromEmail'));
+        $this->assertSame($template, service('mailTemplates')->get('invitation', 'en'));
     }
 
     public function testEmailSettingsPostRequiresCsrf(): void

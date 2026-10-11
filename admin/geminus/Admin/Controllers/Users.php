@@ -28,10 +28,6 @@ class Users extends BaseController
 
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('users.view')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
         $query                = $this->listQuery();
         $users                = $this->filteredUsers($query);
@@ -106,10 +102,6 @@ class Users extends BaseController
 
     public function create(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('users.create')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         return view('Geminus\Admin\Views\user_create', ['me' => auth()->user(), 'page_title' => lang('Admin.createUser')]);
@@ -132,10 +124,6 @@ class Users extends BaseController
 
     public function store(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.create')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules([
             'username' => config('Auth')->usernameValidationRules,
@@ -243,19 +231,11 @@ class Users extends BaseController
 
     public function template(): ResponseInterface
     {
-        if (! auth()->user()?->can('users.create')) {
-            return $this->response->setStatusCode(403);
-        }
-
         return $this->csvResponse('users-template.csv', (new Csv())->write(['username', 'email']));
     }
 
     public function export(): ResponseInterface
     {
-        if (! auth()->user()?->can('users.view')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $users = $this->filteredUsers($this->listQuery())->withIdentities()->findAll(self::EXPORT_LIMIT + 1);
         if (count($users) > self::EXPORT_LIMIT) {
             return $this->response->setStatusCode(413)->setBody(lang('Admin.exportLimit'));
@@ -268,10 +248,6 @@ class Users extends BaseController
 
     public function import(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.create')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $file = $this->request->getFile('file');
         if (! $file || ! $file->isValid() || $file->getSize() > 1024 * 1024 || strtolower($file->getClientExtension()) !== 'csv' || ! in_array($file->getMimeType(), ['text/plain', 'text/csv', 'application/vnd.ms-excel'], true)) {
             return redirect()->to($this->userReturnUrl('admin/users/create'))->with('alert', ['type' => 'danger', 'message' => lang('Admin.invalidUserCsv')]);
@@ -322,10 +298,6 @@ class Users extends BaseController
 
     private function attachmentUser(int $userId): ?User
     {
-        if (! auth()->user()?->can('users.view')) {
-            return null;
-        }
-
         $user = auth()->getProvider()->findById($userId);
 
         return $user && $this->canAccessAttachments($user) ? $user : null;
@@ -342,10 +314,6 @@ class Users extends BaseController
 
     private function editableUser(int $userId): ?User
     {
-        if (! auth()->user()?->can('users.edit')) {
-            return null;
-        }
-
         $user = auth()->getProvider()->findById($userId);
         if (! $user || $this->editState($user) !== 'editable') {
             return null;

@@ -13,10 +13,6 @@ class EmailTemplates extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('email-templates.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
         $type   = (string) $this->request->getGet('type');
         $locale = (string) $this->request->getGet('locale');
@@ -39,10 +35,6 @@ class EmailTemplates extends BaseController
 
     public function update(string $type, string $locale): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('email-templates.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         if (! isset(MailTemplates::TYPES[$type]) || ! in_array($locale, config('App')->supportedLocales, true)) {
             return $this->response->setStatusCode(404);
         }
@@ -70,10 +62,6 @@ class EmailTemplates extends BaseController
 
     public function reset(string $type, string $locale): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('email-templates.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         if (! isset(MailTemplates::TYPES[$type]) || ! in_array($locale, config('App')->supportedLocales, true)) {
             return $this->response->setStatusCode(404);
         }

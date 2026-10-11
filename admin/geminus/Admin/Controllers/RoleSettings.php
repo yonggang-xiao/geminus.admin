@@ -14,10 +14,6 @@ class RoleSettings extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         $groups = setting('AuthGroups.groups');
@@ -82,10 +78,6 @@ class RoleSettings extends BaseController
 
     public function permissions(string $role): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $groups      = setting('AuthGroups.groups');
         $permissions = setting('AuthGroups.permissions');
 
@@ -121,10 +113,6 @@ class RoleSettings extends BaseController
 
     public function createRole(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules([
             'name'        => 'required|max_length[40]',
@@ -150,10 +138,6 @@ class RoleSettings extends BaseController
 
     public function updateRole(string $role): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $groups = setting('AuthGroups.groups');
         if (! isset($groups[$role])) {
             return $this->response->setStatusCode(404);
@@ -179,10 +163,6 @@ class RoleSettings extends BaseController
 
     public function createPermission(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules([
             'name'        => 'required|max_length[80]',
@@ -215,10 +195,6 @@ class RoleSettings extends BaseController
 
     public function updatePermission(string $permission): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->inGroup('superadmin')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $permissions = setting('AuthGroups.permissions');
         if (! isset($permissions[$permission])) {
             return $this->response->setStatusCode(404);

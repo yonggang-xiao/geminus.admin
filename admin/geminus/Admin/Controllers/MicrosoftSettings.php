@@ -16,10 +16,6 @@ class MicrosoftSettings extends BaseController
 {
     public function index(): ResponseInterface|string
     {
-        if (! auth()->user()?->can('microsoft-settings.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
         $canApprove = auth()->user()->can('users.edit');
@@ -47,10 +43,6 @@ class MicrosoftSettings extends BaseController
 
     public function update(): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('microsoft-settings.manage')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules([
             'enabled'  => ['label' => 'Admin.microsoftEnabled', 'rules' => 'permit_empty|in_list[0,1]'],
@@ -74,10 +66,6 @@ class MicrosoftSettings extends BaseController
 
     public function approve(int $requestId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.edit')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $validation = service('validation');
         $validation->setRules(['user_id' => 'required|is_natural_no_zero']);
         if (! $validation->run($this->request->getPost())) {
@@ -98,10 +86,6 @@ class MicrosoftSettings extends BaseController
 
     public function reject(int $requestId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.edit')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $rejected = Services::microsoftLinks()->reject($requestId);
 
         return redirect()->to(route_to('admin/settings/microsoft'))->with('alert', [
@@ -112,10 +96,6 @@ class MicrosoftSettings extends BaseController
 
     public function revoke(int $userId): RedirectResponse|ResponseInterface
     {
-        if (! auth()->user()?->can('users.edit')) {
-            return $this->response->setStatusCode(403);
-        }
-
         $user = auth()->getProvider()->findById($userId);
         if ($user && ! ($user->inGroup('superadmin') && $user->id === auth()->id()) && ! (new UserManagementPolicy(auth()->user()))->canManage($user)) {
             return $this->response->setStatusCode(404);
