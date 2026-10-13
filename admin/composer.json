@@ -22,7 +22,8 @@
         "codeigniter/coding-standard": "^1.9",
         "fakerphp/faker": "^1.24",
         "mikey179/vfsstream": "^1.6",
-        "phpunit/phpunit": "^13.4"
+        "phpunit/phpunit": "^13.4",
+        "zircote/swagger-php": "^6.13"
     },
     "autoload": {
         "psr-4": {

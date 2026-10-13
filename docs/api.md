@@ -119,6 +119,25 @@ Content-Type: application/json
 
 通知沿用模块接收人规则并排除发布操作者；每次成功创建的新公告分别触发通知，不改变之前通知的已读状态。通知异常仅记录错误日志，不撤销公告或改变成功响应，无自动重试和可靠投递保证。详见[发布事件与通知中心](example-business-module.md#发布事件与通知中心)。审计摘要仅含 `title`，不记录正文。
 
+## OpenAPI 文档
+
+开发依赖 `zircote/swagger-php` 使用 PHP Attributes 描述接口，生成 OpenAPI 3.1.0 JSON；Schema 遵循 JSON Schema 2020-12，可空字段使用包含 `null` 的类型（例如 `type: ['string', 'null']`），不使用 3.0 的 `nullable`。不包含 Swagger UI，也不提供 HTTP 文档入口。生产请求不扫描源码、不生成文档，生产环境可使用 `composer install --no-dev`。
+
+在安装 Composer 开发依赖的容器中运行：
+
+```sh
+php spark openapi:generate
+php spark openapi:generate build/openapi.json
+```
+
+从仓库根目录执行时，命令前加 `docker compose -f docker/docker-compose.yaml exec -T geminus-admin`。默认输出为 `admin/writable/openapi.json`；指定路径相对于容器工作目录，父目录须已存在且可写。生成或规范校验失败返回非零退出码，可用于 CI。产物不默认公开，交付时按对接需要分发。
+
+应用的 `app/OpenApi/Document.php` 定义文档标题、版本及服务器地址；Admin 的 `OpenApi/ApiContract.php` 定义 Bearer Token 安全方案和共享错误响应。业务模块在 API 控制器方法上使用 `OpenApi\Attributes` 声明路径、请求、响应和业务权限，复杂 Schema 可放在模块的 `OpenApi/` 目录，通过 `$ref` 引用共享定义。声明 API 权限时使用说明文字，不将业务 scope 描述为 OAuth2 流程。
+
+生成命令通过 Spark 复用 CI4 自动加载，扫描 `Config\Autoload::$psr4` 注册目录下的 `Controllers/` 和 `OpenApi/`，不扫描未注册模块或 vendor。只有带 OpenAPI 定义的接口进入文档；路由、过滤器和字段校验不会自动转换为文档。全局 `Info` 只由应用定义，模块不重复声明。新增或调整接口时同步维护文档属性和契约测试；规范校验通过不代表实现与文档一致。
+
+公告发布接口已定义请求字段、201 响应及通用错误响应，并声明 `announcements.manage`、非幂等和每次成功创建新公告的语义。
+
 ## 运行约束
 
 部署时须运行模块迁移。业务模块使用显式资源路由，声明 `api:<权限>` 组合过滤器，例如 `api:announcements.manage`。组合由应用的 `Config\Filters` 统一定义，按顺序执行 IP 限流、认证授权、已认证密钥限流和 JSON 请求格式校验，业务模块不重复列出通用过滤器。应用为 `api/v1/*` 统一配置会话与 CSRF 例外及 `apiRouteGuard` 路由声明守卫，新增同前缀接口无需修改例外清单；路由仍必须声明一个具体业务权限。例外仅覆盖 `api/v1/` 下级路径；裸 `api/v1`（含末尾斜杠）及其他版本仍受会话与 CSRF 保护。例外不扩展到 `api/*` 或其他前缀，不开放匿名调用或公开注册。
