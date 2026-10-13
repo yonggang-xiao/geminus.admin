@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Announcements\Libraries;
 
 use CodeIgniter\Events\Events;
+use CodeIgniter\I18n\Time;
 use Modules\Announcements\Models\AnnouncementModel;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -15,12 +16,21 @@ class AnnouncementPublication
     {
     }
 
-    public function publish(int $announcementId, int $publisherId): void
+    public function publish(int $announcementId, int $publisherId, bool $notify = true, ?Time $publishedAt = null): bool
     {
-        if (! $this->model->publishDraft($announcementId)) {
-            return;
+        if (! $this->model->publishDraft($announcementId, $publishedAt)) {
+            return false;
         }
 
+        if ($notify) {
+            $this->notifyPublished($announcementId, $publisherId);
+        }
+
+        return true;
+    }
+
+    public function notifyPublished(int $announcementId, int $publisherId): void
+    {
         try {
             Events::trigger('announcements.published', $announcementId, $publisherId);
         } catch (Throwable $exception) {

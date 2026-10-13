@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Announcements\Config;
 
 use CodeIgniter\Config\BaseService;
+use Modules\Announcements\Libraries\AnnouncementApiPublication;
 use Modules\Announcements\Libraries\AnnouncementDashboardProvider;
 use Modules\Announcements\Libraries\AnnouncementPublication;
 use Modules\Announcements\Libraries\AnnouncementUploadSource;
@@ -12,6 +13,17 @@ use Modules\Announcements\Models\AnnouncementModel;
 
 class Services extends BaseService
 {
+    public static function announcementApiPublication(bool $getShared = false): AnnouncementApiPublication
+    {
+        if ($getShared) {
+            return static::getSharedInstance('announcementapipublication');
+        }
+        $db    = db_connect();
+        $model = new AnnouncementModel($db);
+
+        return new AnnouncementApiPublication($db, $model, new AnnouncementPublication($model, service('logger')), static::validation(null, false));
+    }
+
     public static function announcementDashboardProvider(bool $getShared = false): AnnouncementDashboardProvider
     {
         if ($getShared) {

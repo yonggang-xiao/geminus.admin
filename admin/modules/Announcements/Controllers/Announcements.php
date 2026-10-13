@@ -12,6 +12,7 @@ use Geminus\Admin\Libraries\DataManagement\CsvImport;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
 use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
+use Modules\Announcements\Libraries\AnnouncementContent;
 use Modules\Announcements\Models\AnnouncementModel;
 use RuntimeException;
 
@@ -55,7 +56,7 @@ class Announcements extends BaseController
         $validation = service('validation');
         $validation->setRules($this->rules());
 
-        if (! $validation->run($this->request->getPost())) {
+        if (! $validation->run(AnnouncementContent::normalize($this->request->getPost()))) {
             return redirect()->to(route_to('admin/announcements/create'))->withInput()->with('errors', $validation->getErrors());
         }
 
@@ -109,7 +110,7 @@ class Announcements extends BaseController
         }
         $validation = service('validation');
         $validation->setRules($this->rules());
-        if (! $validation->run($this->request->getPost())) {
+        if (! $validation->run(AnnouncementContent::normalize($this->request->getPost()))) {
             return redirect()->to(route_to('admin/announcements/edit', $announcementId))->withInput()->with('errors', $validation->getErrors());
         }
         if (! $model->update($announcementId, $validation->getValidated())) {
@@ -234,10 +235,7 @@ class Announcements extends BaseController
 
     private function rules(): array
     {
-        return [
-            'title' => ['label' => 'Announcements.name', 'rules' => 'required|max_length[150]'],
-            'body'  => ['label' => 'Announcements.body', 'rules' => 'required|max_length[2000]'],
-        ];
+        return AnnouncementContent::rules();
     }
 
     private function listFilters(ListQuery $query): array

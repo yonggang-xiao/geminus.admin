@@ -1,5 +1,7 @@
 <?php
 
+$routes->resource('api/v1/announcements', ['namespace' => 'Modules\Announcements\Controllers', 'controller' => 'ApiAnnouncements', 'only' => ['create'], 'filter' => 'api:announcements.manage']);
+
 $routes->group('{locale}/admin/announcements', ['namespace' => 'Modules\Announcements\Controllers', 'filter' => 'permission:announcements.access,announcements.manage'], static function ($routes) {
     $routes->get('', 'Announcements::index', ['as' => 'admin/announcements']);
     $routes->get('(:num)', 'Announcements::show/$1', ['as' => 'admin/announcements/show']);

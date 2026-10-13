@@ -55,7 +55,7 @@ public static function OperationAudit(): array
 | `object.route_parameter` | 已解析路由参数的索引，从 0 开始；无对象 ID 时省略 |
 | `fields` | 非空的精确字段白名单；未声明字段直接忽略，不支持“记录全部”的通配符；空列表属于非法配置 |
 
-示例只记录提交的标题，不记录正文。页面直接显示稳定动作标识，不增加动作翻译配置。[公告 Registrar](../admin/modules/Announcements/Config/Registrar.php) 已接入创建、编辑和附件上传；API 发布使用 `announcement.api.publish`，仅记录 `source_id` 和 `title`；后台发布及附件删除继续基础审计。[后台 Registrar](../admin/geminus/Admin/Config/Registrar.php) 只声明白名单非空的内置操作：
+示例只记录提交的标题，不记录正文。页面直接显示稳定动作标识，不增加动作翻译配置。[公告 Registrar](../admin/modules/Announcements/Config/Registrar.php) 已接入创建、编辑和附件上传；API 发布使用 `announcement.api.publish`，仅记录 `title`；后台发布及附件删除继续基础审计。[后台 Registrar](../admin/geminus/Admin/Config/Registrar.php) 只声明白名单非空的内置操作：
 
 | 内置操作 | 提交字段 |
 | --- | --- |

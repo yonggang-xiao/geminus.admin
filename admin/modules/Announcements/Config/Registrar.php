@@ -10,6 +10,11 @@ class Registrar
     {
         return ['operations' => [
             [
+                'controller' => 'Modules\\Announcements\\Controllers\\ApiAnnouncements::create',
+                'methods'    => ['POST'], 'action' => 'announcement.api.publish',
+                'object'     => ['type' => 'announcement'], 'fields' => ['title'],
+            ],
+            [
                 'controller' => 'Modules\\Announcements\\Controllers\\Announcements::store',
                 'methods'    => ['POST'], 'action' => 'announcement.create',
                 'object'     => ['type' => 'announcement'], 'fields' => ['title'],
