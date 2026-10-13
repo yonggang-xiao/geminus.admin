@@ -121,7 +121,7 @@ Content-Type: application/json
 
 ## OpenAPI 文档
 
-开发依赖 `zircote/swagger-php` 使用 PHP Attributes 描述接口，生成 OpenAPI 3.1.0 JSON；Schema 遵循 JSON Schema 2020-12，可空字段使用包含 `null` 的类型（例如 `type: ['string', 'null']`），不使用 3.0 的 `nullable`。不包含 Swagger UI，也不提供 HTTP 文档入口。生产请求不扫描源码、不生成文档，生产环境可使用 `composer install --no-dev`。
+开发依赖 `zircote/swagger-php` 使用 PHP Attributes 描述接口，生成 OpenAPI 3.1.0 JSON；Schema 遵循 JSON Schema 2020-12，可空字段使用包含 `null` 的类型（例如 `type: ['string', 'null']`），不使用 3.0 的 `nullable`。Docker 开发环境提供 Swagger UI 容器，通过 Caddy 的 `/swagger/` 路径访问。生产请求不扫描源码、不生成文档，生产环境可使用 `composer install --no-dev`。
 
 在安装 Composer 开发依赖的容器中运行：
 
@@ -130,7 +130,11 @@ php spark openapi:generate
 php spark openapi:generate build/openapi.json
 ```
 
-从仓库根目录执行时，命令前加 `docker compose -f docker/docker-compose.yaml exec -T geminus-admin`。默认输出为 `admin/writable/openapi.json`；指定路径相对于容器工作目录，父目录须已存在且可写。生成或规范校验失败返回非零退出码，可用于 CI。产物不默认公开，交付时按对接需要分发。
+从仓库根目录执行时，命令前加 `docker compose -f docker/docker-compose.yaml exec -T geminus-admin`。默认输出为 `admin/writable/openapi.json`；指定路径相对于容器工作目录，父目录须已存在且可写。生成或规范校验失败返回非零退出码，可用于 CI。
+
+生成默认文档后，从仓库根目录运行 `docker compose -f docker/docker-compose.yaml up -d swagger-ui`，访问 [https://localhost/swagger/](https://localhost/swagger/)。Swagger UI 与 API 同源，文档的服务器地址 `/` 指向当前应用，不需要开放额外 CORS。通过 `Authorize` 输入个人中心创建的 Access Token，再使用 `Try it out` 调试接口；Token 不持久化到浏览器存储。公告发布请求每次成功都会创建新公告，请使用测试数据。接口变更后重新生成默认文档并刷新页面，无需重启 Swagger UI。
+
+Swagger UI 属于 `dev` profile，默认启动不包含该服务；显式启动前须先生成默认文档，只读挂载该 JSON 文件，不共享其他可写目录。容器不单独映射主机端口，文档通过 `/swagger/openapi.json` 供页面读取。生产部署应禁用该容器并移除 Caddy 的 `/swagger` 代理规则，不公开开发文档。
 
 应用的 `app/OpenApi/Document.php` 定义文档标题、版本及服务器地址；Admin 的 `OpenApi/ApiContract.php` 定义 Bearer Token 安全方案和共享错误响应。业务模块在 API 控制器方法上使用 `OpenApi\Attributes` 声明路径、请求、响应和业务权限，复杂 Schema 可放在模块的 `OpenApi/` 目录，通过 `$ref` 引用共享定义。声明 API 权限时使用说明文字，不将业务 scope 描述为 OAuth2 流程。
 

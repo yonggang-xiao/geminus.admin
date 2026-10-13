@@ -12,8 +12,14 @@
 localhost {
     root * public
     encode zstd br gzip
-    php_server {
-        try_files {path} frankenphp-worker.php
+    redir /swagger /swagger/ 308
+    handle_path /swagger/* {
+        reverse_proxy swagger-ui:8080
     }
-    file_server
+    handle {
+        php_server {
+            try_files {path} frankenphp-worker.php
+        }
+        file_server
+    }
 }

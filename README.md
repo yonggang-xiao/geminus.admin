@@ -18,7 +18,7 @@ GeminusAdmin 是面向 AI 辅助开发、用于构建组织业务管理应用的
 - `admin/geminus/Admin/`：后台管理模块，包含控制器、视图、组件、语言文件及数据库迁移等，提供仪表盘和后台页面布局。用户认证基于 CodeIgniter Shield。
 - `admin/modules/Announcements/`：与后台底座并列的[业务模块示例](docs/example-business-module.md)，展示独立的路由、权限、页面和迁移。
 - `admin/public/`：Web 入口与静态资源目录，由 FrankenPHP 提供访问。
-- `docker/`：本地运行环境，使用 Docker Compose 运行 FrankenPHP 应用、PostgreSQL 数据库和 Adminer 数据库管理工具。
+- `docker/`：本地运行环境，使用 Docker Compose 运行 FrankenPHP 应用、PostgreSQL 数据库、Redis、Adminer 数据库管理工具和 Swagger UI 接口调试工具。
 
 ## 工程目标
 
@@ -77,7 +77,7 @@ GeminusAdmin 是面向 AI 辅助开发、用于构建组织业务管理应用的
 	database.default.port = 5432
 	```
 
-3. 构建并启动应用、PostgreSQL 和 Adminer：
+3. 构建并启动应用及配套开发服务：
 
 	```sh
 	docker compose -f docker/docker-compose.yaml up -d --build
@@ -94,6 +94,15 @@ GeminusAdmin 是面向 AI 辅助开发、用于构建组织业务管理应用的
 	按终端提示输入并确认密码。公开注册已关闭；首个账号需要 `superadmin` 组以管理后台设置和其他管理员。此命令创建本地登录账号，不会自动配置 Microsoft 登录。
 
 启动后访问 [https://localhost](https://localhost)，使用刚创建的账号登录。本地 HTTPS 使用自签名证书，浏览器可能提示证书不受信任。数据库管理界面位于 [http://localhost:8080](http://localhost:8080)。停止服务可运行 `docker compose -f docker/docker-compose.yaml down`。
+
+接口调试界面位于 [https://localhost/swagger/](https://localhost/swagger/)，首次使用须生成文档并启动可选的 Swagger UI 容器：
+
+```sh
+docker compose -f docker/docker-compose.yaml exec -T geminus-admin php spark openapi:generate
+docker compose -f docker/docker-compose.yaml up -d swagger-ui
+```
+
+接口变更后重新生成文档并刷新页面。在 Swagger UI 的 `Authorize` 中输入个人中心创建的 Access Token，即可调试已声明的接口。详见 [API 说明](docs/api.md#openapi-文档)。Swagger UI 属于 `dev` profile，仅用于本地开发，生产部署不启用该容器及对应代理规则。
 
 ## 运行测试
 

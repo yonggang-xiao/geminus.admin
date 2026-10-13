@@ -53,6 +53,22 @@ services:
     depends_on:
       - db
 
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.32.0
+    container_name: geminus-swagger-ui
+    profiles: [dev]
+    environment:
+      URL: /swagger/openapi.json
+      VALIDATOR_URL: none
+      PERSIST_AUTHORIZATION: "false"
+    volumes:
+      - type: bind
+        source: ../admin/writable/openapi.json
+        target: /usr/share/nginx/html/openapi.json
+        read_only: true
+        bind:
+          create_host_path: false
+
 volumes:
   caddy_data:
   caddy_config:
