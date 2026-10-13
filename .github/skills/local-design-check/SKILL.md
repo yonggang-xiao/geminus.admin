@@ -11,8 +11,9 @@ Check whether a small change belongs where it was made, before the coding task i
 
 1. Start with the user's named files or feature. Otherwise inspect unstaged and staged changes, plus relevant untracked source files. Do not assume `git diff` includes untracked files. If there are no changes and no named scope, ask what to check rather than auditing the repository.
 2. Read the changed code and only the nearest callers, callees, tests, and project conventions needed to understand who owns the behavior. Follow forwarding code to the layer that actually decides the behavior. Consult framework or package code only when its contract is in question; do not modify `vendor/`.
-3. State the change's intended behavior and the suspected design boundary before judging it. Distinguish observed behavior and code evidence from assumptions; use a small targeted check when that would settle a disputed claim.
-4. Do not change files, stage, commit, create a PR, or run destructive commands as part of this check. A separately requested fix is a separate task. Preserve other worktree changes.
+3. Before judging implementation placement, verify why each added behavior, responsibility or framework extension is needed. Trace it to the user's original request and later scope corrections, a verified current workflow required to satisfy that request, or an applicable mandatory engineering rule. Keep the author's assumptions separate; existing tests, newly written documentation, hypothetical risks and framework extension support do not independently authorize additional scope. Use a small nearby check when a disputed premise can be verified; otherwise report the missing requirement evidence.
+4. State the change's intended behavior and the suspected design boundary before judging it. Distinguish observed behavior and code evidence from assumptions; do not turn the author's expanded contract into the review's requirements.
+5. Do not change files, stage, commit, create a PR, or run destructive commands as part of this check. A separately requested fix is a separate task. Preserve other worktree changes.
 
 ## Engineering standards
 
@@ -34,6 +35,8 @@ Apply only lenses relevant to the change; do not report a violation merely becau
 For this project, use `.github/instructions/codeigniter.instructions.md` and nearby code as the concrete baseline. Shared app code lives under `admin/app/`, admin module behavior under `admin/geminus/Admin/`; persisted runtime settings use CodeIgniter Settings. Controllers may validate requests, authorize, and coordinate responses. Keep framework, Settings persistence, and SQL-dialect concerns out of field-specific controller branches unless there is evidence that the behavior truly is a business rule. Do not recommend a new service or repository solely to make a controller shorter.
 
 ## Verdict
+
+Report unsupported scope expansion as an actionable finding even when the code is correctly layered and tests pass. A necessity verdict must precede a design verdict; do not declare the change sound when a material requirement source remains unverified.
 
 Report only actionable findings, ordered by impact. For each finding include the location, observed evidence, applicable engineering rule or affected design principle, why the code violates that rule or responsibility boundary, the smallest viable correction and its tradeoff. In-scope standards violations are blockers; optional cleanup is not. Prefer one concrete cause over multiple overlapping principle labels. Explain justified deviations from recommendations, and mark uncertain claims as needing verification with the check that would resolve them.
 
