@@ -15,6 +15,7 @@ use CodeIgniter\Test\FeatureTestTrait;
 use CodeIgniter\Test\Mock\MockCache;
 use CodeIgniter\Test\TestResponse;
 use CodeIgniter\Throttle\Throttler;
+use Config\Auth;
 use Config\Services;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Filters\ApiAccess;
@@ -63,6 +64,84 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
         $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
+    }
+
+    public function testShieldTokenAuthenticationLogsRespectConfiguration(): void
+    {
+        $config   = config('AuthToken');
+        $original = $config->recordLoginAttempt;
+        $user     = $this->account();
+        $allowed  = $user->generateAccessToken('Allowed authentication', ['announcements.manage']);
+        $denied   = $user->generateAccessToken('Denied authorization', ['announcements.access']);
+
+        try {
+            foreach ([
+                [Auth::RECORD_LOGIN_ATTEMPT_NONE, []],
+                [Auth::RECORD_LOGIN_ATTEMPT_FAILURE, [0]],
+                [Auth::RECORD_LOGIN_ATTEMPT_ALL, [0, 1, 1]],
+            ] as [$mode, $expected]) {
+                $config->recordLoginAttempt = $mode;
+                $this->db->table('auth_token_logins')->emptyTable();
+                $this->publishRequest('private-invalid-token')->assertStatus(401);
+                $this->publishRequest($allowed->raw_token)->assertStatus(201);
+                $this->publishRequest($denied->raw_token)->assertStatus(403);
+                $logs = $this->db->table('auth_token_logins')->orderBy('id')->get()->getResultArray();
+                $this->assertSame($expected, array_map(static fn (array $log): int => (int) $log['success'], $logs));
+
+                foreach ($logs as $log) {
+                    $this->assertSame('access_token', $log['id_type']);
+                    $this->assertNotEmpty($log['date']);
+                    $this->assertNotEmpty($log['ip_address']);
+                }
+                if ($mode === Auth::RECORD_LOGIN_ATTEMPT_ALL) {
+                    $this->assertSame('Allowed authentication', $logs[1]['identifier']);
+                    $this->assertSame('Denied authorization', $logs[2]['identifier']);
+                    $this->assertSame((int) $user->id, (int) $logs[1]['user_id']);
+                    $this->assertSame((int) $user->id, (int) $logs[2]['user_id']);
+                }
+                if ($mode !== Auth::RECORD_LOGIN_ATTEMPT_NONE) {
+                    $this->assertSame('private-invalid-token', $logs[0]['identifier']);
+                }
+                $this->assertStringNotContainsString($allowed->raw_token, json_encode($logs));
+                $this->assertStringNotContainsString($denied->raw_token, json_encode($logs));
+            }
+            $this->assertSame(3, (new AnnouncementModel())->countAllResults());
+            $this->assertSame(3, $this->db->table('operation_audit_logs')->countAllResults());
+        } finally {
+            $config->recordLoginAttempt = $original;
+        }
+    }
+
+    public function testTokenAuthenticationFailureLogsUseShieldIdentifiers(): void
+    {
+        $user    = $this->account();
+        $expired = $user->generateAccessToken('Expired secret', ['announcements.manage'], Time::now('UTC')->subDays(1));
+        $token   = $user->generateAccessToken('Banned account token', ['announcements.manage']);
+
+        foreach (['', 'Basic private-invalid-token', 'Bearer private-invalid-token', 'Bearer ' . $expired->raw_token] as $header) {
+            $this->withHeaders(['Authorization' => $header, 'Content-Type' => 'application/json'])->withBody('{}')->post('/api/v1/announcements')->assertStatus(401);
+        }
+        $user->ban();
+        $this->publishRequest($token->raw_token)->assertStatus(401);
+        $logs = $this->db->table('auth_token_logins')->orderBy('id')->get()->getResultArray();
+        $this->assertCount(5, $logs);
+        $this->assertSame(['', '', 'private-invalid-token', $expired->raw_token, 'Banned account token'], array_column($logs, 'identifier'));
+        $this->assertSame([0, 0, 0, 0, 0], array_map(static fn (array $log): int => (int) $log['success'], $logs));
+        $this->assertSame((int) $user->id, (int) $logs[4]['user_id']);
+        $this->assertStringNotContainsString($token->raw_token, json_encode($logs));
+        $this->assertSame(0, (new AnnouncementModel())->countAllResults());
+        $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
+    }
+
+    public function testShieldDirectAttemptRecordsSubmittedBearerCredentials(): void
+    {
+        $token  = $this->account()->generateAccessToken('Direct attempt', ['announcements.manage'], Time::now('UTC')->subDays(1));
+        $result = auth('tokens')->attempt(['token' => 'Bearer ' . $token->raw_token]);
+        auth('session');
+        $this->assertFalse($result->isOK());
+        $log = $this->db->table('auth_token_logins')->get()->getRowArray();
+        $this->assertSame('Bearer ' . $token->raw_token, $log['identifier']);
+        $this->assertSame(0, (int) $log['success']);
     }
 
     public function testApiRejectsEmptyWildcardAndUnownedScopes(): void
@@ -231,6 +310,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         $request->setMethod('POST');
         $request->setHeader('Authorization', 'Bearer ' . $token->raw_token);
         $request->setHeader('Content-Type', 'text/plain');
+        Services::injectMock('request', $request);
         $throttler = $this->createMock(Throttler::class);
         $throttler->expects($this->never())->method('check');
         Services::injectMock('throttler', $throttler);
@@ -511,12 +591,13 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         $this->assertSame(1, (new AnnouncementModel())->countAllResults());
     }
 
-    public function testExpiredRevokedBannedAndDeletedAccountsAreUnauthenticated(): void
+    public function testExpiredRevokedUnusedAndBannedTokensAreUnauthenticated(): void
     {
         $user    = $this->account();
         $expired = $user->generateAccessToken('Expired', ['announcements.manage'], Time::now('UTC')->subDays(1));
         $this->publishRequest($expired->raw_token)->assertStatus(401);
-        $token = $user->generateAccessToken('Revoked', ['announcements.manage']);
+        $token        = $user->generateAccessToken('Revoked', ['announcements.manage']);
+        $revokedToken = $token->raw_token;
         $user->revokeAccessToken($token->raw_token);
         $this->publishRequest($token->raw_token)->assertStatus(401);
         $unused = $user->generateAccessToken('Unused', ['announcements.manage']);
@@ -525,10 +606,10 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         $token = $user->generateAccessToken('Banned', ['announcements.manage']);
         $user->ban();
         $this->publishRequest($token->raw_token)->assertStatus(401);
-        $user->unBan();
-        auth()->getProvider()->delete($user->id);
-        $this->publishRequest($token->raw_token)->assertStatus(401);
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
+        $logs = $this->db->table('auth_token_logins')->orderBy('id')->get()->getResultArray();
+        $this->assertSame([$expired->raw_token, $revokedToken, $unused->raw_token, 'Banned'], array_column($logs, 'identifier'));
+        $this->assertSame([0, 0, 0, 0], array_map(static fn (array $log): int => (int) $log['success'], $logs));
     }
 
     public function testIpAndTokenRateLimitsReturnRetryAfterWithoutWriting(): void

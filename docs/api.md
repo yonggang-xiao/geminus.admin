@@ -45,7 +45,11 @@ scope 不随账号授权自动改写。Admin 每次请求检查最新角色、�
 
 ### 请求与响应
 
-业务 API 使用 `/api/v1/` 前缀，不带语言路径，通过 HTTPS、JSON 和 `Authorization: Bearer <Access Token>` 调用，仅接受 Token 认证。无效或失效密钥、禁用或删除的账号返回 JSON 401，不重定向登录；不能借用会话或同账号另一把密钥的权限。
+业务 API 使用 `/api/v1/` 前缀，不带语言路径，通过 HTTPS、JSON 和 `Authorization: Bearer <Access Token>` 调用，仅接受 Token 认证。无效或失效密钥、禁用账号返回 JSON 401，不重定向登录；不能借用会话或同账号另一把密钥的权限。
+
+API 入口通过 `auth('tokens')` 调用 Shield 原生 Token 认证器的 `attempt()`，限流与操作审计使用同一认证器上下文。凭证校验、有效期、闲置期限、最后使用时间和认证尝试日志均沿用 Shield，账号权限及密钥 scope 由 API 授权过滤器检查，不注册自定义认证器。
+
+`AuthToken.recordLoginAttempt` 控制 `auth_token_logins`：默认仅记录认证失败，也可关闭或记录全部认证尝试。日志沿用 Shield 默认规则：凭证校验失败时，`identifier` 保存传入认证器的凭证值；API 入口传入解析后的原始 Token，缺失或格式不合法的 Authorization 传入空值。认证成功或已识别的禁用账号记录密钥名称及账号 ID。该认证日志可能包含失败凭证原文，须限制访问及保留期限，不作为业务审计内容公开展示。权限或 scope 不足属于授权失败，不属于 Token 认证失败；配置记录全部时，其认证阶段仍记成功。
 
 `api/v1/*` 统一排除全局会话与 CSRF 要求，并由路径级路由声明守卫保护：未声明 `api:<具体权限>` 完整组合、权限参数为空或使用通配符、多参数的路由返回 JSON 403，不执行控制器。合法路由由组合启用限流与 Token 认证授权；后台表单防护不变，不接受 Cookie 认证或任意来源 CORS。Shield 的 `tokenCan()` 允许 `*`，通用入口须显式拒绝通配符密钥。
 

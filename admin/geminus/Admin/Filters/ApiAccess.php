@@ -8,7 +8,6 @@ use CodeIgniter\API\ResponseTrait;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
-use CodeIgniter\Shield\Models\UserIdentityModel;
 use Config\Services;
 use Geminus\Admin\Libraries\TokenPermissions;
 use Throwable;
@@ -27,19 +26,13 @@ class ApiAccess implements FilterInterface
         $this->response = service('response')->setHeader('Cache-Control', 'no-store');
 
         try {
-            if (! preg_match('/\ABearer ([^\s]+)\z/i', $request->getHeaderLine('Authorization'), $matches)) {
+            $rawToken = preg_match('/\ABearer ([^\s]+)\z/i', $request->getHeaderLine('Authorization'), $matches) ? $matches[1] : '';
+            if (! $authenticator->attempt(['token' => $rawToken])->isOK()) {
                 return $this->failUnauthorized('A valid access token is required.');
             }
 
-            $identity = (new UserIdentityModel())->getAccessTokenByRawToken($matches[1]);
-            $provider = auth()->getProvider()::class;
-            $user     = $identity === null ? null : (new $provider())->findById($identity->user_id);
-            if ($user === null || $user->isBanned() || ! $authenticator->check(['token' => $matches[1]])->isOK()) {
-                return $this->failUnauthorized('A valid access token is required.');
-            }
-
-            $user->setAccessToken($identity);
-            $authenticator->login($user);
+            $user     = $authenticator->getUser();
+            $identity = $user->currentAccessToken();
             Services::resetSingle('settings');
             $permission = $arguments[0] ?? '';
             if (! (new TokenPermissions())->allows($user, setting('AuthGroups.permissions'), $identity->scopes, $permission) || ! $user->tokenCan($permission)) {
