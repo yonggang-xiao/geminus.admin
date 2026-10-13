@@ -122,22 +122,43 @@
                         <?= csrf_field() ?>
                         <div class="col-12 col-md-5">
                             <label class="form-label required" for="token-name"><?= esc(lang('Admin.tokenName')) ?></label>
-                            <input id="token-name" name="name" class="form-control<?= session('token_errors.name') ? ' is-invalid' : '' ?>" required maxlength="100">
+                            <input id="token-name" name="name" class="form-control<?= session('token_errors.name') ? ' is-invalid' : '' ?>" value="<?= esc(old('name')) ?>" required maxlength="100">
                             <?php if (session('token_errors.name')): ?><div class="invalid-feedback"><?= esc(session('token_errors.name')) ?></div><?php endif; ?>
                         </div>
                         <div class="col-12 col-md-4">
                             <?= view_cell('Geminus\Admin\Cells\DateFieldCell', ['inputId' => 'token-expires', 'name' => 'expires', 'label' => lang('Admin.tokenExpires'), 'value' => (string) old('expires'), 'error' => (string) session('token_errors.expires'), 'min' => gmdate('Y-m-d'), 'required' => true]) ?>
                         </div>
-                        <div class="col-12 col-md-auto"><button type="submit" class="btn btn-primary"><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createToken')) ?></button></div>
+                        <fieldset class="col-12">
+                            <legend class="form-label required"><?= esc(lang('Admin.tokenPermissions')) ?></legend>
+                            <div class="row g-2">
+                                <?php foreach ($availablePermissions as $permission => $description): ?>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-check">
+                                            <input type="checkbox" name="scopes[]" value="<?= esc($permission, 'attr') ?>" class="form-check-input<?= session('token_errors.scopes') ? ' is-invalid' : '' ?>"<?= in_array($permission, $selectedPermissions, true) ? ' checked' : '' ?><?= session('token_errors.scopes') ? ' aria-describedby="token-scopes-error" aria-invalid="true"' : '' ?>>
+                                            <span class="form-check-label text-break"><?= esc($permission) ?> <span class="text-secondary"><?= esc($description) ?></span></span>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php if ($availablePermissions === []): ?><div class="text-secondary"><?= esc(lang('Admin.tokenNoPermissions')) ?></div><?php endif; ?>
+                            <?php if (session('token_errors.scopes')): ?><div id="token-scopes-error" class="invalid-feedback d-block"><?= esc(session('token_errors.scopes')) ?></div><?php endif; ?>
+                        </fieldset>
+                        <div class="col-12"><button type="submit" class="btn btn-primary"<?= $availablePermissions === [] ? ' disabled' : '' ?>><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Admin.createToken')) ?></button></div>
                     </form>
                 </div>
                 <div class="table-responsive">
                     <table class="table card-table table-vcenter">
-                        <thead><tr><th><?= esc(lang('Admin.tokenName')) ?></th><th><?= esc(lang('Admin.tokenExpires')) ?></th><th><?= esc(lang('Admin.lastUsed')) ?></th><th></th></tr></thead>
+                        <thead><tr><th><?= esc(lang('Admin.tokenName')) ?></th><th><?= esc(lang('Admin.tokenPermissions')) ?></th><th><?= esc(lang('Admin.tokenExpires')) ?></th><th><?= esc(lang('Admin.lastUsed')) ?></th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($tokens as $token): ?>
                                 <tr>
                                     <td><?= esc($token->name) ?></td>
+                                    <td class="text-wrap">
+                                        <?php if ($tokenPermissions[$token->id]['state'] !== null): ?><div class="text-danger"><?= esc(lang('Admin.' . $tokenPermissions[$token->id]['state'])) ?></div><?php endif; ?>
+                                        <?php foreach ($tokenPermissions[$token->id]['permissions'] as $permission): ?>
+                                            <div class="text-break"><?= esc($permission['permission']) ?> <span class="text-secondary"><?= esc($permission['description']) ?></span> <span class="<?= $permission['state'] === 'tokenPermissionActive' ? 'text-success' : 'text-danger' ?>"><?= esc(lang('Admin.' . $permission['state'])) ?></span></div>
+                                        <?php endforeach; ?>
+                                    </td>
                                     <td><?= esc($token->expires?->format('Y-m-d') ?? '-') ?></td>
                                     <td><?= esc($me->formatDateTime($token->last_used_at) ?? '-') ?></td>
                                     <td class="text-end">
@@ -148,7 +169,7 @@
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if ($tokens === []): ?><tr><td colspan="4" class="text-center py-4">
+                            <?php if ($tokens === []): ?><tr><td colspan="5" class="text-center py-4">
                                 <?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang('Admin.noTokens')]) ?>
                             </td></tr><?php endif; ?>
                         </tbody>

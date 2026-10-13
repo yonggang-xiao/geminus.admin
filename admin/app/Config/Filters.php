@@ -12,6 +12,11 @@ use CodeIgniter\Filters\InvalidChars;
 use CodeIgniter\Filters\PageCache;
 use CodeIgniter\Filters\PerformanceMetrics;
 use CodeIgniter\Filters\SecureHeaders;
+use Geminus\Admin\Filters\ApiAccess;
+use Geminus\Admin\Filters\ApiIpRateLimit;
+use Geminus\Admin\Filters\ApiJsonRequest;
+use Geminus\Admin\Filters\ApiRouteGuard;
+use Geminus\Admin\Filters\ApiTokenRateLimit;
 use Geminus\Admin\Filters\OperationAudit;
 
 class Filters extends BaseFilters
@@ -26,16 +31,27 @@ class Filters extends BaseFilters
      * or [filter_name => [classname1, classname2, ...]]
      */
     public array $aliases = [
-        'csrf'           => CSRF::class,
-        'toolbar'        => DebugToolbar::class,
-        'honeypot'       => Honeypot::class,
-        'invalidchars'   => InvalidChars::class,
-        'secureheaders'  => SecureHeaders::class,
-        'cors'           => Cors::class,
-        'forcehttps'     => ForceHTTPS::class,
-        'pagecache'      => PageCache::class,
-        'performance'    => PerformanceMetrics::class,
-        'operationAudit' => OperationAudit::class,
+        'csrf'              => CSRF::class,
+        'toolbar'           => DebugToolbar::class,
+        'honeypot'          => Honeypot::class,
+        'invalidchars'      => InvalidChars::class,
+        'secureheaders'     => SecureHeaders::class,
+        'cors'              => Cors::class,
+        'forcehttps'        => ForceHTTPS::class,
+        'pagecache'         => PageCache::class,
+        'performance'       => PerformanceMetrics::class,
+        'operationAudit'    => OperationAudit::class,
+        'apiIpRateLimit'    => ApiIpRateLimit::class,
+        'apiAccess'         => ApiAccess::class,
+        'apiTokenRateLimit' => ApiTokenRateLimit::class,
+        'apiJsonRequest'    => ApiJsonRequest::class,
+        'apiRouteGuard'     => ApiRouteGuard::class,
+        'api'               => [
+            ApiIpRateLimit::class,
+            ApiAccess::class,
+            ApiTokenRateLimit::class,
+            ApiJsonRequest::class,
+        ],
     ];
 
     /**
@@ -75,10 +91,10 @@ class Filters extends BaseFilters
     public array $globals = [
         'before' => [
             // 'honeypot',
-            'csrf',
+            'csrf' => ['except' => ['api/v1/*']],
             'operationAudit',
             // 'invalidchars',
-            'session' => ['except' => ['*/login*', '*/register', '*/auth/a/*', '*/logout', '*/microsoft/start', '*/microsoft/callback', '__hot-reload']],
+            'session' => ['except' => ['*/login*', '*/register', '*/auth/a/*', '*/logout', '*/microsoft/start', '*/microsoft/callback', '__hot-reload', 'api/v1/*']],
         ],
         'after' => [
             'operationAudit',
@@ -111,5 +127,7 @@ class Filters extends BaseFilters
      *
      * @var array<string, array<string, list<string>>>
      */
-    public array $filters = [];
+    public array $filters = [
+        'apiRouteGuard' => ['before' => ['api/v1/*']],
+    ];
 }

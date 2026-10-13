@@ -246,6 +246,9 @@ final class OperationAuditTest extends CIUnitTestCase
                     'body'       => $template['body'], 'tenant' => 'organizations', 'clientId' => '11111111-2222-3333-4444-555555555555',
                     'password'   => 'private-secret', 'clientSecret' => 'private-secret', 'actor_id' => 999, 'id' => 999,
                 ];
+                if ($operation === 'profile.token.create') {
+                    $input['scopes'] = ['announcements.manage'];
+                }
                 $this->post($path, $input)->assertRedirect();
                 $log     = db_connect()->table('operation_audit_logs')->orderBy('id', 'DESC')->get()->getRowArray();
                 $summary = json_decode($log['submission'], true, flags: JSON_THROW_ON_ERROR);

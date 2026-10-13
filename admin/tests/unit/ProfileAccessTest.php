@@ -3,6 +3,7 @@
 use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\UserAgent;
+use CodeIgniter\I18n\Time;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Shield\Auth;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -14,6 +15,7 @@ use Geminus\Admin\Controllers\Profile;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Filters\OperationAudit;
 use Geminus\Admin\Libraries\AvatarFiles;
+use Geminus\Admin\Libraries\TokenPermissions;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Libraries\TableLayoutAssertions;
 
@@ -30,6 +32,7 @@ final class ProfileAccessTest extends CIUnitTestCase
     protected function tearDown(): void
     {
         auth()->logout();
+        Services::resetSingle('settings');
         parent::tearDown();
     }
 
@@ -73,6 +76,32 @@ final class ProfileAccessTest extends CIUnitTestCase
         ]);
 
         $result->assertRedirect();
+    }
+
+    public function testTokenPermissionsAreAnExplicitSubsetOfCurrentAccountPermissions(): void
+    {
+        $user = $this->createStub(AdminUser::class);
+        $user->method('can')->willReturnCallback(static fn (string $permission): bool => $permission === 'announcements.manage');
+        $policy  = new TokenPermissions();
+        $catalog = ['announcements.manage' => 'Manage announcements', 'users.create' => 'Create users'];
+
+        $this->assertSame(['announcements.manage' => 'Manage announcements'], $policy->available($user, $catalog));
+        $this->assertSame(['announcements.manage'], $policy->select($user, $catalog, ['announcements.manage', 'announcements.manage']));
+        $this->assertTrue($policy->allows($user, $catalog, ['announcements.manage'], 'announcements.manage'));
+        $this->assertFalse($policy->allows($user, $catalog, ['*'], 'announcements.manage'));
+        $this->assertFalse($policy->allows($user, $catalog, ['announcements.*', 'announcements.manage'], 'announcements.manage'));
+        $this->assertFalse($policy->allows($user, $catalog, [], 'announcements.manage'));
+        $this->assertFalse($policy->allows($user, $catalog, ['users.create'], 'users.create'));
+        $this->assertFalse($policy->allows($user, [], ['announcements.manage'], 'announcements.manage'));
+
+        foreach ([null, [], ['*'], ['announcements.*'], ['users.create'], ['unknown.permission'], [123]] as $submitted) {
+            try {
+                $policy->select($user, $catalog, $submitted);
+                $this->fail('Invalid token permissions were accepted.');
+            } catch (InvalidArgumentException $exception) {
+                $this->assertNotSame('', $exception->getMessage());
+            }
+        }
     }
 
     public function testAvatarChangesRequireAuthentication(): void
@@ -768,17 +797,20 @@ final class ProfileAccessTest extends CIUnitTestCase
         $users = auth()->getProvider();
         $users->save($user);
         $user = $users->findById($users->getInsertID());
+        $user->addPermission('announcements.manage');
         auth()->login($user);
 
         $result = $this->post('/en/admin/profile/tokens', [
             csrf_token() => csrf_hash(),
             'name'       => 'Test key',
             'expires'    => '2030-01-01',
+            'scopes'     => ['announcements.manage', 'announcements.manage'],
         ]);
 
         $result->assertRedirect();
         $tokens = $user->accessTokens();
         $this->assertCount(1, $tokens);
+        $this->assertSame(['announcements.manage'], $tokens[0]->scopes);
         $rawToken = session('alert')['detail'];
 
         $result = $this->withSession($_SESSION)->get('/en/admin/profile');
@@ -836,6 +868,91 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->post('/en/admin/profile/tokens/' . $token->id . '/revoke', [csrf_token() => csrf_hash()])->assertRedirect();
         $this->assertSame(lang('Admin.tokenNotFound'), session('alert')['message']);
         $this->assertCount(1, $owner->accessTokens());
+    }
+
+    public function testTokenCreationRejectsInvalidScopesAndUsesLatestPermissions(): void
+    {
+        $users = auth()->getProvider();
+        $user  = new AdminUser(['username' => 'scope-test']);
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addPermission('announcements.manage');
+        auth()->login($user);
+        $profile = $this->get('/en/admin/profile');
+        $profile->assertOK();
+        $document = new DOMDocument();
+        @$document->loadHTML($profile->response()->getBody());
+        $xpath = new DOMXPath($document);
+        $this->assertCount(1, $xpath->query('//input[@name="scopes[]"]'));
+        $this->assertCount(0, $xpath->query('//input[@name="scopes[]" and @checked]'));
+
+        foreach ([null, [], ['*'], ['announcements.*'], ['users.create'], ['not.registered'], ['announcements.manage', '*']] as $scope) {
+            $this->post('/en/admin/profile/tokens', [csrf_token() => csrf_hash(), 'name' => 'Invalid', 'expires' => '2030-01-01', 'scopes' => $scope])->assertRedirect();
+            $this->assertSame(lang('Admin.tokenPermissionInvalid'), session('token_errors')['scopes']);
+            $this->assertSame([], $user->accessTokens());
+        }
+        $users->findById($user->id)->removePermission('announcements.manage');
+        $this->post('/en/admin/profile/tokens', [csrf_token() => csrf_hash(), 'name' => 'Revoked permission', 'expires' => '2030-01-01', 'scopes' => ['announcements.manage']])->assertRedirect();
+        $this->assertSame([], $user->accessTokens());
+    }
+
+    public function testLegacyEmptyAndExpiredKeysAreMarkedUnavailable(): void
+    {
+        $users = auth()->getProvider();
+        $user  = new AdminUser(['username' => 'legacy-scope-test']);
+        $users->save($user);
+        $user = $users->findById($users->getInsertID());
+        $user->addPermission('announcements.manage');
+        $user->generateAccessToken('Legacy', ['*']);
+        $user->generateAccessToken('Empty', []);
+        $user->generateAccessToken('Expired', ['announcements.manage'], Time::now('UTC')->subDays(1));
+        $unused   = $user->generateAccessToken('Unused', ['announcements.manage']);
+        $lifetime = setting('AuthToken.unusedTokenLifetime');
+        $this->db->table('auth_identities')->where('id', $unused->id)->update(['last_used_at' => Time::now('UTC')->subSeconds($lifetime + 1)->toDateTimeString()]);
+        auth()->login($user);
+        $result = $this->get('/en/admin/profile');
+        $result->assertOK();
+        $document = new DOMDocument();
+        @$document->loadHTML($result->response()->getBody());
+        $xpath = new DOMXPath($document);
+
+        foreach (['Legacy' => 'tokenLegacy', 'Empty' => 'tokenInvalid', 'Expired' => 'tokenInvalid', 'Unused' => 'tokenInvalid'] as $name => $status) {
+            $rows = $xpath->query('//tr[td[normalize-space(.)="' . $name . '"]]');
+            $this->assertCount(1, $rows);
+            $this->assertStringContainsString(lang('Admin.' . $status), $rows->item(0)->textContent);
+        }
+        $this->assertStringNotContainsString('>Effective<', $result->response()->getBody());
+        $fresh = $user->generateAccessToken('Before ban', ['announcements.manage']);
+        $user->ban();
+        $description = (new TokenPermissions())->describe($user, setting('AuthGroups.permissions'), $fresh, $lifetime);
+        $this->assertSame('tokenInvalid', $description['state']);
+        $this->assertSame('tokenInvalid', $description['permissions'][0]['state']);
+    }
+
+    public function testWildcardAccountGrantsStillCreateOnlyConcreteTokenScopes(): void
+    {
+        $matrix           = setting('AuthGroups.matrix');
+        $changed          = $matrix;
+        $changed['admin'] = ['announcements.*'];
+        setting('AuthGroups.matrix', $changed);
+
+        try {
+            foreach (['superadmin', 'admin'] as $group) {
+                auth()->logout();
+                $users = auth()->getProvider();
+                $user  = new AdminUser(['username' => 'scope-' . $group]);
+                $users->save($user);
+                $user = $users->findById($users->getInsertID());
+                $user->addGroup($group);
+                auth()->login($user);
+                $this->post('/en/admin/profile/tokens', [csrf_token() => csrf_hash(), 'name' => 'Concrete scope', 'expires' => '2030-01-01', 'scopes' => ['announcements.manage']])->assertRedirect();
+                $tokens = $user->accessTokens();
+                $this->assertCount(1, $tokens);
+                $this->assertSame(['announcements.manage'], $tokens[0]->scopes);
+            }
+        } finally {
+            setting('AuthGroups.matrix', $matrix);
+        }
     }
 
     public function testValidationErrorsUseRequestedLocale(): void

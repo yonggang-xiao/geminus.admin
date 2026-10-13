@@ -22,8 +22,10 @@ class OperationAudit implements FilterInterface
     {
         $this->submission = [];
         if ($this->isAdminWrite($request)) {
-            $this->flashBefore      = session()->getFlashdata();
-            $this->flashStateBefore = session()->get('__ci_vars') ?? [];
+            if (! $this->isApi($request)) {
+                $this->flashBefore      = session()->getFlashdata();
+                $this->flashStateBefore = session()->get('__ci_vars') ?? [];
+            }
 
             try {
                 $collector  = new AuditSubmission(config(AuditConfig::class)->operations);
@@ -79,14 +81,21 @@ class OperationAudit implements FilterInterface
             return;
         }
 
-        $user = auth()->user();
+        if ($this->isApi($request)) {
+            $authenticator = auth('tokens')->getAuthenticator();
+            auth('session');
+            $user = $authenticator->getUser();
+            $authenticator->logout();
+        } else {
+            $user = auth()->user();
+        }
         if (! $user) {
             return;
         }
 
         $status = $response->getStatusCode();
         $result = $status >= 400 ? 'failed' : ($status >= 300 ? $this->redirectResult() : 'success');
-        preg_match('~^[^/]+/admin/(.+)$~', $path, $matches);
+        preg_match($this->isApi($request) ? '~^api/v1/(.+)$~' : '~^[^/]+/admin/(.+)$~', $path, $matches);
         $segments   = explode('/', $matches[1]);
         $targetId   = null;
         $targetType = $segments[0];
@@ -125,7 +134,12 @@ class OperationAudit implements FilterInterface
     private function isAdminWrite(RequestInterface $request): bool
     {
         return in_array(strtoupper($request->getMethod()), ['POST', 'PUT', 'PATCH', 'DELETE'], true)
-            && (bool) preg_match('~^[^/]+/admin/.+$~', ltrim($request->getUri()->getPath(), '/'));
+            && ((bool) preg_match('~^[^/]+/admin/.+$~', ltrim($request->getUri()->getPath(), '/')) || $this->isApi($request));
+    }
+
+    private function isApi(RequestInterface $request): bool
+    {
+        return str_starts_with(ltrim($request->getUri()->getPath(), '/'), 'api/v1/');
     }
 
     private function redirectResult(): string

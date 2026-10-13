@@ -7,10 +7,14 @@ namespace Geminus\Admin\Controllers;
 use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\I18n\Time;
+use CodeIgniter\Shield\Entities\User;
+use Config\Services;
 use Geminus\Admin\Cells\TimezoneSelectorCell;
 use Geminus\Admin\Libraries\AvatarFiles;
 use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Libraries\MicrosoftLinks;
+use Geminus\Admin\Libraries\TokenPermissions;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
@@ -22,7 +26,16 @@ class Profile extends BaseController
 
     public function index(): string
     {
-        $user = auth()->user();
+        $user             = auth()->user();
+        $tokenOwner       = $this->tokenOwner();
+        $catalog          = setting('AuthGroups.permissions');
+        $policy           = new TokenPermissions();
+        $tokens           = $tokenOwner->accessTokens();
+        $tokenPermissions = [];
+
+        foreach ($tokens as $token) {
+            $tokenPermissions[$token->id] = $policy->describe($tokenOwner, $catalog, $token, config('AuthToken')->unusedTokenLifetime);
+        }
 
         $this->response->setHeader('Cache-Control', 'private, no-store');
 
@@ -30,7 +43,10 @@ class Profile extends BaseController
             'me'                    => $user,
             'page_title'            => lang('Admin.accountSettings'),
             'localAccount'          => ! empty($user->getEmailIdentity()?->secret2),
-            'tokens'                => $user->accessTokens(),
+            'tokens'                => $tokens,
+            'availablePermissions'  => $policy->available($tokenOwner, $catalog),
+            'tokenPermissions'      => $tokenPermissions,
+            'selectedPermissions'   => is_array(old('scopes')) ? old('scopes') : [],
             'languages'             => config('App')->supportedLocales,
             'minimumPasswordLength' => config('Auth')->minimumPasswordLength,
             'microsoftLinked'       => $user->getIdentity(MicrosoftLinks::IDENTITY_TYPE) !== null,
@@ -224,7 +240,14 @@ class Profile extends BaseController
             return redirect()->to(route_to('admin/profile'))->withInput()->with('token_errors', ['expires' => lang('Admin.futureExpiry')]);
         }
 
-        $token = auth()->user()->generateAccessToken($data['name'], ['*'], $expires);
+        $user = $this->tokenOwner();
+
+        try {
+            $scopes = (new TokenPermissions())->select($user, setting('AuthGroups.permissions'), $this->request->getPost('scopes'));
+        } catch (InvalidArgumentException $exception) {
+            return redirect()->to(route_to('admin/profile'))->withInput()->with('token_errors', ['scopes' => lang('Admin.tokenPermissionInvalid')]);
+        }
+        $token = $user->generateAccessToken($data['name'], $scopes, $expires);
 
         return redirect()->to(route_to('admin/profile'))->with('alert', [
             'type'    => 'warning',
@@ -244,5 +267,13 @@ class Profile extends BaseController
         $user->revokeAccessTokenBySecret($token->secret);
 
         return redirect()->to(route_to('admin/profile'))->with('alert', ['type' => 'success', 'message' => lang('Admin.tokenRevoked')]);
+    }
+
+    private function tokenOwner(): User
+    {
+        Services::resetSingle('settings');
+        $provider = auth()->getProvider()::class;
+
+        return (new $provider())->findById(auth()->id());
     }
 }
