@@ -249,7 +249,7 @@ class Profile extends BaseController
         }
         $token = $user->generateAccessToken($data['name'], $scopes, $expires);
 
-        return redirect()->to(route_to('admin/profile'))->with('alert', [
+        return redirect()->to(route_to('admin/profile'))->with('_operation_audit_result', 'success')->with('alert', [
             'type'    => 'warning',
             'message' => lang('Admin.tokenOnce'),
             'detail'  => $token->raw_token,

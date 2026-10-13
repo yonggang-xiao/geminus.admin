@@ -235,7 +235,7 @@ final class OperationAuditTest extends CIUnitTestCase
             ['/en/admin/settings/microsoft', ['enabled' => '0'], 'microsoft.settings.update', 'microsoft_settings', null, 'success'],
             ['/en/admin/settings/microsoft', [], 'microsoft.settings.update', 'microsoft_settings', null, 'success'],
             ['/en/admin/settings/microsoft/requests/42/approve', ['user_id' => '999999999'], 'microsoft.link.approve', 'requests', '42', 'failed'],
-            ['/en/admin/profile/tokens', ['name' => 'Audit token', 'expires' => '2099-01-01'], 'profile.token.create', 'tokens', null, 'redirected'],
+            ['/en/admin/profile/tokens', ['name' => 'Audit token', 'expires' => '2099-01-01'], 'profile.token.create', 'tokens', null, 'success'],
             ['/en/admin/profile/tokens', ['name' => 'Expired token', 'expires' => '2000-01-01'], 'profile.token.create', 'tokens', null, 'failed'],
         ];
 
@@ -262,7 +262,12 @@ final class OperationAuditTest extends CIUnitTestCase
                 $this->assertSame((int) $actor->id, (int) $log['actor_id']);
                 $this->assertStringNotContainsString('private-secret', $log['submission']);
                 $this->assertStringNotContainsString($target->email, $log['submission']);
-                if ($operation === 'profile.token.create' && $result === 'redirected') {
+                if ($operation === 'profile.token.create') {
+                    $this->assertCount(1, $actor->accessTokens());
+                }
+                if ($operation === 'profile.token.create' && $result === 'success') {
+                    $this->assertSame('warning', session('alert')['type']);
+                    $this->assertSame(lang('Admin.tokenOnce'), session('alert')['message']);
                     $rawToken = session('alert')['detail'];
                     $this->assertNotEmpty($rawToken);
                     $this->assertStringNotContainsString($rawToken, json_encode($log));

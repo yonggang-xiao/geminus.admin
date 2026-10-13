@@ -16,7 +16,7 @@
 
 **结果判定。** HTTP 错误状态记为 `failed`，2xx 记为 `success`；后台写操作的 3xx 重定向优先读取本次新增或更新的反馈：`alert.type=success` 记成功，`alert.type=danger`、`error` 或 `*_errors` 记失败，且失败优先。通过反馈内容和 CI4 Flashdata 生命周期标记区分本次反馈与旧反馈；本次将旧反馈重新写入时，即使内容相同也参与判定。若没有明确反馈，或仅有未更新的旧反馈，仍记为 `redirected`，不能推断业务成败。
 
-语言选择通过隐藏的 `_operation_audit_result` Flashdata 提供明确结果：偏好保存成功记为 `success`，保存返回失败记为 `failed`，不产生可见提示。该反馈同样遵循旧反馈忽略及失败优先规则。
+语言选择通过隐藏的 `_operation_audit_result` Flashdata 提供明确结果：偏好保存成功记为 `success`，保存返回失败记为 `failed`，不产生可见提示。访问令牌生成成功同样使用该标记记为 `success`，同时保留“令牌仅显示一次”的警告提示，不记录令牌内容。该反馈遵循旧反馈忽略及失败优先规则。
 
 ## 配置接入
 
