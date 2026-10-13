@@ -56,9 +56,9 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         auth()->login($user);
 
         foreach (['', 'Bearer invalid', 'Basic invalid'] as $header) {
-            $result = $this->withHeaders(['Authorization' => $header, 'Content-Type' => 'application/json'])->withBody('{}')->post('/api/v1/announcements');
+            $result = $this->withHeaders(['Authorization' => $header, 'Content-Type' => 'application/json', 'Accept' => 'application/xml'])->withBody('{}')->post('/api/v1/announcements');
             $result->assertStatus(401);
-            $this->assertSame('unauthenticated', json_decode($result->response()->getBody(), true)['error']['code']);
+            $this->assertSame(['status' => 401, 'error' => 401, 'messages' => ['error' => 'A valid access token is required.']], json_decode($result->response()->getBody(), true));
             $this->assertApiHeaders($result);
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
@@ -88,10 +88,12 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             $result = $this->withHeaders(['Authorization' => 'Bearer ' . $token->raw_token, 'Content-Type' => 'application/json'])->withBody($body)->post('/api/v1/announcements');
             $result->assertStatus(400);
             $this->assertApiHeaders($result);
-            $this->assertSame('invalid_json', json_decode($result->response()->getBody(), true)['error']['code']);
+            $this->assertSame(['error' => 'The request body must be a JSON object.'], json_decode($result->response()->getBody(), true)['messages']);
         }
         $result = $this->withHeaders(['Authorization' => 'Bearer ' . $token->raw_token, 'Content-Type' => 'text/plain'])->withBody('{}')->post('/api/v1/announcements');
         $result->assertStatus(415);
+        $this->assertApiHeaders($result);
+        $this->assertSame(['error' => 'Content-Type must be application/json.'], json_decode($result->response()->getBody(), true)['messages']);
         $this->assertApiHeaders($result);
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
         $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
@@ -107,7 +109,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             ]);
             $result = $this->publishRequest($token->raw_token);
             $result->assertStatus(403);
-            $this->assertSame('forbidden', json_decode($result->response()->getBody(), true)['error']['code']);
+            $this->assertSame(['status' => 403, 'error' => 403, 'messages' => ['error' => 'The API route is not enabled.']], json_decode($result->response()->getBody(), true));
             $this->assertSame(0, (new AnnouncementModel())->countAllResults());
             $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
         } finally {
@@ -135,7 +137,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
                 foreach (['', 'Bearer ' . $token->raw_token] as $authorization) {
                     $result = $this->withHeaders(['Authorization' => $authorization, 'Content-Type' => 'application/json'])->withBody('{}')->post('/api/v1/unprotected');
                     $result->assertStatus(403);
-                    $this->assertSame('forbidden', json_decode($result->response()->getBody(), true)['error']['code']);
+                    $this->assertSame(['status' => 403, 'error' => 403, 'messages' => ['error' => 'The API route is not enabled.']], json_decode($result->response()->getBody(), true));
                     $this->assertApiHeaders($result);
                     $this->assertFalse($reached);
                 }
@@ -248,13 +250,13 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         $allowed = $user->generateAccessToken('Allowed stages', ['announcements.manage']);
         $denied  = $user->generateAccessToken('Denied stages', ['announcements.access']);
         $cases   = [
-            [false, '', 429, 'rate_limited', '3'],
-            [true, '', 401, 'unauthenticated', ''],
-            [true, 'Bearer ' . $denied->raw_token, 403, 'forbidden', ''],
-            [true, 'Bearer ' . $allowed->raw_token, 429, 'rate_limited', '3'],
+            [false, '', 429, '3'],
+            [true, '', 401, ''],
+            [true, 'Bearer ' . $denied->raw_token, 403, ''],
+            [true, 'Bearer ' . $allowed->raw_token, 429, '3'],
         ];
 
-        foreach ($cases as [$ipAllowed, $authorization, $status, $code, $retryAfter]) {
+        foreach ($cases as [$ipAllowed, $authorization, $status, $retryAfter]) {
             Services::resetSingle('response');
             $throttler = $this->createStub(Throttler::class);
             $throttler->method('check')->willReturnCallback(static fn (string $key): bool => $ipAllowed && str_starts_with($key, 'api-ip-'));
@@ -262,7 +264,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             Services::injectMock('throttler', $throttler);
             $result = $this->withHeaders(['Authorization' => $authorization, 'Content-Type' => 'text/plain'])->withBody('{')->post('/api/v1/announcements');
             $result->assertStatus($status);
-            $this->assertSame($code, json_decode($result->response()->getBody(), true)['error']['code']);
+            $this->assertSame($status, json_decode($result->response()->getBody(), true)['error']);
             $this->assertSame($retryAfter, $result->response()->getHeaderLine('Retry-After'));
             $this->assertApiHeaders($result);
         }
@@ -301,7 +303,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
 
         $response = (new ApiTokenRateLimit())->before($request);
         $this->assertSame(401, $response->getStatusCode());
-        $this->assertSame('unauthenticated', json_decode($response->getBody(), true)['error']['code']);
+        $this->assertSame(['status' => 401, 'error' => 401, 'messages' => ['error' => 'A valid access token is required.']], json_decode($response->getBody(), true));
         $this->assertContains('no-store', array_map('trim', explode(',', $response->getHeaderLine('Cache-Control'))));
         $this->assertSame((int) $user->id, (int) auth()->id());
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
@@ -323,7 +325,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             Services::injectMock('throttler', $throttler);
             $result = $this->publishRequest($token->raw_token);
             $result->assertStatus(500);
-            $this->assertSame(['error' => ['code' => 'internal_error', 'message' => 'The request could not be completed.']], json_decode($result->response()->getBody(), true));
+            $this->assertSame(['status' => 500, 'error' => 500, 'messages' => ['error' => 'The request could not be completed.']], json_decode($result->response()->getBody(), true));
             $this->assertStringNotContainsString($token->raw_token, $result->response()->getBody());
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
@@ -391,9 +393,8 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         foreach ([['source_id' => 'obsolete'], ['title' => '  '], ['title' => str_repeat('a', 151)], ['title' => false], ['title' => true], ['title' => 123], ['body' => []], ['body' => ['x']], ['body' => 123], ['body' => " \n\t "], ['body' => str_repeat('a', 2001)], ['status' => 'published'], ['actor_id' => 123]] as $changes) {
             $result = $this->withHeaders(['Authorization' => 'Bearer ' . $token->raw_token, 'Content-Type' => 'application/json'])->withBody(json_encode(array_replace($valid, $changes)))->post('/api/v1/announcements');
             $result->assertStatus(422);
-            $error = json_decode($result->response()->getBody(), true)['error'];
-            $this->assertSame('validation_failed', $error['code']);
-            $this->assertArrayHasKey(array_key_first($changes), $error['fields']);
+            $this->assertApiHeaders($result);
+            $this->assertArrayHasKey(array_key_first($changes), json_decode($result->response()->getBody(), true)['messages']);
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
     }
@@ -437,6 +438,14 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
     {
         $this->assertContains('no-store', array_map('trim', explode(',', $result->response()->getHeaderLine('Cache-Control'))));
         $this->assertStringStartsWith('application/json', $result->response()->getHeaderLine('Content-Type'));
+        $status = $result->response()->getStatusCode();
+        if ($status >= 400) {
+            $payload = json_decode($result->response()->getBody(), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertEqualsCanonicalizing(['status', 'error', 'messages'], array_keys($payload));
+            $this->assertSame($status, $payload['status']);
+            $this->assertSame($status, $payload['error']);
+            $this->assertIsArray($payload['messages']);
+        }
     }
 
     public function testCurrentPermissionsAndProfileReflectDirectGrantChanges(): void
@@ -534,7 +543,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             $result = $this->publishRequest($token->raw_token);
             $result->assertStatus(429);
             $this->assertSame('7', $result->response()->getHeaderLine('Retry-After'));
-            $this->assertSame('rate_limited', json_decode($result->response()->getBody(), true)['error']['code']);
+            $this->assertSame(['error' => 'Too many requests.'], json_decode($result->response()->getBody(), true)['messages']);
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
         $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
@@ -612,8 +621,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         try {
             $result = $this->publishRequest($token->raw_token);
             $result->assertStatus(500);
-            $error = json_decode($result->response()->getBody(), true)['error'];
-            $this->assertSame(['code' => 'internal_error', 'message' => 'The request could not be completed.'], $error);
+            $this->assertSame(['status' => 500, 'error' => 500, 'messages' => ['error' => 'The request could not be completed.']], json_decode($result->response()->getBody(), true));
             $this->assertSame(0, $model->countAllResults());
             $this->assertSame([], $events);
             $model->fail = false;
@@ -692,7 +700,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             unset($missing[$field]);
             $result = $this->publishRequest($token->raw_token, $missing);
             $result->assertStatus(422);
-            $this->assertArrayHasKey($field, json_decode($result->response()->getBody(), true)['error']['fields']);
+            $this->assertArrayHasKey($field, json_decode($result->response()->getBody(), true)['messages']);
         }
     }
 
@@ -723,7 +731,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
 
         $result = $this->publishRequest($token->raw_token, ['title' => 'Unknown field', 'body' => 'Body', 'source_id' => 'leak-marker']);
         $result->assertStatus(422);
-        $this->assertArrayHasKey('source_id', json_decode($result->response()->getBody(), true)['error']['fields']);
+        $this->assertArrayHasKey('source_id', json_decode($result->response()->getBody(), true)['messages']);
         $unknown = $this->db->table('operation_audit_logs')->where('path', 'api/v1/announcements')->orderBy('id', 'DESC')->get()->getRowArray();
         $this->assertNotSame($row['id'], $unknown['id']);
         $this->assertSame(['title' => 'Unknown field'], json_decode($unknown['submission'], true)['fields']);
@@ -740,7 +748,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             $input[$field] = "Text\0content";
             $result        = $this->publishRequest($token->raw_token, $input);
             $result->assertStatus(422);
-            $this->assertArrayHasKey($field, json_decode($result->response()->getBody(), true)['error']['fields']);
+            $this->assertArrayHasKey($field, json_decode($result->response()->getBody(), true)['messages']);
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
     }

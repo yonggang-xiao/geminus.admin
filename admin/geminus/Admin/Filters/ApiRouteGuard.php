@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Geminus\Admin\Filters;
 
+use CodeIgniter\API\ResponseTrait;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
-use Geminus\Admin\HTTP\ApiResponse;
 use Throwable;
 
 class ApiRouteGuard implements FilterInterface
 {
+    use ResponseTrait;
+
+    protected ResponseInterface $response;
+
     public function before(RequestInterface $request, $arguments = null)
     {
-        $response = service('response');
+        $this->response = service('response')->setHeader('Cache-Control', 'no-store');
 
         try {
             foreach (service('router')->getFilters() as $filter) {
@@ -23,11 +27,11 @@ class ApiRouteGuard implements FilterInterface
                 }
             }
 
-            return ApiResponse::error($response, 403, 'forbidden', 'The API route is not enabled.');
+            return $this->failForbidden('The API route is not enabled.');
         } catch (Throwable $exception) {
             log_message('error', 'API route guard failed: {type}', ['type' => $exception::class]);
 
-            return ApiResponse::error($response, 500, 'internal_error', 'The request could not be completed.');
+            return $this->failServerError('The request could not be completed.');
         }
     }
 

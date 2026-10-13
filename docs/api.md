@@ -49,28 +49,26 @@ scope 不随账号授权自动改写。Admin 每次请求检查最新角色、�
 
 `api/v1/*` 统一排除全局会话与 CSRF 要求，并由路径级路由声明守卫保护：未声明 `api:<具体权限>` 完整组合、权限参数为空或使用通配符、多参数的路由返回 JSON 403，不执行控制器。合法路由由组合启用限流与 Token 认证授权；后台表单防护不变，不接受 Cookie 认证或任意来源 CORS。Shield 的 `tokenCan()` 允许 `*`，通用入口须显式拒绝通配符密钥。
 
-带 JSON 请求体的接口须声明 `Content-Type: application/json`，顶层为对象；字段和业务规则由模块定义。成功响应使用 `data`，错误使用 `error.code`、`error.message` 和可选的 `error.fields`；机器可读代码稳定，响应均设置 `Cache-Control: no-store`。
+带 JSON 请求体的接口须声明 `Content-Type: application/json`，顶层为对象；字段和业务规则由模块定义。成功响应使用 `data`，错误遵循 CI4 `ResponseTrait` 默认的 `status`、`error`、`messages` 结构，`status` 与 `error` 均为 HTTP 状态码。一般错误说明位于 `messages.error`，字段校验错误按字段名放在 `messages` 中。响应固定为 JSON，均设置 `Cache-Control: no-store`。
 
-| HTTP 状态 | 通用错误代码 | 含义 |
-| --- | --- | --- |
-| 400 | `invalid_json` | JSON 无法解析或顶层不是对象 |
-| 401 | `unauthenticated` | Token 无效或账号不可用 |
-| 403 | `forbidden` | 账号权限或当前密钥 scope 不满足要求，包括通配符密钥 |
-| 415 | `unsupported_media_type` | 要求 JSON 的接口收到其他内容类型 |
-| 422 | `validation_failed` | 字段校验失败 |
-| 429 | `rate_limited` | 超过 API 请求限制，提供 `Retry-After` |
-| 500 | `internal_error` | 内部处理失败，不暴露异常细节 |
+| HTTP 状态 | 含义 |
+| --- | --- |
+| 400 | JSON 无法解析或顶层不是对象 |
+| 401 | Token 无效或账号不可用 |
+| 403 | 路由声明、账号权限或当前密钥 scope 不满足要求，包括通配符密钥 |
+| 415 | 要求 JSON 的接口收到其他内容类型 |
+| 422 | 字段校验失败 |
+| 429 | 超过 API 请求限制，提供 `Retry-After` |
+| 500 | 内部处理失败，不暴露异常细节 |
 
 业务成功状态及冲突等错误由模块契约确定；不统一要求所有接口幂等或使用事务。
 
 ```json
 {
-  "error": {
-    "code": "validation_failed",
-    "message": "请求字段不符合要求。",
-    "fields": {
-      "title": "标题不能为空。"
-    }
+  "status": 422,
+  "error": 422,
+  "messages": {
+    "title": "标题不能为空。"
   }
 }
 ```
