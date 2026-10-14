@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CodeIgniter\Test\CIUnitTestCase;
+use Geminus\Admin\Config\OperationAudit;
 use Geminus\Admin\Config\Registrar;
 use Geminus\Admin\Libraries\AuditSubmission;
 
@@ -171,6 +172,55 @@ final class AuditSubmissionTest extends CIUnitTestCase
             $input    = array_fill_keys($definition['fields'], 'safe-value');
             $captured = $collector->capture($definition, $input, [42]);
             $this->assertSame($input, json_decode($captured['submission'], true)['fields']);
+        }
+    }
+
+    public function testAuditConfigPreservesAdminAndAnnouncementOperations(): void
+    {
+        $config = new OperationAudit();
+
+        $this->assertCount(16, $config->operations);
+
+        foreach ([Registrar::OperationAudit(), Modules\Announcements\Config\Registrar::OperationAudit()] as $registration) {
+            foreach ($registration['operations'] as $definition) {
+                $this->assertContains($definition, $config->operations);
+            }
+        }
+    }
+
+    public function testAuditConfigRejectsInvalidRegisteredOperations(): void
+    {
+        new OperationAudit();
+        $registrars = OperationAudit::$registrars;
+        $registrar  = new class () {
+            public static array $operations = [];
+
+            public static function OperationAudit(): array
+            {
+                return ['operations' => self::$operations];
+            }
+        };
+
+        try {
+            OperationAudit::$registrars[] = $registrar;
+
+            foreach ([
+                ['invalid' => $this->definition()],
+                [array_replace($this->definition(), ['methods' => ['GET']])],
+                [array_replace($this->definition(), ['fields' => []])],
+                [$this->definition(), $this->definition()],
+            ] as $definitions) {
+                $registrar::$operations = $definitions;
+
+                try {
+                    new OperationAudit();
+                    $this->fail('Invalid registered operations were accepted.');
+                } catch (InvalidArgumentException $exception) {
+                    $this->assertNotEmpty($exception->getMessage());
+                }
+            }
+        } finally {
+            OperationAudit::$registrars = $registrars;
         }
     }
 }
