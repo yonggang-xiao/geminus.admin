@@ -1,6 +1,9 @@
 <?php
 
 use CodeIgniter\Database\Exceptions\DatabaseException;
+use CodeIgniter\Database\Postgre\Builder;
+use CodeIgniter\Database\Postgre\Connection;
+use CodeIgniter\Database\Postgre\Result;
 use CodeIgniter\HTTP\DownloadResponse;
 use CodeIgniter\HTTP\Files\UploadedFile;
 use CodeIgniter\HTTP\IncomingRequest;
@@ -15,12 +18,15 @@ use Config\Services;
 use Geminus\Admin\Config\AdminMenu;
 use Geminus\Admin\Entities\AdminUser;
 use Geminus\Admin\Libraries\DataManagement\Attachments;
+use Geminus\Admin\Libraries\DataManagement\UploadStorage;
 use Geminus\Admin\Models\AttachmentModel;
+use Geminus\Admin\Models\NotificationModel;
 use Modules\Announcements\Config\Registrar;
 use Modules\Announcements\Controllers\AnnouncementAttachments;
 use Modules\Announcements\Controllers\Announcements;
 use Modules\Announcements\Database\Migrations\AddPublicationState;
 use Modules\Announcements\Database\Migrations\GrantAnnouncementsToSuperadmin;
+use Modules\Announcements\Libraries\AnnouncementDeletion;
 use Modules\Announcements\Models\AnnouncementModel;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Libraries\TableLayoutAssertions;
@@ -199,6 +205,176 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertCount(1, $values);
 
         return trim($values->item(0)->textContent);
+    }
+
+    public function testDeleteRemovesDraftAndPublishedAnnouncementsAndOnlyTheirRelatedData(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model = new AnnouncementModel();
+        $other = $model->insert(['title' => 'Keep', 'body' => 'Other announcement']);
+
+        foreach (['draft', 'published'] as $status) {
+            $owner     = $model->insert(['title' => 'Delete ' . $status, 'body' => 'Content', 'status' => $status, 'published_at' => $status === 'published' ? '2026-10-14 01:00:00' : null]);
+            $directory = WRITEPATH . 'uploads/attachments/';
+            if (! is_dir($directory)) {
+                mkdir($directory, 0770, true);
+            }
+            $filename = bin2hex(random_bytes(16)) . '.txt';
+            file_put_contents($directory . $filename, 'Attachment');
+            $attachments   = new AttachmentModel();
+            $data          = ['resource_type' => 'announcement', 'resource_id' => $owner, 'filename' => $filename, 'original_name' => 'note.txt', 'mime_type' => 'text/plain', 'size_bytes' => 10, 'uploaded_by' => auth()->id()];
+            $attachment    = $attachments->insert($data);
+            $unrelated     = $attachments->insert(array_replace($data, ['resource_type' => 'user', 'filename' => bin2hex(random_bytes(16)) . '.txt']));
+            $otherFilename = bin2hex(random_bytes(16)) . '.txt';
+            file_put_contents($directory . $otherFilename, 'Other announcement file');
+            $otherAttachment = $attachments->insert(array_replace($data, ['resource_id' => $other, 'filename' => $otherFilename]));
+            $notifications   = new NotificationModel();
+            $notification    = ['user_id' => auth()->id(), 'source' => 'announcements.published', 'reference' => $owner, 'title' => 'Notice', 'target_route' => 'admin/announcements/show', 'target_parameters' => json_encode([$owner]), 'permissions' => '[]'];
+            $notifications->deliver($notification);
+            $notifications->deliver(array_replace($notification, ['source' => 'other.event']));
+            $notifications->deliver(array_replace($notification, ['reference' => $other]));
+
+            try {
+                $this->post('/en/admin/announcements/delete/' . $owner, [csrf_token() => csrf_hash()])->assertRedirectTo('/en/admin/announcements');
+                $this->assertSame(lang('Announcements.deleted'), session('alert.message'));
+                $this->assertNull($model->find($owner));
+                $this->assertNotNull($model->find($other));
+                $this->assertNull($attachments->find($attachment));
+                $this->assertNotNull($attachments->find($unrelated));
+                $this->assertNotNull($attachments->find($otherAttachment));
+                $this->assertSame('Other announcement file', file_get_contents($directory . $otherFilename));
+                $this->assertFileDoesNotExist($directory . $filename);
+                $this->assertSame(0, $notifications->where('source', 'announcements.published')->where('reference', $owner)->countAllResults());
+                $this->assertSame(1, $notifications->where('source', 'other.event')->where('reference', $owner)->countAllResults());
+                $this->assertSame(1, $notifications->where('source', 'announcements.published')->where('reference', $other)->countAllResults());
+                $this->get('/en/admin/announcements/' . $owner)->assertStatus(404);
+                $this->post('/en/admin/announcements/delete/' . $owner, [csrf_token() => csrf_hash()])->assertStatus(404);
+            } finally {
+                if (is_file($directory . $filename)) {
+                    unlink($directory . $filename);
+                }
+                if (is_file($directory . $otherFilename)) {
+                    unlink($directory . $otherFilename);
+                }
+            }
+        }
+    }
+
+    public function testDeleteCommitFailurePreservesAnnouncementRelatedRecordsAndFiles(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model     = new AnnouncementModel();
+        $owner     = $model->insert(['title' => 'Keep after failure', 'body' => 'Content']);
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0770, true);
+        }
+        $filename = bin2hex(random_bytes(16)) . '.txt';
+        file_put_contents($directory . $filename, 'Keep file');
+        $attachment    = (new AttachmentModel())->insert(['resource_type' => 'announcement', 'resource_id' => $owner, 'filename' => $filename, 'original_name' => 'keep.txt', 'mime_type' => 'text/plain', 'size_bytes' => 9, 'uploaded_by' => auth()->id()]);
+        $notifications = new NotificationModel();
+        $notifications->deliver(['user_id' => auth()->id(), 'source' => 'announcements.published', 'reference' => $owner, 'title' => 'Keep notification', 'target_route' => 'admin/announcements/show', 'target_parameters' => json_encode([$owner]), 'permissions' => '[]']);
+        $db          = $this->getMockBuilder(Connection::class)->setConstructorArgs([config('Database')->tests])->onlyMethods(['_transCommit', 'table'])->getMock();
+        $resultClass = str_replace('Connection', 'Result', $db::class);
+        if (! class_exists($resultClass)) {
+            class_alias(Result::class, $resultClass);
+        }
+        $db->method('table')->willReturnCallback(static fn ($tableName) => new Builder($tableName, $db));
+        $db->expects($this->once())->method('_transCommit')->willReturn(false);
+        $storage = new UploadStorage('attachments', ['text/plain'], ['txt'], 1024);
+
+        try {
+            (new AnnouncementDeletion($db, $storage))->delete((int) $owner);
+            $this->fail('Commit failure must not report deletion success.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame(0, $db->transDepth);
+            $this->assertNotNull((new AnnouncementModel($db))->find($owner));
+            $this->assertNotNull((new AttachmentModel($db))->find($attachment));
+            $this->assertSame(1, (new NotificationModel($db))->where('source', 'announcements.published')->where('reference', $owner)->countAllResults());
+            $this->assertSame('Keep file', file_get_contents($directory . $filename));
+        } finally {
+            if ($db->transDepth > 0) {
+                $db->transRollback();
+            }
+            unlink($directory . $filename);
+        }
+    }
+
+    public function testDeleteFileCleanupFailureDoesNotRestoreCommittedRecords(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model     = new AnnouncementModel();
+        $owner     = $model->insert(['title' => 'Delete despite cleanup failure', 'body' => 'Content']);
+        $directory = WRITEPATH . 'uploads/attachments/';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0770, true);
+        }
+        $filename = bin2hex(random_bytes(16)) . '.txt';
+        file_put_contents($directory . $filename, 'Pending cleanup');
+        $attachment = (new AttachmentModel())->insert(['resource_type' => 'announcement', 'resource_id' => $owner, 'filename' => $filename, 'original_name' => 'cleanup.txt', 'mime_type' => 'text/plain', 'size_bytes' => 15, 'uploaded_by' => auth()->id()]);
+        $storage    = new UploadStorage('attachments', ['text/plain'], ['txt'], 1024, static fn (): bool => false);
+
+        try {
+            $this->assertTrue((new AnnouncementDeletion($model->db, $storage))->delete((int) $owner));
+            $this->assertNull($model->find($owner));
+            $this->assertNull((new AttachmentModel())->find($attachment));
+            $this->assertFileExists($directory . $filename);
+            $this->assertLogged('error', 'Announcement attachment cleanup failed: RuntimeException');
+        } finally {
+            unlink($directory . $filename);
+        }
+    }
+
+    public function testDeleteConfirmationIsLocalizedAndOnlyShownToManagers(): void
+    {
+        $this->loginAs('admin', ['announcements.manage', 'announcements.access']);
+        $owner = (new AnnouncementModel())->insert(['title' => '<script>delete</script>', 'body' => 'Content', 'status' => 'published', 'published_at' => '2026-10-14 01:00:00']);
+
+        foreach (['en' => 'Delete this announcement?', 'zh-Hans' => '确认删除此公告？', 'zh-Hant' => '確認刪除此公告？'] as $locale => $title) {
+            $body  = $this->get('/' . $locale . '/admin/announcements/' . $owner)->response()->getBody();
+            $xpath = $this->dashboardXPath($body);
+            $this->assertSame($title, $xpath->query('//*[@id="announcement-delete-title"]')->item(0)->textContent);
+            $form = $xpath->query('//form[contains(@action, "/announcements/delete/")]');
+            $this->assertCount(1, $form);
+            $this->assertSame('/' . $locale . '/admin/announcements/delete/' . $owner, $form->item(0)->getAttribute('action'));
+            $this->assertSame('post', $form->item(0)->getAttribute('method'));
+            $this->assertCount(1, $xpath->query('.//input[@name="' . csrf_token() . '"]', $form->item(0)));
+            $this->assertStringNotContainsString('<script>delete</script>', $body);
+        }
+
+        auth()->user()->removePermission('announcements.manage');
+        $body = $this->get('/en/admin/announcements/' . $owner)->response()->getBody();
+        $this->assertStringNotContainsString('id="announcement-delete"', $body);
+        $this->assertStringNotContainsString('/announcements/delete/', $body);
+    }
+
+    public function testDeleteRequiresManagementPermissionAndPost(): void
+    {
+        $model = new AnnouncementModel();
+        $owner = $model->insert(['title' => 'Keep', 'body' => 'Content', 'status' => 'published', 'published_at' => '2026-10-14 01:00:00']);
+        $route = '/en/admin/announcements/delete/' . $owner;
+        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertNotNull($model->find($owner));
+        $this->loginAs('admin', ['announcements.access']);
+        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirect();
+        $this->assertNotNull($model->find($owner));
+        auth()->user()->addPermission('announcements.manage');
+        $this->get($route)->assertStatus(404);
+        $this->assertNotNull($model->find($owner));
+    }
+
+    public function testDeleteRequiresCsrf(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model = new AnnouncementModel();
+        $owner = $model->insert(['title' => 'Keep', 'body' => 'Content']);
+
+        try {
+            $this->post('/en/admin/announcements/delete/' . $owner);
+            $this->fail('Deletion without CSRF must be rejected.');
+        } catch (SecurityException $exception) {
+            $this->assertNotNull($model->find($owner));
+        }
     }
 
     public function testCreateRequiresCsrf(): void

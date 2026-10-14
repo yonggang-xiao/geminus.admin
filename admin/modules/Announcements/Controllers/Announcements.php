@@ -7,14 +7,17 @@ namespace Modules\Announcements\Controllers;
 use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
+use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\CsvImport;
 use Geminus\Admin\Libraries\DataManagement\ListQuery;
 use Geminus\Admin\Models\AttachmentModel;
 use InvalidArgumentException;
 use Modules\Announcements\Libraries\AnnouncementContent;
+use Modules\Announcements\Libraries\AnnouncementDeletion;
 use Modules\Announcements\Models\AnnouncementModel;
 use RuntimeException;
+use Throwable;
 
 class Announcements extends BaseController
 {
@@ -135,6 +138,22 @@ class Announcements extends BaseController
         }
 
         return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'success', 'message' => lang('Announcements.published')]);
+    }
+
+    public function delete(int $announcementId): RedirectResponse|ResponseInterface
+    {
+        try {
+            $deletion = new AnnouncementDeletion(db_connect(), Attachments::storage());
+            if (! $deletion->delete($announcementId)) {
+                return $this->response->setStatusCode(404);
+            }
+        } catch (Throwable $exception) {
+            log_message('error', 'Announcement deletion failed: {type}', ['type' => $exception::class]);
+
+            return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'danger', 'message' => lang('Announcements.deleteFailed')]);
+        }
+
+        return redirect()->to(route_to('admin/announcements'))->with('alert', ['type' => 'success', 'message' => lang('Announcements.deleted')]);
     }
 
     private function listQuery(): ListQuery

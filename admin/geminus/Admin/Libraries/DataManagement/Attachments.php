@@ -28,7 +28,12 @@ final class Attachments
     public function __construct(?AttachmentModel $model = null, ?UploadStorage $storage = null)
     {
         $this->model   = $model ?? new AttachmentModel();
-        $this->storage = $storage ?? new UploadStorage('attachments', array_values(array_unique(array_merge(...array_values(self::FILE_TYPES)))), array_keys(self::FILE_TYPES), self::maxBytes());
+        $this->storage = $storage ?? self::storage();
+    }
+
+    public static function storage(): UploadStorage
+    {
+        return new UploadStorage('attachments', array_values(array_unique(array_merge(...array_values(self::FILE_TYPES)))), array_keys(self::FILE_TYPES), self::maxBytes());
     }
 
     public static function maxBytes(): int

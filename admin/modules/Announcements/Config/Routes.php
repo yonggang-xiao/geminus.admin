@@ -23,3 +23,7 @@ $routes->group('{locale}/admin/announcements', ['namespace' => 'Modules\Announce
     $routes->post('(:num)/attachments', 'AnnouncementAttachments::upload/$1', ['as' => 'admin/announcements/attachments/upload']);
     $routes->post('(:num)/attachments/(:num)/remove', 'AnnouncementAttachments::remove/$1/$2', ['as' => 'admin/announcements/attachments/remove']);
 });
+
+$routes->group('{locale}/admin', ['namespace' => 'Modules\Announcements\Controllers', 'filter' => 'permission:announcements.manage'], static function ($routes) {
+    $routes->presenter('announcements', ['controller' => 'Announcements', 'only' => ['delete'], 'placeholder' => '(:num)', 'as' => 'admin/announcements/delete']);
+});
