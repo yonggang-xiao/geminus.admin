@@ -47,15 +47,67 @@ final class AnnouncementsTest extends CIUnitTestCase
         parent::tearDown();
     }
 
+    public function testPresenterRoutesUseNativeMethodsAndDistinctNames(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model = new AnnouncementModel();
+        $owner = $model->insert(['title' => 'Presenter announcement', 'body' => 'Content']);
+
+        foreach (['en', 'zh-Hans', 'zh-Hant'] as $locale) {
+            service('request')->setLocale($locale);
+            service('language')->setLocale($locale);
+            $base = '/' . $locale . '/admin/announcements';
+            $this->assertSame($base, route_to('admin/announcements'));
+
+            foreach (['new', 'create', 'edit', 'update', 'delete', 'show'] as $action) {
+                $parameters = in_array($action, ['new', 'create'], true) ? [] : [$owner];
+                $this->assertSame($base . '/' . $action . ($parameters === [] ? '' : '/' . $owner), route_to('admin/announcements/' . $action, ...$parameters));
+            }
+            $new = $this->get($base . '/new');
+            $new->assertOK();
+            $newForm = $this->dashboardXPath($new->response()->getBody())->query('//form[.//input[@name="title"]]')->item(0);
+            $this->assertSame('post', $newForm->getAttribute('method'));
+            $this->assertSame($base . '/create', $newForm->getAttribute('action'));
+            $this->get($base . '/show/' . $owner)->assertOK();
+            $this->get($base . '/' . $owner)->assertOK();
+            $edit = $this->get($base . '/edit/' . $owner);
+            $edit->assertOK();
+            $form = $this->dashboardXPath($edit->response()->getBody())->query('//form[@method="post" and .//input[@name="title"]]')->item(0);
+            $this->assertSame($base . '/update/' . $owner, $form->getAttribute('action'));
+        }
+    }
+
+    public function testPresenterRoutesRejectWrongHttpMethodsWithoutChangingData(): void
+    {
+        $this->loginAs('admin', ['announcements.manage']);
+        $model    = new AnnouncementModel();
+        $owner    = $model->insert(['title' => 'Unchanged presenter record', 'body' => 'Original content']);
+        $original = $model->find($owner);
+
+        foreach (['create', 'update/' . $owner, 'delete/' . $owner] as $path) {
+            $this->get('/en/admin/announcements/' . $path)->assertStatus(404);
+        }
+
+        foreach (['new', 'edit/' . $owner, 'show/' . $owner] as $path) {
+            $this->post('/en/admin/announcements/' . $path, [csrf_token() => csrf_hash(), 'title' => 'Tampered', 'body' => 'Tampered'])->assertStatus(404);
+        }
+        $this->get('/en/admin/announcements/' . $owner . '/edit')->assertStatus(404);
+        $this->post('/en/admin/announcements/' . $owner . '/edit', [csrf_token() => csrf_hash(), 'title' => 'Tampered', 'body' => 'Tampered'])->assertStatus(404);
+        $this->assertSame($original, $model->find($owner));
+        $this->assertSame(1, $model->countAllResults());
+    }
+
     public function testAccessRequiresPermission(): void
     {
         $this->get('/en/admin/announcements')->assertRedirect();
+        $this->get('/en/admin/announcements/show/1')->assertRedirect();
         $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Hidden', 'body' => 'Hidden'])->assertRedirect();
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
 
         $this->loginAs('admin');
         $this->get('/en/admin/announcements')->assertRedirect();
-        $this->get('/en/admin/announcements/create')->assertRedirect();
+        $this->get('/en/admin/announcements/show/1')->assertRedirect();
+        $this->get('/en/admin/announcements/new')->assertRedirect();
         $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Hidden', 'body' => 'Hidden'])->assertRedirect();
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
         $dashboard = $this->get('/en/admin/dashboard');
@@ -78,9 +130,9 @@ final class AnnouncementsTest extends CIUnitTestCase
         $body = $result->response()->getBody();
         $this->assertSame('2', $this->dashboardDraftValue($body));
         $this->assertSame(2, array_column(service('dashboard')->sections(auth()->user(), 'zh-Hans'), null, 'id')['announcements']['items'][0]['value']);
-        $this->assertContains('/zh-Hans/admin/announcements/' . $draft, $this->dashboardLinks($body));
+        $this->assertContains('/zh-Hans/admin/announcements/show/' . $draft, $this->dashboardLinks($body));
         $this->assertContains('/zh-Hans/admin/announcements?status=draft', $this->dashboardLinks($body));
-        $this->assertContains('/zh-Hans/admin/announcements/create', $this->dashboardLinks($body));
+        $this->assertContains('/zh-Hans/admin/announcements/new', $this->dashboardLinks($body));
         $this->assertStringNotContainsString('最近发布的公告', $body);
         $this->assertStringContainsString('private', $result->response()->getHeaderLine('Cache-Control'));
         $this->assertStringContainsString('no-store', $result->response()->getHeaderLine('Cache-Control'));
@@ -94,9 +146,9 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertStringNotContainsString('Secret dashboard draft', $readerBody);
         $this->assertStringNotContainsString('Second private draft', $readerBody);
         $this->assertStringNotContainsString('公告草稿', $readerBody);
-        $this->assertNotContains('/zh-Hans/admin/announcements/create', $this->dashboardLinks($readerBody));
+        $this->assertNotContains('/zh-Hans/admin/announcements/new', $this->dashboardLinks($readerBody));
         $this->get('/zh-Hans/admin/announcements/' . $draft)->assertStatus(404);
-        $this->get('/zh-Hans/admin/announcements/create')->assertRedirect();
+        $this->get('/zh-Hans/admin/announcements/new')->assertRedirect();
 
         auth()->user()->removePermission('announcements.access');
         $empty = $this->get('/zh-Hans/admin/dashboard');
@@ -125,7 +177,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $sections = service('dashboard')->sections($user, 'zh-Hant');
         $rows     = array_column($sections, null, 'id')['announcements']['items'][0]['rows'];
         $this->assertCount(5, $rows);
-        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hant/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
+        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hant/admin/announcements/show/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
         $this->assertStringContainsString('LIMIT 5', (string) $model->db->getLastQuery());
         $result = $this->get('/zh-Hant/admin/dashboard?status=draft');
         $result->assertOK();
@@ -155,7 +207,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $sections = service('dashboard')->sections(auth()->user(), 'zh-Hans');
         $rows     = array_column($sections, null, 'id')['announcements']['items'][2]['rows'];
         $this->assertCount(5, $rows);
-        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hans/admin/announcements/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
+        $this->assertSame(array_map(static fn (int $identifier): string => '/zh-Hans/admin/announcements/show/' . $identifier, [$identifiers[0], $identifiers[6], $identifiers[5], $identifiers[4], $identifiers[3]]), array_column(array_column($rows, 'link'), 'url'));
         $this->assertSame('2026-10-11T02:00:00Z', $rows[0]['time']);
         $this->assertStringContainsString('LIMIT 5', (string) $model->db->getLastQuery());
         $result = $this->get('/zh-Hans/admin/dashboard');
@@ -443,7 +495,7 @@ final class AnnouncementsTest extends CIUnitTestCase
     public function testValidationRejectsMissingFields(): void
     {
         $this->loginAs('superadmin', ['announcements.manage']);
-        $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => '', 'body' => ''])->assertRedirectTo('/en/admin/announcements/create');
+        $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => '', 'body' => ''])->assertRedirectTo('/en/admin/announcements/new');
         $this->assertNotEmpty(session('errors.title'));
         $this->assertNotEmpty(session('errors.body'));
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
@@ -454,7 +506,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->loginAs('superadmin', ['announcements.manage']);
 
         foreach ([['title' => str_repeat('A', 151), 'body' => 'Valid'], ['title' => 'Valid', 'body' => str_repeat('B', 2001)]] as $data) {
-            $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash()] + $data)->assertRedirectTo('/en/admin/announcements/create');
+            $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash()] + $data)->assertRedirectTo('/en/admin/announcements/new');
         }
         $this->assertSame(0, (new AnnouncementModel())->countAllResults());
     }
@@ -462,7 +514,7 @@ final class AnnouncementsTest extends CIUnitTestCase
     public function testCreateAndListEscapesContent(): void
     {
         $this->loginAs('superadmin', ['announcements.manage']);
-        $create = $this->get('/en/admin/announcements/create');
+        $create = $this->get('/en/admin/announcements/new');
         $create->assertOK();
         $create->assertSee('New announcement');
         $created = $this->post('/en/admin/announcements/create', [
@@ -473,7 +525,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         ]);
 
         $saved = (new AnnouncementModel())->first();
-        $created->assertRedirectTo('/en/admin/announcements/' . $saved['id']);
+        $created->assertRedirectTo('/en/admin/announcements/show/' . $saved['id']);
         $this->assertSame('<script>alert(1)</script>', $saved['title']);
         $this->assertSame('Example body', $saved['body']);
         $this->assertSame(1, (new AnnouncementModel())->countAllResults());
@@ -483,7 +535,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertStringContainsString('href="/en/admin/announcements"', $page->response()->getBody());
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $page->response()->getBody());
         $this->assertStringNotContainsString('<script>alert(1)</script>', $page->response()->getBody());
-        $this->assertStringContainsString('href="/en/admin/announcements/create"', $page->response()->getBody());
+        $this->assertStringContainsString('href="/en/admin/announcements/new"', $page->response()->getBody());
     }
 
     public function testListReusesEmptyStateAndPaginationInBothLocales(): void
@@ -496,7 +548,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             $page->assertOK();
             TableLayoutAssertions::assertTablesInCards($page->response()->getBody(), paginated: true);
             $this->assertStringContainsString('empty-title', $page->response()->getBody());
-            $this->assertStringContainsString('href="/' . $locale . '/admin/announcements/create"', $page->response()->getBody());
+            $this->assertStringContainsString('href="/' . $locale . '/admin/announcements/new"', $page->response()->getBody());
             $page->assertSee(lang('Announcements.empty'));
         }
 
@@ -1077,10 +1129,13 @@ final class AnnouncementsTest extends CIUnitTestCase
             csrf_token() => csrf_hash(), 'title' => 'Draft title', 'body' => 'Draft body',
             'status'     => 'published', 'published_at' => '2000-01-01 00:00:00',
         ]);
-        $model = new AnnouncementModel();
-        $draft = $model->first();
-        $route = '/en/admin/announcements/' . $draft['id'];
-        $created->assertRedirectTo($route);
+        $model       = new AnnouncementModel();
+        $draft       = $model->first();
+        $route       = '/en/admin/announcements/' . $draft['id'];
+        $detailRoute = '/en/admin/announcements/show/' . $draft['id'];
+        $editRoute   = '/en/admin/announcements/edit/' . $draft['id'];
+        $updateRoute = '/en/admin/announcements/update/' . $draft['id'];
+        $created->assertRedirectTo($detailRoute);
         $this->assertSame('draft', $draft['status']);
         $this->assertNull($draft['published_at']);
         $detail = $this->get($route);
@@ -1088,14 +1143,14 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertStringContainsString('action="' . $route . '/publish"', $detail->response()->getBody());
         $this->assertStringContainsString('href="' . $route . '/attachments"', $detail->response()->getBody());
         $this->assertStringNotContainsString('attachment-file', $detail->response()->getBody());
-        $edit = $this->get($route . '/edit');
+        $edit = $this->get($editRoute);
         $edit->assertOK();
         $document = new DOMDocument();
         @$document->loadHTML($edit->response()->getBody());
         $xpath = new DOMXPath($document);
         $this->assertSame('Draft title', $xpath->query('//input[@name="title"]')->item(0)->getAttribute('value'));
-        $this->assertSame($route . '/edit', $xpath->query('//form[contains(@action, "announcements")]')->item(0)->getAttribute('action'));
-        $this->post($route . '/edit', [csrf_token() => csrf_hash(), 'title' => '<img src=x onerror=alert(1)>', 'body' => '<script>unsafe()</script>', 'status' => 'published', 'published_at' => '2000-01-01 00:00:00'])->assertRedirectTo($route);
+        $this->assertSame($updateRoute, $xpath->query('//form[contains(@action, "announcements")]')->item(0)->getAttribute('action'));
+        $this->post($updateRoute, [csrf_token() => csrf_hash(), 'title' => '<img src=x onerror=alert(1)>', 'body' => '<script>unsafe()</script>', 'status' => 'published', 'published_at' => '2000-01-01 00:00:00'])->assertRedirectTo($detailRoute);
         $edited = $model->find($draft['id']);
         $this->assertSame('draft', $edited['status']);
         $this->assertNull($edited['published_at']);
@@ -1108,7 +1163,7 @@ final class AnnouncementsTest extends CIUnitTestCase
 
         try {
             $beforePublication = gmdate('Y-m-d H:i:s');
-            $this->post($route . '/publish', [csrf_token() => csrf_hash(), 'published_at' => '2000-01-01 00:00:00'])->assertRedirectTo($route);
+            $this->post($route . '/publish', [csrf_token() => csrf_hash(), 'published_at' => '2000-01-01 00:00:00'])->assertRedirectTo($detailRoute);
             $afterPublication = gmdate('Y-m-d H:i:s');
         } finally {
             date_default_timezone_set($originalTimezone);
@@ -1120,11 +1175,11 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertGreaterThanOrEqual($beforePublication, $published['published_at']);
         $this->assertLessThanOrEqual($afterPublication, $published['published_at']);
         $model->update($draft['id'], ['published_at' => '2026-10-01 12:00:00']);
-        $this->post($route . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
+        $this->post($route . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo($detailRoute);
         $this->assertSame('2026-10-01 12:00:00', $model->find($draft['id'])['published_at']);
-        $edit = $this->get($route . '/edit');
+        $edit = $this->get($editRoute);
         $edit->assertSee('Saved changes will be visible to readers immediately.');
-        $this->post($route . '/edit', [csrf_token() => csrf_hash(), 'title' => 'Corrected publication', 'body' => 'Corrected content', 'status' => 'draft', 'published_at' => null])->assertRedirectTo($route);
+        $this->post($updateRoute, [csrf_token() => csrf_hash(), 'title' => 'Corrected publication', 'body' => 'Corrected content', 'status' => 'draft', 'published_at' => null])->assertRedirectTo($detailRoute);
         $updated = $model->find($draft['id']);
         $this->assertSame('published', $updated['status']);
         $this->assertSame('2026-10-01 12:00:00', $updated['published_at']);
@@ -1149,7 +1204,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $page->assertDontSee('Secret body');
         $page->assertSee('Published first');
         $this->assertLessThan(strpos($page->response()->getBody(), 'Published first'), strpos($page->response()->getBody(), 'Published second'));
-        $this->assertStringNotContainsString('/announcements/create"', $page->response()->getBody());
+        $this->assertStringNotContainsString('/announcements/new"', $page->response()->getBody());
         $this->assertStringNotContainsString('/announcements/import"', $page->response()->getBody());
         $this->assertStringNotContainsString('/announcements/export?', $page->response()->getBody());
         $this->assertStringNotContainsString('name="status"', $page->response()->getBody());
@@ -1157,11 +1212,13 @@ final class AnnouncementsTest extends CIUnitTestCase
         $filtered = $this->get('/en/admin/announcements?q=Secret&status=draft');
         $filtered->assertDontSee('Confidential draft');
         $this->get('/en/admin/announcements/' . $draftId)->assertStatus(404);
+        $this->get('/en/admin/announcements/show/' . $draftId)->assertStatus(404);
         $detail = $this->get('/en/admin/announcements/' . $publishedId);
         $detail->assertOK();
         $detail->assertSee('Readable body');
+        $this->get('/en/admin/announcements/show/' . $publishedId)->assertSee('Readable body');
         $this->assertStringNotContainsString('/publish"', $detail->response()->getBody());
-        $this->assertStringNotContainsString('/edit"', $detail->response()->getBody());
+        $this->assertStringNotContainsString('/announcements/edit/', $detail->response()->getBody());
         $this->assertStringContainsString('no-store', $detail->response()->getHeaderLine('Cache-Control'));
         $range = $this->get('/en/admin/announcements?created_from=2026-10-01&created_to=2026-10-01');
         $range->assertSee('Published first');
@@ -1172,11 +1229,11 @@ final class AnnouncementsTest extends CIUnitTestCase
         $originalAttachments   = $attachments->countAllResults();
         $deniedUrl             = config('Auth')->permissionDeniedRedirect();
 
-        foreach (['/en/admin/announcements/create', $route . '/edit', '/en/admin/announcements/import', '/en/admin/announcements/export', '/en/admin/announcements/template', $route . '/attachments'] as $managementRoute) {
+        foreach (['/en/admin/announcements/new', '/en/admin/announcements/edit/' . $publishedId, '/en/admin/announcements/import', '/en/admin/announcements/export', '/en/admin/announcements/template', $route . '/attachments'] as $managementRoute) {
             $this->get($managementRoute)->assertRedirectTo($deniedUrl);
         }
 
-        foreach (['/en/admin/announcements/create', $route . '/edit', $route . '/publish', '/en/admin/announcements/import', $route . '/attachments', $route . '/attachments/1/remove'] as $managementRoute) {
+        foreach (['/en/admin/announcements/create', '/en/admin/announcements/update/' . $publishedId, $route . '/publish', '/en/admin/announcements/import', $route . '/attachments', $route . '/attachments/1/remove'] as $managementRoute) {
             $this->post($managementRoute, [csrf_token() => csrf_hash(), 'title' => 'Unauthorized change', 'body' => 'Unauthorized content'])->assertRedirectTo($deniedUrl);
             $this->assertSame($originalAnnouncements, $model->findAll());
             $this->assertSame($originalAttachments, $attachments->countAllResults());
@@ -1202,8 +1259,8 @@ final class AnnouncementsTest extends CIUnitTestCase
                 auth()->logout();
                 $this->loginAs($group);
             }
-            $this->get($route . '/edit')->assertRedirect();
-            $this->post($route . '/edit', [csrf_token() => csrf_hash(), 'title' => 'Tampered', 'body' => 'Tampered'])->assertRedirect();
+            $this->get('/en/admin/announcements/edit/' . $announcementId)->assertRedirect();
+            $this->post('/en/admin/announcements/update/' . $announcementId, [csrf_token() => csrf_hash(), 'title' => 'Tampered', 'body' => 'Tampered'])->assertRedirect();
             $this->post($route . '/publish', [csrf_token() => csrf_hash()])->assertRedirect();
             $this->assertSame('Protected draft', $model->find($announcementId)['title']);
             $this->assertSame('draft', $model->find($announcementId)['status']);
@@ -1211,9 +1268,9 @@ final class AnnouncementsTest extends CIUnitTestCase
         auth()->logout();
         $this->loginAs('superadmin', ['announcements.manage']);
 
-        foreach (['edit', 'publish'] as $action) {
+        foreach (['/en/admin/announcements/update/' . $announcementId, $route . '/publish'] as $writeRoute) {
             try {
-                $this->post($route . '/' . $action, ['title' => 'Tampered', 'body' => 'Tampered']);
+                $this->post($writeRoute, ['title' => 'Tampered', 'body' => 'Tampered']);
                 $this->fail('Missing CSRF token must be rejected.');
             } catch (SecurityException $exception) {
                 $this->assertSame('Protected draft', $model->find($announcementId)['title']);
@@ -1228,15 +1285,16 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->loginAs('superadmin', ['announcements.manage']);
         $missing = '/en/admin/announcements/999999';
         $this->get($missing)->assertStatus(404);
-        $this->get($missing . '/edit')->assertStatus(404);
-        $this->post($missing . '/edit', [csrf_token() => csrf_hash(), 'title' => 'Missing', 'body' => 'Missing'])->assertStatus(404);
+        $this->get('/en/admin/announcements/edit/999999')->assertStatus(404);
+        $this->post('/en/admin/announcements/update/999999', [csrf_token() => csrf_hash(), 'title' => 'Missing', 'body' => 'Missing'])->assertStatus(404);
         $this->post($missing . '/publish', [csrf_token() => csrf_hash()])->assertStatus(404);
         $model          = new AnnouncementModel();
         $announcementId = $model->insert(['title' => 'Original', 'body' => 'Original body']);
-        $route          = '/en/admin/announcements/' . $announcementId . '/edit';
+        $route          = '/en/admin/announcements/update/' . $announcementId;
+        $editRoute      = '/en/admin/announcements/edit/' . $announcementId;
 
         foreach ([['title' => '', 'body' => ''], ['title' => str_repeat('A', 151), 'body' => 'Valid'], ['title' => 'Valid', 'body' => str_repeat('B', 2001)]] as $invalid) {
-            $this->post($route, [csrf_token() => csrf_hash()] + $invalid)->assertRedirectTo($route);
+            $this->post($route, [csrf_token() => csrf_hash()] + $invalid)->assertRedirectTo($editRoute);
             $this->assertNotEmpty(session('errors'));
             $saved = $model->find($announcementId);
             $this->assertSame('Original', $saved['title']);
@@ -1318,7 +1376,7 @@ final class AnnouncementsTest extends CIUnitTestCase
     {
         $this->loginAs('superadmin', ['announcements.manage']);
         $announcementId = (new AnnouncementModel())->insert(['title' => 'Original', 'body' => 'Original body']);
-        $page           = $this->withSession(['_ci_old_input' => ['post' => ['title' => '<script>&"', 'body' => '<img>&"']]])->get('/en/admin/announcements/' . $announcementId . '/edit');
+        $page           = $this->withSession(['_ci_old_input' => ['post' => ['title' => '<script>&"', 'body' => '<img>&"']]])->get('/en/admin/announcements/edit/' . $announcementId);
         $page->assertOK();
         $document = new DOMDocument();
         @$document->loadHTML($page->response()->getBody());
@@ -1345,16 +1403,17 @@ final class AnnouncementsTest extends CIUnitTestCase
         @$document->loadHTML($dashboard->response()->getBody());
         $xpath = new DOMXPath($document);
         $this->assertSame(0, $xpath->query('//div[@id="sidebar-menu"]/ul/li/hr')->length);
-        $this->get('/en/admin/announcements/create')->assertOK();
-        $created = $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Module-only draft', 'body' => 'Module-only body']);
-        $draft   = (new AnnouncementModel())->first();
-        $route   = '/en/admin/announcements/' . $draft['id'];
-        $created->assertRedirectTo($route);
+        $this->get('/en/admin/announcements/new')->assertOK();
+        $created     = $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Module-only draft', 'body' => 'Module-only body']);
+        $draft       = (new AnnouncementModel())->first();
+        $route       = '/en/admin/announcements/' . $draft['id'];
+        $detailRoute = '/en/admin/announcements/show/' . $draft['id'];
+        $created->assertRedirectTo($detailRoute);
         $this->get('/en/admin/announcements')->assertSee('Module-only draft');
         $this->get($route)->assertSee('Module-only body');
-        $this->get($route . '/edit')->assertOK();
+        $this->get('/en/admin/announcements/edit/' . $draft['id'])->assertOK();
         $this->get($route . '/attachments')->assertOK();
-        $this->post($route . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo($route);
+        $this->post($route . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo($detailRoute);
         $this->get($route)->assertOK();
     }
 
@@ -1407,7 +1466,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->get('/en/admin/announcements')->assertRedirect();
         $this->get('/en/admin/announcements/1')->assertRedirect();
         $this->get('/en/admin/announcements/1/attachments/1')->assertRedirect();
-        $this->get('/en/admin/announcements/create')->assertRedirect();
+        $this->get('/en/admin/announcements/new')->assertRedirect();
         $dashboard = $this->get('/en/admin/dashboard');
         $dashboard->assertOK();
         $this->assertStringNotContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
@@ -1428,7 +1487,7 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertTrue(auth()->user()->can('announcements.manage'));
         $this->get('/en/admin/announcements')->assertSee('Superadmin draft');
         $this->get('/en/admin/announcements/' . $draftId)->assertSee('Private content');
-        $this->get('/en/admin/announcements/create')->assertOK();
+        $this->get('/en/admin/announcements/new')->assertOK();
         $dashboard = $this->get('/en/admin/dashboard');
         $this->assertStringContainsString('href="/en/admin/announcements"', $dashboard->response()->getBody());
         $document = new DOMDocument();
@@ -1474,7 +1533,7 @@ final class AnnouncementsTest extends CIUnitTestCase
             $this->get('/en/admin/announcements')->assertSee('Published via role access');
             $this->get('/en/admin/announcements/' . $publishedId)->assertSee('Reader content');
             $this->get('/en/admin/announcements/' . $draftId)->assertStatus(404);
-            $this->get('/en/admin/announcements/create')->assertRedirect();
+            $this->get('/en/admin/announcements/new')->assertRedirect();
             $this->post('/en/admin/announcements/' . $draftId . '/publish', [csrf_token() => csrf_hash()])->assertRedirect();
             $this->assertSame('draft', $model->find($draftId)['status']);
 
@@ -1485,9 +1544,9 @@ final class AnnouncementsTest extends CIUnitTestCase
             auth()->login(auth()->getProvider()->findById($readerId));
             $this->assertTrue(auth()->user()->can('announcements.manage'));
             $this->assertFalse(auth()->user()->can('announcements.access'));
-            $this->get('/en/admin/announcements/create')->assertOK();
+            $this->get('/en/admin/announcements/new')->assertOK();
             $this->get('/en/admin/announcements/' . $draftId)->assertSee('Private content');
-            $this->post('/en/admin/announcements/' . $draftId . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo('/en/admin/announcements/' . $draftId);
+            $this->post('/en/admin/announcements/' . $draftId . '/publish', [csrf_token() => csrf_hash()])->assertRedirectTo('/en/admin/announcements/show/' . $draftId);
             $this->assertSame('published', $model->find($draftId)['status']);
 
             auth()->logout();

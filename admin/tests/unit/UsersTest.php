@@ -746,7 +746,7 @@ final class UsersTest extends CIUnitTestCase
         }
 
         $this->assertStringContainsString('&lt;b&gt;Published record&lt;/b&gt;', $body);
-        $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '"', $body);
+        $this->assertStringContainsString('href="/en/admin/announcements/show/' . $published . '"', $body);
         $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '"', $body);
         $this->assertStringContainsString('href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '/preview" target="_blank" rel="noopener noreferrer"', $body);
         $document = new DOMDocument();

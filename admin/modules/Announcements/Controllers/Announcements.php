@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Announcements\Controllers;
 
-use App\Controllers\BaseController;
 use CodeIgniter\HTTP\RedirectResponse;
+use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
+use CodeIgniter\RESTful\ResourcePresenter;
 use Geminus\Admin\Libraries\DataManagement\Attachments;
 use Geminus\Admin\Libraries\DataManagement\Csv;
 use Geminus\Admin\Libraries\DataManagement\CsvImport;
@@ -16,13 +17,20 @@ use InvalidArgumentException;
 use Modules\Announcements\Libraries\AnnouncementContent;
 use Modules\Announcements\Libraries\AnnouncementDeletion;
 use Modules\Announcements\Models\AnnouncementModel;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Throwable;
 
-class Announcements extends BaseController
+class Announcements extends ResourcePresenter
 {
     private const CSV_COLUMNS  = ['title', 'body'];
     private const EXPORT_LIMIT = 10000;
+
+    public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
+    {
+        parent::initController($request, $response, $logger);
+        service('language')->setLocale($request->getLocale());
+    }
 
     public function index(): string
     {
@@ -44,28 +52,28 @@ class Announcements extends BaseController
         ]);
     }
 
-    public function create(): string
+    public function new(): string
     {
         return view('Modules\Announcements\Views\create', [
             'me'           => auth()->user(),
             'page_title'   => lang('Announcements.create'),
             'announcement' => [],
-            'formAction'   => route_to('admin/announcements/store'),
+            'formAction'   => route_to('admin/announcements/create'),
         ]);
     }
 
-    public function store(): RedirectResponse
+    public function create(): RedirectResponse
     {
         $validation = service('validation');
         $validation->setRules($this->rules());
 
         if (! $validation->run(AnnouncementContent::normalize($this->request->getPost()))) {
-            return redirect()->to(route_to('admin/announcements/create'))->withInput()->with('errors', $validation->getErrors());
+            return redirect()->to(route_to('admin/announcements/new'))->withInput()->with('errors', $validation->getErrors());
         }
 
         $announcementId = (new AnnouncementModel())->insert($validation->getValidated() + ['status' => 'draft', 'published_at' => null]);
         if ($announcementId === false) {
-            return redirect()->to(route_to('admin/announcements/create'))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
+            return redirect()->to(route_to('admin/announcements/new'))->withInput()->with('alert', ['type' => 'danger', 'message' => lang('Announcements.saveFailed')]);
         }
 
         return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', [
@@ -73,10 +81,11 @@ class Announcements extends BaseController
         ]);
     }
 
-    public function show(int $announcementId): ResponseInterface|string
+    public function show($announcementId = null): ResponseInterface|string
     {
-        $canManage    = auth()->user()->can('announcements.manage');
-        $announcement = (new AnnouncementModel())->visibleTo($canManage)->find($announcementId);
+        $announcementId = (int) $announcementId;
+        $canManage      = auth()->user()->can('announcements.manage');
+        $announcement   = (new AnnouncementModel())->visibleTo($canManage)->find($announcementId);
         if ($announcement === null) {
             return $this->response->setStatusCode(404);
         }
@@ -91,9 +100,10 @@ class Announcements extends BaseController
         ]);
     }
 
-    public function edit(int $announcementId): ResponseInterface|string
+    public function edit($announcementId = null): ResponseInterface|string
     {
-        $announcement = (new AnnouncementModel())->find($announcementId);
+        $announcementId = (int) $announcementId;
+        $announcement   = (new AnnouncementModel())->find($announcementId);
         if ($announcement === null) {
             return $this->response->setStatusCode(404);
         }
@@ -105,9 +115,10 @@ class Announcements extends BaseController
         ]);
     }
 
-    public function update(int $announcementId): RedirectResponse|ResponseInterface
+    public function update($announcementId = null): RedirectResponse|ResponseInterface
     {
-        $model = new AnnouncementModel();
+        $announcementId = (int) $announcementId;
+        $model          = new AnnouncementModel();
         if ($model->find($announcementId) === null) {
             return $this->response->setStatusCode(404);
         }
@@ -140,8 +151,10 @@ class Announcements extends BaseController
         return redirect()->to(route_to('admin/announcements/show', $announcementId))->with('alert', ['type' => 'success', 'message' => lang('Announcements.published')]);
     }
 
-    public function delete(int $announcementId): RedirectResponse|ResponseInterface
+    public function delete($announcementId = null): RedirectResponse|ResponseInterface
     {
+        $announcementId = (int) $announcementId;
+
         try {
             $deletion = new AnnouncementDeletion(db_connect(), Attachments::storage());
             if (! $deletion->delete($announcementId)) {

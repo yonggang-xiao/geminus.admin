@@ -31,7 +31,7 @@ class AnnouncementDashboardProvider implements DashboardProvider
             ];
             $items[] = [
                 'id'   => 'create', 'type' => 'shortcut', 'title' => 'Announcements.create', 'order' => 20,
-                'link' => ['route' => 'admin/announcements/create'], 'icon' => 'plus',
+                'link' => ['route' => 'admin/announcements/new'], 'icon' => 'plus',
             ];
         }
         $rows = [];

@@ -25,7 +25,9 @@
 
 [`Announcements` 控制器](../admin/modules/Announcements/Controllers/Announcements.php) 的 `index()` 通过 `ListQuery` 和 [`AnnouncementModel`](../admin/modules/Announcements/Models/AnnouncementModel.php) 查询，每页 15 条。管理者看到草稿和已发布公告，默认 ID 倒序，可按状态、UTC 创建日期、标题及正文筛选，按标题、创建或发布时间排序。仅有公告阅读权限的用户只看到已发布公告，默认发布时间倒序，日期筛选改为 UTC 发布日期；不能通过筛选参数或直接访问 ID 读取草稿。查询追加稳定 ID 排序，非法参数不进入 SQL，切换筛选和排序不沿用页码。
 
-`create()` 与 `edit()` 复用表单；标题最长 150 字符，正文最长 2000 字符，失败时带原输入和字段错误返回。创建只保存草稿，成功后进入详情；更新只写入验证通过的标题和正文，不接受请求中的状态或发布时间。管理者在详情页单独发布，服务端设置 UTC 发布时间；重复发布不会改写首次发布时间。已发布公告仍可编辑，表单明确提示修改立即对读者生效，状态与首次发布时间保持不变。
+标准增删改查使用 CI4 `presenter` 路由和原生 `ResourcePresenter` 控制器。列表为 GET `/announcements`，详情为 GET `/announcements/show/{id}`，同时支持框架的 `/announcements/{id}` 快捷路径；新建表单为 GET `/announcements/new`，保存为 POST `/announcements/create`；编辑为 GET `/announcements/edit/{id}`，更新为 POST `/announcements/update/{id}`。ID 限制为数字，读写权限分别声明；保留列表、详情、编辑、更新和删除的命名路由，新建表单使用 `admin/announcements/new`。发布、CSV 工具和附件仍使用显式业务路由。
+
+`new()` 与 `edit()` 复用表单，`create()` 保存新公告；标题最长 150 字符，正文最长 2000 字符，失败时带原输入和字段错误返回。创建只保存草稿，成功后进入详情；更新只写入验证通过的标题和正文，不接受请求中的状态或发布时间。管理者在详情页单独发布，服务端设置 UTC 发布时间；重复发布不会改写首次发布时间。已发布公告仍可编辑，表单明确提示修改立即对读者生效，状态与首次发布时间保持不变。
 
 管理者在详情页通过确认弹窗永久删除草稿或已发布公告。删除使用 CI4 presenter 的 POST `/delete/{announcementId}` 路由，受 `announcements.manage` 和全局 CSRF 保护；不存在或已删除的公告返回 404，成功后返回公告列表。公告、关联附件记录和对应 `announcements.published` 站内通知在同一数据库事务中删除，数据库失败时回滚；提交后清理受控附件文件，文件清理失败记录错误日志，不撤销已提交的删除。此操作不可恢复，不提供外部 API 删除接口。
 

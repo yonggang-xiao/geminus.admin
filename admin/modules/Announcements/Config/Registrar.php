@@ -15,7 +15,7 @@ class Registrar
                 'object'     => ['type' => 'announcement'], 'fields' => ['title'],
             ],
             [
-                'controller' => 'Modules\\Announcements\\Controllers\\Announcements::store',
+                'controller' => 'Modules\\Announcements\\Controllers\\Announcements::create',
                 'methods'    => ['POST'], 'action' => 'announcement.create',
                 'object'     => ['type' => 'announcement'], 'fields' => ['title'],
             ],

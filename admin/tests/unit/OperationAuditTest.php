@@ -47,7 +47,7 @@ final class OperationAuditTest extends CIUnitTestCase
         $this->post('/zh-Hans/admin/profile/language', [csrf_token() => csrf_hash(), 'language' => 'zh-Hans', 'password' => 'private-password'])->assertRedirect();
         $this->post('/en/admin/announcements/create', [csrf_token() => csrf_hash(), 'title' => 'Audit example', 'body' => 'private-body', 'actor_id' => 999])->assertRedirect();
         $announcement = (new AnnouncementModel())->first();
-        $this->post('/zh-Hant/admin/announcements/' . $announcement['id'] . '/edit', [csrf_token() => csrf_hash(), 'title' => '<script>alert("audit")</script>', 'body' => 'private-body'])->assertRedirect();
+        $this->post('/zh-Hant/admin/announcements/update/' . $announcement['id'], [csrf_token() => csrf_hash(), 'title' => '<script>alert("audit")</script>', 'body' => 'private-body'])->assertRedirect();
 
         $logs = db_connect()->table('operation_audit_logs')->orderBy('id')->get()->getResultArray();
         $this->assertSame(['profile.language', 'announcement.create', 'announcement.update'], array_column($logs, 'operation'));

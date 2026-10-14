@@ -13,7 +13,7 @@ use CodeIgniter\I18n\Time;
         <div class="col-12 col-md"><h2 class="page-title"><?= esc($page_title) ?></h2></div>
         <?php if ($canManage): ?>
         <div class="col-12 col-md-auto ms-auto btn-list">
-            <a class="btn btn-primary" href="<?= route_to('admin/announcements/create') ?>"><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Announcements.create')) ?></a>
+            <a class="btn btn-primary" href="<?= route_to('admin/announcements/new') ?>"><i class="ti ti-plus me-1" aria-hidden="true"></i><?= esc(lang('Announcements.create')) ?></a>
             <div class="dropdown">
                 <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="ti ti-file-type-csv me-1" aria-hidden="true"></i><?= esc(lang('Announcements.batchTools')) ?></button>
                 <div class="dropdown-menu dropdown-menu-end">
@@ -67,7 +67,7 @@ use CodeIgniter\I18n\Time;
                         </tr>
                     <?php endforeach; ?>
                     <?php if ($announcements === []): ?>
-                        <tr><td colspan="<?= $canManage ? 6 : 3 ?>"><?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang($filtered ? 'Announcements.noResults' : ($canManage ? 'Announcements.empty' : 'Announcements.emptyPublished')), 'filtered' => $filtered, 'clearUrl' => route_to('admin/announcements'), 'clearLabel' => lang('Admin.userClear'), 'createUrl' => $canManage ? route_to('admin/announcements/create') : '', 'createLabel' => lang('Announcements.create')]) ?></td></tr>
+                        <tr><td colspan="<?= $canManage ? 6 : 3 ?>"><?= view_cell('Geminus\Admin\Cells\EmptyStateCell', ['message' => lang($filtered ? 'Announcements.noResults' : ($canManage ? 'Announcements.empty' : 'Announcements.emptyPublished')), 'filtered' => $filtered, 'clearUrl' => route_to('admin/announcements'), 'clearLabel' => lang('Admin.userClear'), 'createUrl' => $canManage ? route_to('admin/announcements/new') : '', 'createLabel' => lang('Announcements.create')]) ?></td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

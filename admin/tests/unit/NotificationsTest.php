@@ -219,7 +219,7 @@ final class NotificationsTest extends CIUnitTestCase
         $service->send((int) $owner->id, 'announcements.published', 42, 'Authorized notice', 'admin/announcements/show', ['announcements.access', 'announcements.manage'], [42]);
         $notificationId = (new NotificationModel())->first()['id'];
         $route          = '/zh-Hans/admin/notifications/' . $notificationId . '/open';
-        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo('/zh-Hans/admin/announcements/42');
+        $this->post($route, [csrf_token() => csrf_hash()])->assertRedirectTo('/zh-Hans/admin/announcements/show/42');
         $this->assertSame([], $service->unread($owner));
         $this->assertNotNull((new NotificationModel())->find($notificationId)['read_at']);
         $owner->removePermission('announcements.access');
@@ -342,7 +342,7 @@ final class NotificationsTest extends CIUnitTestCase
         $publication->expects($this->once())->method('publish')->with($draftId, (int) $owner->id)->willThrowException(new RuntimeException('Save failed'));
         Services::injectMock('announcementPublication', $publication);
         $result = $this->post('/en/admin/announcements/' . $draftId . '/publish', [csrf_token() => csrf_hash()]);
-        $result->assertRedirectTo('/en/admin/announcements/' . $draftId);
+        $result->assertRedirectTo('/en/admin/announcements/show/' . $draftId);
         $this->assertSame('danger', session('alert')['type']);
         $this->assertSame('draft', (new AnnouncementModel())->find($draftId)['status']);
         $this->assertSame([], service('notifications')->unread($owner));
