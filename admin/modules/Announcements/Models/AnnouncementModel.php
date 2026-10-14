@@ -28,9 +28,9 @@ class AnnouncementModel extends Model
             ->orderBy($canManage ? 'created_at' : 'published_at', 'DESC')->orderBy('id', 'DESC')->findAll(5);
     }
 
-    public function publishDraft(int $announcementId, ?Time $publishedAt = null): bool
+    public function publishDraft(int $announcementId): bool
     {
-        if (! $this->where('status', 'draft')->update($announcementId, ['status' => 'published', 'published_at' => ($publishedAt ?? Time::now('UTC'))->toDateTimeString()])) {
+        if (! $this->where('status', 'draft')->update($announcementId, ['status' => 'published', 'published_at' => Time::now('UTC')->toDateTimeString()])) {
             throw new RuntimeException('Could not publish announcement.');
         }
 

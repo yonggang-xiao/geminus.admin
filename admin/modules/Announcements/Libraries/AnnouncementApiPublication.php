@@ -34,12 +34,9 @@ class AnnouncementApiPublication
 
         try {
             $publishedAt    = Time::now('UTC');
-            $announcementId = $this->announcements->insert(['title' => $data['title'], 'body' => $data['body'], 'status' => 'draft', 'published_at' => null]);
+            $announcementId = $this->announcements->insert(['title' => $data['title'], 'body' => $data['body'], 'status' => 'published', 'published_at' => $publishedAt->toDateTimeString()]);
             if ($announcementId === false) {
                 throw new RuntimeException('Could not create announcement.');
-            }
-            if (! $this->publication->publish((int) $announcementId, $actorId, false, $publishedAt)) {
-                throw new RuntimeException('Could not publish announcement.');
             }
             if (! $this->db->transStatus() || ! $this->db->transCommit()) {
                 throw new RuntimeException('Could not commit publication.');

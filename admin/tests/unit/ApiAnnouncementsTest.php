@@ -682,15 +682,18 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
         $user  = $this->account();
         $token = $user->generateAccessToken('Rollback', ['announcements.manage']);
         $model = new class ($this->db) extends AnnouncementModel {
-            public bool $fail = true;
+            public bool $fail         = true;
+            public array $createdRows = [];
 
-            public function publishDraft(int $announcementId, ?Time $publishedAt = null): bool
+            public function insert($row = null, bool $returnID = true)
             {
+                $result              = parent::insert($row, $returnID);
+                $this->createdRows[] = $this->find((int) $this->getInsertID());
                 if ($this->fail) {
                     $this->db->query('SELECT CAST(? AS INTEGER)', ['invalid']);
                 }
 
-                return parent::publishDraft($announcementId, $publishedAt);
+                return $result;
             }
         };
         $service = new AnnouncementApiPublication($this->db, $model, new AnnouncementPublication($model, service('logger')), Services::validation(null, false));
@@ -708,6 +711,8 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             $result = $this->publishRequest($token->raw_token);
             $result->assertStatus(500);
             $this->assertSame(['status' => 500, 'error' => 500, 'messages' => ['error' => 'The request could not be completed.']], json_decode($result->response()->getBody(), true));
+            $this->assertSame('published', $model->createdRows[0]['status']);
+            $this->assertNotNull($model->createdRows[0]['published_at']);
             $this->assertSame(0, $model->countAllResults());
             $this->assertSame([], $events);
             $model->fail = false;
