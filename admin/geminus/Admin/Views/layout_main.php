@@ -1,11 +1,10 @@
 <!doctype html>
-<html lang="<?= service('request')->getLocale() ?>">
+<html lang="<?= service('request')->getLocale() ?>" data-bs-theme="light" data-bs-theme-base="gray">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><?= esc($page_title) ?></title>
-    <script src="/static/js/tabler-theme.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/css/tabler.min.css" integrity="sha384-tT2UAGE9hxG/p5d0iGIvZ/s8El3nWWG3tfG02i8iOY5Pbf8cZZRVmcrrVs+JG5Vw" crossorigin="anonymous" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.35.0/dist/tabler-icons.min.css" />
     <link rel="stylesheet" href="/static/css/theme.css" />
@@ -13,6 +12,7 @@
 </head>
 
 <body>
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler-theme.min.js" integrity="sha384-gPM8vc3koNjMZtzPmhqasm5L6/Zak4DcWmRrPt4GZJBKSEKQfwyFIehZzq2TH1AZ" crossorigin="anonymous"></script>
     <div class="page">
         <!-- Sidebar -->
         <aside class="navbar navbar-vertical navbar-expand-lg">

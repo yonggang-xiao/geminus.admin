@@ -188,8 +188,14 @@ final class NotificationsTest extends CIUnitTestCase
         $document = new DOMDocument();
         @$document->loadHTML($body);
         $xpath = new DOMXPath($document);
-        $this->assertSame(1, $xpath->query('//header//*[@data-notifications]/preceding-sibling::*[1][.//*[@data-set-theme]]')->length);
-        $this->assertSame(0, $xpath->query('//aside//*[@data-set-theme and contains(concat(" ", normalize-space(@class), " "), " btn-icon ")]')->length);
+        $this->assertSame(1, $xpath->query('//header//*[@data-notifications]/preceding-sibling::*[1][.//a[@href="?theme=dark"] and .//a[@href="?theme=light"]]')->length);
+        $this->assertSame(0, $xpath->query('//aside//a[(@href="?theme=dark" or @href="?theme=light") and contains(concat(" ", normalize-space(@class), " "), " btn-icon ")]')->length);
+        $this->assertSame(2, $xpath->query('//aside//a[@href="?theme=dark" or @href="?theme=light"]')->length);
+        $this->assertSame(1, $xpath->query('/html[@data-bs-theme="light" and @data-bs-theme-base="gray"]')->length);
+        $themeScript = 'https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler-theme.min.js';
+        $this->assertSame(1, $xpath->query('//script[@src="' . $themeScript . '"]')->length);
+        $this->assertSame(1, $xpath->query('/html/body/*[1][self::script and @src="' . $themeScript . '" and @crossorigin="anonymous" and @integrity="sha384-gPM8vc3koNjMZtzPmhqasm5L6/Zak4DcWmRrPt4GZJBKSEKQfwyFIehZzq2TH1AZ" and not(@defer) and not(@async)]')->length);
+        $this->assertSame(0, $xpath->query('//script[@src="/static/js/tabler-theme.js"] | //*[@data-set-theme]')->length);
         $this->assertSame(1, $xpath->query('//aside//*[@data-notifications]')->length);
         $this->assertSame(2, $xpath->query('//form[@data-notification-target="/zh-Hans/admin/dashboard"]')->length);
         $this->assertSame(2, $xpath->query('//form[@data-notification-target]/input[@name="' . csrf_token() . '"]')->length);

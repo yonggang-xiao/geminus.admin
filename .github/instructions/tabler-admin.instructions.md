@@ -16,7 +16,7 @@ applyTo: 'admin/app/Views/**/*.php, admin/geminus/**/Views/**/*.php, admin/gemin
 
 ## 1) 项目资源
 
-- `admin/geminus/Admin/Views/layout_main.php` 与 `layout_public.php` 已通过 CDN 加载与 skill 一致的 Tabler Core 1.6.1，以及 Icons Webfont 3.35.0；主布局的 `<head>` 提前加载 `/static/js/tabler-theme.js`。图标沿用项目现有的 Webfont 接入方式，不要仅因 skill 的 SVG 示例切换图标来源或擅自改为本地打包。
+- `admin/geminus/Admin/Views/layout_main.php` 与 `layout_public.php` 已通过 CDN 加载与 skill 一致的 Tabler Core 1.6.1，以及 Icons Webfont 3.35.0；主布局在 `<body>` 开头同步加载同版本官方 `tabler-theme.min.js`，保留完整性校验，不加 `defer` 或 `async`。主题切换沿用官方 `?theme=dark/light` 链接，默认浅色与 gray 由 `<html>` 属性指定，不另建本地主题初始化实现。图标沿用项目现有的 Webfont 接入方式，不要仅因 skill 的 SVG 示例切换图标来源或擅自改为本地打包。
 - CSS/JS 由布局加载；仅在需要的页面通过 `section('head')` 追加插件资源，页面初始化脚本放入 `section('javascript')`。
 
 ## 2) CodeIgniter 4 视图与布局
