@@ -244,7 +244,6 @@ return [
     'mailSubjectTokens'      => '主旨可用佔位符',
     'mailTemplateRestore'    => '還原預設',
     'mailTemplateSave'       => '儲存範本',
-    'mailTemplateBody'       => '正文',
     'mailHtmlBody'           => 'HTML 正文',
     'mailPreview'            => '預覽',
     'emailQueue'             => '郵件佇列與發送稽核',

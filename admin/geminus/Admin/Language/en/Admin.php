@@ -244,7 +244,6 @@ return [
     'mailSubjectTokens'      => 'Subject placeholders',
     'mailTemplateRestore'    => 'Restore default',
     'mailTemplateSave'       => 'Save template',
-    'mailTemplateBody'       => 'Message',
     'mailHtmlBody'           => 'HTML message',
     'mailPreview'            => 'Preview',
     'emailQueue'             => 'Email queue and audit',

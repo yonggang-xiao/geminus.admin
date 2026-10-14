@@ -11,10 +11,10 @@ use InvalidArgumentException;
 class MailTemplates
 {
     public const TYPES = [
-        'invitation' => ['label' => 'mailInvitation', 'html' => true, 'required' => 'link', 'variables' => ['username', 'link', 'microsoftLogin'], 'subjectVariables' => ['username']],
-        'magic-link' => ['label' => 'mailMagicLink', 'html' => true, 'required' => 'link', 'variables' => ['username', 'link', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
-        'activation' => ['label' => 'mailActivation', 'html' => true, 'required' => 'code', 'variables' => ['username', 'code', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
-        'email-2fa'  => ['label' => 'mailEmail2fa', 'html' => true, 'required' => 'code', 'variables' => ['username', 'code', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
+        'invitation' => ['label' => 'mailInvitation', 'required' => 'link', 'variables' => ['username', 'link', 'microsoftLogin'], 'subjectVariables' => ['username']],
+        'magic-link' => ['label' => 'mailMagicLink', 'required' => 'link', 'variables' => ['username', 'link', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
+        'activation' => ['label' => 'mailActivation', 'required' => 'code', 'variables' => ['username', 'code', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
+        'email-2fa'  => ['label' => 'mailEmail2fa', 'required' => 'code', 'variables' => ['username', 'code', 'ipAddress', 'userAgent', 'date'], 'subjectVariables' => ['username', 'date']],
     ];
 
     public function __construct(private readonly Settings $settings, private readonly Language $language, private readonly array $supportedLocales)
@@ -45,7 +45,7 @@ class MailTemplates
         foreach (self::TYPES[$type]['variables'] as $name) {
             $value                                  = (string) ($values[$name] ?? '');
             $subjectReplacements['{' . $name . '}'] = $value;
-            $bodyReplacements['{' . $name . '}']    = self::TYPES[$type]['html'] ? esc($value) : $value;
+            $bodyReplacements['{' . $name . '}']    = esc($value);
         }
 
         if ($type === 'invitation') {

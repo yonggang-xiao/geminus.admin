@@ -244,7 +244,6 @@ return [
     'mailSubjectTokens'      => '主题可用占位符',
     'mailTemplateRestore'    => '恢复默认',
     'mailTemplateSave'       => '保存模板',
-    'mailTemplateBody'       => '正文',
     'mailHtmlBody'           => 'HTML 正文',
     'mailPreview'            => '预览',
     'emailQueue'             => '邮件队列与发送审计',

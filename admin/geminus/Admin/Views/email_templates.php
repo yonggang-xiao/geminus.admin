@@ -30,18 +30,16 @@
                         <div class="form-hint" id="template-subject-variables"><?= esc(lang('Admin.mailSubjectTokens')) ?>: <?= esc(implode(', ', array_map(static fn (string $name): string => '{' . $name . '}', $types[$type]['subjectVariables']))) ?></div>
                     </div>
                     <div class="row g-3 mb-3">
-                        <div class="col-12<?= $types[$type]['html'] ? ' col-lg-6' : '' ?>">
-                            <label class="form-label required" for="template-body"><?= esc(lang($types[$type]['html'] ? 'Admin.mailHtmlBody' : 'Admin.mailTemplateBody')) ?></label>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label required" for="template-body"><?= esc(lang('Admin.mailHtmlBody')) ?></label>
                             <textarea class="form-control<?= session('template_errors.body') ? ' is-invalid' : '' ?>" id="template-body" name="body" rows="15" maxlength="10000" required aria-describedby="template-variables"><?= esc(old('body', $template['body'])) ?></textarea>
                             <?php if (session('template_errors.body')): ?><div class="invalid-feedback"><?= esc(session('template_errors.body')) ?></div><?php endif; ?>
                             <div class="form-hint" id="template-variables"><?= esc(lang('Admin.mailTemplateVariables')) ?>: <?= esc(implode(', ', array_map(static fn (string $name): string => '{' . $name . '}', $types[$type]['variables']))) ?></div>
                         </div>
-                        <?php if ($types[$type]['html']): ?>
-                            <div class="col-12 col-lg-6">
-                                <label class="form-label" for="template-preview"><?= esc(lang('Admin.mailPreview')) ?></label>
-                                <iframe id="template-preview" title="<?= esc(lang('Admin.mailPreview'), 'attr') ?>" class="w-100 border rounded" style="height: 360px" sandbox="" referrerpolicy="no-referrer"></iframe>
-                            </div>
-                        <?php endif; ?>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label" for="template-preview"><?= esc(lang('Admin.mailPreview')) ?></label>
+                            <iframe id="template-preview" title="<?= esc(lang('Admin.mailPreview'), 'attr') ?>" class="w-100 border rounded" style="height: 360px" sandbox="" referrerpolicy="no-referrer"></iframe>
+                        </div>
                     </div>
                 </div>
                 <div class="card-footer d-flex flex-wrap gap-2">
@@ -55,9 +53,8 @@
         </div>
     <?= $this->endSection() ?>
 
-    <?php if ($types[$type]['html']): ?>
-        <?= $this->section('javascript') ?>
-            <script>
+    <?= $this->section('javascript') ?>
+        <script>
                 const bodyInput = document.getElementById('template-body');
                 const preview = document.getElementById('template-preview');
                 const samples = { username: 'Example User', link: <?= json_encode(match ($type) {
@@ -71,6 +68,5 @@
                 };
                 bodyInput.addEventListener('input', updatePreview);
                 updatePreview();
-            </script>
-        <?= $this->endSection() ?>
-    <?php endif; ?>
+        </script>
+    <?= $this->endSection() ?>

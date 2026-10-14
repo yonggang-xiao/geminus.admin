@@ -106,6 +106,29 @@ final class EmailSettingsTest extends CIUnitTestCase
         $this->get('/en/admin/settings/email/queue')->assertStatus(404);
     }
 
+    public function testEveryTemplateEscapesHtmlValuesAndProvidesSandboxedPreview(): void
+    {
+        $this->loginAs('superadmin');
+        $templates = service('mailTemplates');
+
+        foreach (['invitation' => 'link', 'magic-link' => 'link', 'activation' => 'code', 'email-2fa' => 'code'] as $type => $required) {
+            $templates->save($type, 'en', 'Hello {username}', '<p>{username}</p><div>{' . $required . '}</div>');
+            $rendered = $templates->render($type, 'en', ['username' => '<user> & "guest"', $required => '<token> & "value"']);
+            $this->assertSame('Hello <user> & "guest"', $rendered['subject']);
+            $this->assertSame('<p>&lt;user&gt; &amp; &quot;guest&quot;</p><div>&lt;token&gt; &amp; &quot;value&quot;</div>', $rendered['body']);
+
+            $page = $this->get('/en/admin/mail/templates?type=' . $type);
+            $page->assertOK();
+            $page->assertSee('HTML message', 'label');
+            $body = $page->response()->getBody();
+            $this->assertStringContainsString('id="template-preview"', $body);
+            $this->assertStringContainsString('sandbox=""', $body);
+            $this->assertStringContainsString('referrerpolicy="no-referrer"', $body);
+            $this->assertStringContainsString("bodyInput.addEventListener('input', updatePreview)", $body);
+            $this->assertStringContainsString("default-src \\'none\\'", $body);
+        }
+    }
+
     public function testTemplatesSaveValidateAndRestorePerLocale(): void
     {
         $this->loginAs('superadmin');
