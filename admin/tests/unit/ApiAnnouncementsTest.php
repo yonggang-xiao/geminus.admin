@@ -199,6 +199,8 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
 
     public function testApiPrefixRejectsRoutesWithoutCompletePermissionDeclaration(): void
     {
+        $filters = config('Filters');
+        $aliases = $filters->aliases;
         $token   = $this->account()->generateAccessToken('Undeclared route', ['announcements.manage']);
         $reached = false;
         $handler = static function () use (&$reached) {
@@ -206,7 +208,9 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
 
             return service('response')->setJSON(['data' => true]);
         };
-        $cases = [[], ['filter' => 'api'], ['filter' => 'api:'], ['filter' => 'api:*'], ['filter' => 'api:announcements.manage,users.create'], ['filter' => 'apiAccess:announcements.manage']];
+        $cases = [[], ['filter' => 'api'], ['filter' => 'api:'], ['filter' => 'api:*'], ['filter' => 'api:announcements.manage,users.create'], ['filter' => 'testApiAccess:announcements.manage']];
+
+        $filters->aliases['testApiAccess'] = ApiAccess::class;
 
         try {
             foreach ($cases as $options) {
@@ -224,6 +228,7 @@ final class ApiAnnouncementsTest extends CIUnitTestCase
             $this->assertSame(0, (new AnnouncementModel())->countAllResults());
             $this->assertSame(0, $this->db->table('operation_audit_logs')->countAllResults());
         } finally {
+            $filters->aliases = $aliases;
             Services::resetSingle('routes');
             Services::resetSingle('router');
         }
