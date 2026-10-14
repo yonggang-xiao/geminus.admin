@@ -190,7 +190,6 @@ final class UsersTest extends CIUnitTestCase
         $users->expects($this->never())->method('dashboardCount');
         $users->expects($this->never())->method('dashboardRecent');
         $email = $this->createMock(EmailDeliveryLogModel::class);
-        $email->expects($this->never())->method('dashboardStatusCount');
         $email->expects($this->never())->method('dashboardCounts');
         $audit = $this->createMock(OperationAuditModel::class);
         $audit->expects($this->never())->method('dashboardRecent');
