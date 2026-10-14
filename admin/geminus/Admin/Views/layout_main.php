@@ -17,7 +17,7 @@
         <!-- Sidebar -->
         <aside class="navbar navbar-vertical navbar-expand-lg">
             <div class="container-fluid">
-                <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
+                <span class="d-inline-flex" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-expanded="false" aria-label="<?= esc(lang('Admin.toggleNavigation'), 'attr') ?>">
                         <span class="navbar-toggler-icon"></span>
                     </button>
@@ -73,7 +73,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/js/tabler.min.js" integrity="sha384-1yCHfhyU8+V33urXkAlLLpNYd9jdzXkxdafCg0+auIIEtYFnOuM/DwJQgk5sXY98" crossorigin="anonymous"></script>
     <?= $this->renderSection('javascript') ?>
-    <script src="/static/js/button-tooltips.js"></script>
     <script src="/static/js/form-submission.js"></script>
     <script src="/static/js/notifications.js"></script>
 </body>

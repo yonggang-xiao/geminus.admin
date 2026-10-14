@@ -871,6 +871,8 @@ final class MicrosoftSettingsTest extends CIUnitTestCase
             $this->assertContains('btn-icon', $classes);
             $this->assertNotSame('', $button->getAttribute('aria-label'));
             $this->assertSame('', $button->getAttribute('title'));
+            $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+            $this->assertSame($button->getAttribute('aria-label'), $button->getAttribute('data-bs-title'));
             $this->assertSame('', trim($button->textContent));
         }
         $this->assertStringContainsString('/users/' . auth()->id() . '/revoke', $page->response()->getBody());

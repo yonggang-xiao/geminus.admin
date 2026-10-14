@@ -755,6 +755,12 @@ final class UsersTest extends CIUnitTestCase
         $this->assertSame('visible-21.txt', $preview->getAttribute('data-preview-name'));
         $this->assertSame('text/plain', $preview->getAttribute('data-preview-mime'));
         $this->assertSame('/en/admin/announcements/' . $published . '/attachments/' . $ids[20], $preview->getAttribute('data-preview-download'));
+        $this->assertSame('tooltip', $preview->getAttribute('data-bs-toggle'));
+        $this->assertSame(lang('Admin.attachmentPreview'), $preview->getAttribute('data-bs-title'));
+        $download = $xpath->query('//table//a[@href="/en/admin/announcements/' . $published . '/attachments/' . $ids[20] . '"]')->item(0);
+        $this->assertNotNull($download);
+        $this->assertSame('tooltip', $download->getAttribute('data-bs-toggle'));
+        $this->assertSame(lang('Admin.attachmentDownload'), $download->getAttribute('data-bs-title'));
         $this->assertSame(0, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " page-body ")]//form')->length);
         $this->assertStringContainsString('private, no-store', $page->response()->getHeaderLine('Cache-Control'));
         $result = service('uploadhistory')->paginate((int) $target->id, auth()->user());
@@ -937,12 +943,31 @@ final class UsersTest extends CIUnitTestCase
         $this->assertStringContainsString('id="user-csv-hint" class="form-hint"', $body);
         $document = new DOMDocument();
         @$document->loadHTML($body);
-        $buttons = (new DOMXPath($document))->query('//table//a[contains(@class, "btn-icon")] | //table//button[contains(@class, "btn-icon") and not(@data-bs-toggle)]');
+        $xpath   = new DOMXPath($document);
+        $buttons = $xpath->query('//table//a[contains(@class, "btn-icon")] | //table//button[contains(@class, "btn-icon") and not(@data-bs-toggle="offcanvas")]');
         $this->assertGreaterThan(0, $buttons->length);
 
         foreach ($buttons as $button) {
             $this->assertSame('', $button->getAttribute('title'));
             $this->assertNotSame('', $button->getAttribute('aria-label'));
+            $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+            $this->assertSame($button->getAttribute('aria-label'), $button->getAttribute('data-bs-title'));
+        }
+
+        $panels = $xpath->query('//button[@data-bs-toggle="offcanvas"]');
+        $this->assertGreaterThan(0, $panels->length);
+
+        foreach ($panels as $button) {
+            $this->assertSame('span', $button->parentNode->nodeName);
+            $this->assertSame('tooltip', $button->parentNode->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Admin.viewUserPermissions'), $button->parentNode->getAttribute('data-bs-title'));
+        }
+        $closeButtons = $xpath->query('//button[@data-bs-dismiss="offcanvas"]');
+        $this->assertGreaterThan(0, $closeButtons->length);
+
+        foreach ($closeButtons as $button) {
+            $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Admin.close'), $button->getAttribute('data-bs-title'));
         }
 
         $empty = $this->get('/en/admin/users?q=no-such-user');

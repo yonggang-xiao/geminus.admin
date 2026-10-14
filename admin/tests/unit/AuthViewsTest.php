@@ -27,6 +27,8 @@ final class AuthViewsTest extends CIUnitTestCase
         $loginPage = $this->get('/en/login')->response()->getBody();
         $this->assertStringContainsString('name="' . csrf_token() . '"', $loginPage);
         $this->assertStringContainsString('src="/static/js/form-submission.js"', $loginPage);
+        $this->assertStringNotContainsString('src="/static/js/button-tooltips.js"', $loginPage);
+        $this->assertStringContainsString('@tabler/core@1.6.1/dist/js/tabler.min.js', $loginPage);
         $this->assertStringContainsString('@tabler/core@1.6.1/dist/css/tabler.min.css', $loginPage);
         $this->assertStringContainsString('href="/static/css/theme.css"', $loginPage);
         $this->assertStringContainsString('class="row align-items-center g-4"', $loginPage);

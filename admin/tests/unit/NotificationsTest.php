@@ -196,6 +196,9 @@ final class NotificationsTest extends CIUnitTestCase
         $this->assertSame(1, $xpath->query('//script[@src="' . $themeScript . '"]')->length);
         $this->assertSame(1, $xpath->query('/html/body/*[1][self::script and @src="' . $themeScript . '" and @crossorigin="anonymous" and @integrity="sha384-gPM8vc3koNjMZtzPmhqasm5L6/Zak4DcWmRrPt4GZJBKSEKQfwyFIehZzq2TH1AZ" and not(@defer) and not(@async)]')->length);
         $this->assertSame(0, $xpath->query('//script[@src="/static/js/tabler-theme.js"] | //*[@data-set-theme]')->length);
+        $this->assertSame(0, $xpath->query('//script[@src="/static/js/button-tooltips.js"] | //*[@data-button-tooltip]')->length);
+        $this->assertSame(0, $xpath->query('//header//*[@data-bs-toggle="tooltip" or @data-bs-title or @title] | //*[@data-notifications]//button[@data-bs-title or @title]')->length);
+        $this->assertSame(1, $xpath->query('//span[@data-bs-toggle="tooltip" and @data-bs-title="' . lang('Admin.toggleNavigation') . '"]/button[@data-bs-toggle="collapse" and @aria-controls="sidebar-menu"]')->length);
         $this->assertSame(1, $xpath->query('//aside//*[@data-notifications]')->length);
         $this->assertSame(2, $xpath->query('//form[@data-notification-target="/zh-Hans/admin/dashboard"]')->length);
         $this->assertSame(2, $xpath->query('//form[@data-notification-target]/input[@name="' . csrf_token() . '"]')->length);

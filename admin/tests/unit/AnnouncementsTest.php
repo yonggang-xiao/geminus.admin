@@ -386,6 +386,15 @@ final class AnnouncementsTest extends CIUnitTestCase
             $body  = $this->get('/' . $locale . '/admin/announcements/' . $owner)->response()->getBody();
             $xpath = $this->dashboardXPath($body);
             $this->assertSame($title, $xpath->query('//*[@id="announcement-delete-title"]')->item(0)->textContent);
+            $deleteButton = $xpath->query('//button[@data-bs-toggle="modal" and @data-bs-target="#announcement-delete"]')->item(0);
+            $this->assertNotNull($deleteButton);
+            $this->assertSame('span', $deleteButton->parentNode->nodeName);
+            $this->assertSame('tooltip', $deleteButton->parentNode->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Announcements.delete'), $deleteButton->parentNode->getAttribute('data-bs-title'));
+            $closeButton = $xpath->query('//*[@id="announcement-delete"]//button[@data-bs-dismiss="modal" and contains(@class, "btn-close")]')->item(0);
+            $this->assertNotNull($closeButton);
+            $this->assertSame('tooltip', $closeButton->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Announcements.cancel'), $closeButton->getAttribute('data-bs-title'));
             $form = $xpath->query('//form[contains(@action, "/announcements/delete/")]');
             $this->assertCount(1, $form);
             $this->assertSame('/' . $locale . '/admin/announcements/delete/' . $owner, $form->item(0)->getAttribute('action'));
@@ -536,6 +545,10 @@ final class AnnouncementsTest extends CIUnitTestCase
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $page->response()->getBody());
         $this->assertStringNotContainsString('<script>alert(1)</script>', $page->response()->getBody());
         $this->assertStringContainsString('href="/en/admin/announcements/new"', $page->response()->getBody());
+        $editLink = $this->dashboardXPath($page->response()->getBody())->query('//table//a[@href="/en/admin/announcements/edit/' . $saved['id'] . '"]')->item(0);
+        $this->assertNotNull($editLink);
+        $this->assertSame('tooltip', $editLink->getAttribute('data-bs-toggle'));
+        $this->assertSame(lang('Announcements.edit'), $editLink->getAttribute('data-bs-title'));
     }
 
     public function testListReusesEmptyStateAndPaginationInBothLocales(): void

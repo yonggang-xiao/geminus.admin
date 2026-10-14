@@ -22,15 +22,15 @@
                     <td class="text-nowrap" data-label="<?= esc($labels['size'], 'attr') ?>"><?= esc($item['size']) ?> KB</td>
                     <td data-label="<?= esc($labels['actions'], 'attr') ?>"><div class="btn-list align-items-start justify-content-end flex-nowrap">
                         <?php if ($item['previewUrl'] !== ''): ?>
-                            <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc($item['previewUrl']) ?>" target="_blank" rel="noopener noreferrer" data-attachment-preview data-preview-name="<?= esc($item['name'], 'attr') ?>" data-preview-mime="<?= esc($item['mime'], 'attr') ?>" data-preview-download="<?= esc($item['downloadUrl'], 'attr') ?>" aria-label="<?= esc($labels['preview'] ?? lang('Admin.attachmentPreview'), 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc($item['previewUrl']) ?>" target="_blank" rel="noopener noreferrer" data-attachment-preview data-preview-name="<?= esc($item['name'], 'attr') ?>" data-preview-mime="<?= esc($item['mime'], 'attr') ?>" data-preview-download="<?= esc($item['downloadUrl'], 'attr') ?>" aria-label="<?= esc($labels['preview'] ?? lang('Admin.attachmentPreview'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc($labels['preview'] ?? lang('Admin.attachmentPreview'), 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></a>
                         <?php endif; ?>
                         <?php if ($item['downloadUrl'] !== ''): ?>
-                            <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc($item['downloadUrl']) ?>" aria-label="<?= esc($labels['download'], 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a>
+                            <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= esc($item['downloadUrl']) ?>" aria-label="<?= esc($labels['download'], 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc($labels['download'], 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a>
                         <?php endif; ?>
                         <?php if ($item['removeUrl'] !== ''): ?>
                             <form method="post" action="<?= esc($item['removeUrl']) ?>">
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-sm btn-icon btn-outline-danger" aria-label="<?= esc($labels['remove'], 'attr') ?>"><i class="ti ti-trash" aria-hidden="true"></i></button>
+                                <button type="submit" class="btn btn-sm btn-icon btn-outline-danger" aria-label="<?= esc($labels['remove'], 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc($labels['remove'], 'attr') ?>"><i class="ti ti-trash" aria-hidden="true"></i></button>
                             </form>
                         <?php endif; ?>
                     </div></td>

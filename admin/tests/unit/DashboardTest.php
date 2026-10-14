@@ -416,6 +416,8 @@ final class DashboardTest extends CIUnitTestCase
             $metricLink = (new DOMXPath($document))->query('//*[@data-dashboard-item="healthy:count"]//a')->item(0);
             $this->assertSame('/' . $locale . '/admin/dashboard', $metricLink->getAttribute('href'));
             $this->assertSame(lang('Dashboard.viewList', [], $locale) . ': ' . lang('Announcements.title', [], $locale) . ': ' . lang('Admin.dashboard', [], $locale), $metricLink->getAttribute('aria-label'));
+            $this->assertSame('tooltip', $metricLink->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Dashboard.viewList', [], $locale) . ': ' . lang('Announcements.title', [], $locale) . ': ' . lang('Admin.dashboard', [], $locale), $metricLink->getAttribute('data-bs-title'));
             $this->assertCount(1, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]'));
             $this->assertCount(1, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]/span[contains(@class,"invisible")]'));
             $this->assertCount(0, (new DOMXPath($document))->query('//section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]//a | //section[@aria-labelledby="dashboard-broken"]//div[@aria-hidden="true"]//*[@tabindex]'));

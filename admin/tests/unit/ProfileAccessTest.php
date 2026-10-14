@@ -301,7 +301,7 @@ final class ProfileAccessTest extends CIUnitTestCase
             $document = new DOMDocument();
             $document->loadHTML($localized->response()->getBody(), LIBXML_NOERROR | LIBXML_NOWARNING);
             $xpath = new DOMXPath($document);
-            $this->assertSame(1, $xpath->query('//header//a[@data-bs-toggle="dropdown" and @data-button-tooltip="false" and @aria-label="' . $label . '" and not(@title)]')->length);
+            $this->assertSame(1, $xpath->query('//header//a[@data-bs-toggle="dropdown" and @aria-label="' . $label . '" and not(@title) and not(@data-bs-title)]')->length);
         }
         $this->assertMatchesRegularExpression('/<div class="d-lg-none">.*?name="language" value="zh-Hant"/s', $page->response()->getBody());
 
@@ -825,6 +825,8 @@ final class ProfileAccessTest extends CIUnitTestCase
         $this->assertContains('btn-icon', explode(' ', $button->getAttribute('class')));
         $this->assertContains('btn-sm', explode(' ', $button->getAttribute('class')));
         $this->assertSame(lang('Admin.revokeToken'), $button->getAttribute('aria-label'));
+        $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+        $this->assertSame(lang('Admin.revokeToken'), $button->getAttribute('data-bs-title'));
         $this->assertSame('', trim($button->textContent));
 
         $result = $this->post('/en/admin/profile/tokens/' . $tokens[0]->id . '/revoke', [

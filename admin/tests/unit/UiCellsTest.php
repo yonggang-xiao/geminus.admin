@@ -203,6 +203,11 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertSame('<script>.pdf', $preview->getAttribute('data-preview-name'));
         $this->assertSame('application/pdf', $preview->getAttribute('data-preview-mime'));
         $this->assertSame(route_to('admin/announcements/attachments/download', 12, 34), $preview->getAttribute('data-preview-download'));
+        $tooltips = (new DOMXPath($document))->query('//*[@data-bs-toggle="tooltip"]');
+        $this->assertSame(3, $tooltips->length);
+        $this->assertSame(lang('Admin.attachmentPreview'), $tooltips->item(0)->getAttribute('data-bs-title'));
+        $this->assertSame('Download', $tooltips->item(1)->getAttribute('data-bs-title'));
+        $this->assertSame('Remove', $tooltips->item(2)->getAttribute('data-bs-title'));
         $this->assertStringContainsString('action="' . route_to('admin/announcements/attachments/remove', 12, 34) . '"', $html);
         $this->assertStringContainsString('enctype="multipart/form-data"', $html);
         $this->assertStringContainsString('aria-describedby="attachment-file-hint attachment-file-error"', $html);
@@ -220,6 +225,23 @@ final class UiCellsTest extends CIUnitTestCase
         TableLayoutAssertions::assertTablesInCards('<div class="card">' . $empty . '</div>');
     }
 
+    public function testAlertCloseUsesOfficialTooltip(): void
+    {
+        session()->set('alert', ['type' => 'success', 'message' => 'Saved']);
+
+        try {
+            $document = new DOMDocument();
+            @$document->loadHTML(view('Geminus\Admin\Views\alert'));
+            $button = (new DOMXPath($document))->query('//button[@data-bs-dismiss="alert"]')->item(0);
+            $this->assertNotNull($button);
+            $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+            $this->assertSame(lang('Admin.close'), $button->getAttribute('data-bs-title'));
+            $this->assertSame(lang('Admin.close'), $button->getAttribute('aria-label'));
+        } finally {
+            session()->remove('alert');
+        }
+    }
+
     public function testAttachmentPreviewModalHasAccessibleControlsAndNoEagerFrame(): void
     {
         $html     = view('Geminus\Admin\Views\attachment_preview');
@@ -230,6 +252,10 @@ final class UiCellsTest extends CIUnitTestCase
         $this->assertSame(1, $xpath->query('//*[@data-preview-open and @target="_blank" and @rel="noopener noreferrer"]')->length);
         $this->assertSame(1, $xpath->query('//*[@data-preview-download]')->length);
         $this->assertSame(1, $xpath->query('//button[@data-bs-dismiss="modal" and @aria-label]')->length);
+        $this->assertSame(3, $xpath->query('//*[@data-bs-toggle="tooltip" and @data-bs-title and @aria-label]')->length);
+        $this->assertSame(lang('Admin.attachmentDownload'), $xpath->query('//*[@data-preview-download]')->item(0)->getAttribute('data-bs-title'));
+        $this->assertSame(lang('Admin.attachmentOpen'), $xpath->query('//*[@data-preview-open]')->item(0)->getAttribute('data-bs-title'));
+        $this->assertSame(lang('Admin.close'), $xpath->query('//button[@data-bs-dismiss="modal"]')->item(0)->getAttribute('data-bs-title'));
         $this->assertSame(1, $xpath->query('//*[@data-preview-loading and @role="status"]')->length);
         $this->assertSame(1, $xpath->query('//*[@data-preview-error and @role="alert"]')->length);
         $this->assertSame(0, $xpath->query('//iframe')->length);

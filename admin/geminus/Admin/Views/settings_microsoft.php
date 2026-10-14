@@ -55,11 +55,11 @@
                                                 <option value="<?= esc($candidate->id) ?>"><?= esc($candidate->username . ' (' . $candidate->email . ')') ?></option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <button type="submit" class="btn btn-primary btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftApprove'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><i class="ti ti-check" aria-hidden="true"></i></button>
+                                        <button type="submit" class="btn btn-primary btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftApprove'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.microsoftApprove'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmApproval')), 'attr') ?>)"><i class="ti ti-check" aria-hidden="true"></i></button>
                                     </form>
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/reject', $request['id']) ?>" class="mt-2">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftReject'), 'attr') ?>"><i class="ti ti-x" aria-hidden="true"></i></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftReject'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.microsoftReject'), 'attr') ?>"><i class="ti ti-x" aria-hidden="true"></i></button>
                                     </form>
                                 </td>
                             </tr>
@@ -83,7 +83,7 @@
                                 <td class="text-end">
                                     <form method="post" action="<?= route_to('admin/settings/microsoft/revoke', $binding['user']->id) ?>">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftRevoke'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><i class="ti ti-unlink" aria-hidden="true"></i></button>
+                                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.microsoftRevoke'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.microsoftRevoke'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.microsoftConfirmRevoke')), 'attr') ?>)"><i class="ti ti-unlink" aria-hidden="true"></i></button>
                                     </form>
                                 </td>
                             </tr>

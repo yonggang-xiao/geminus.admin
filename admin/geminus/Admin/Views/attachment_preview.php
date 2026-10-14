@@ -4,9 +4,9 @@
             <div class="modal-header gap-3">
                 <h5 class="modal-title text-break flex-fill" id="attachment-preview-title"><?= esc(lang('Admin.attachmentPreview')) ?></h5>
                 <div class="btn-list flex-nowrap flex-shrink-0">
-                    <a class="btn btn-sm btn-icon btn-outline-secondary" data-preview-download aria-label="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a>
-                    <a class="btn btn-sm btn-icon btn-outline-secondary" data-preview-open target="_blank" rel="noopener noreferrer" aria-label="<?= esc(lang('Admin.attachmentOpen'), 'attr') ?>"><i class="ti ti-external-link" aria-hidden="true"></i></a>
-                    <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-dismiss="modal" aria-label="<?= esc(lang('Admin.close'), 'attr') ?>"><i class="ti ti-x" aria-hidden="true"></i></button>
+                    <a class="btn btn-sm btn-icon btn-outline-secondary" data-preview-download aria-label="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.attachmentDownload'), 'attr') ?>"><i class="ti ti-download" aria-hidden="true"></i></a>
+                    <a class="btn btn-sm btn-icon btn-outline-secondary" data-preview-open target="_blank" rel="noopener noreferrer" aria-label="<?= esc(lang('Admin.attachmentOpen'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.attachmentOpen'), 'attr') ?>"><i class="ti ti-external-link" aria-hidden="true"></i></a>
+                    <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-dismiss="modal" aria-label="<?= esc(lang('Admin.close'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.close'), 'attr') ?>"><i class="ti ti-x" aria-hidden="true"></i></button>
                 </div>
             </div>
             <div class="modal-body p-0" aria-busy="false">

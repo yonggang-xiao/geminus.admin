@@ -63,18 +63,18 @@
                                     <?php elseif ($editStates[$user->id] === 'protected'): ?>
                                         <span class="text-secondary text-nowrap"><?= esc(lang('Admin.userProtected')) ?></span>
                                     <?php elseif ($me->can('users.edit')): ?>
-                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/edit', $user->id) ?>" aria-label="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.editUser') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a>
                                         <?php if (! $user->isBanned() && $user->email && setting('Auth.allowMagicLinkLogins')): ?>
                                             <form method="post" action="<?= route_to('admin/users/invite', $user->id) ?>">
                                                 <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" aria-label="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-mail-forward" aria-hidden="true"></i></button>
+                                                <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" aria-label="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.userInvite') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-mail-forward" aria-hidden="true"></i></button>
                                             </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                     <?php if ($attachmentAccess[$user->id]): ?>
-                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.uploadHistory') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
+                                        <a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/users/attachments', $user->id) ?>" aria-label="<?= esc(lang('Admin.uploadHistory') . ': ' . $user->username, 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.uploadHistory') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-paperclip" aria-hidden="true"></i></a>
                                     <?php endif; ?>
-                                    <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Admin.viewUserPermissions'), 'attr') ?>">
+                                    <span class="d-inline-flex" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.viewUserPermissions'), 'attr') ?>">
                                         <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#user-permissions-<?= esc($user->id, 'attr') ?>" aria-controls="user-permissions-<?= esc($user->id, 'attr') ?>" aria-label="<?= esc(lang('Admin.viewUserPermissions') . ': ' . $user->username, 'attr') ?>"><i class="ti ti-eye" aria-hidden="true"></i></button>
                                     </span>
                                 </div>
@@ -93,7 +93,7 @@
             <div class="offcanvas offcanvas-end" tabindex="-1" id="user-permissions-<?= esc($user->id, 'attr') ?>" aria-labelledby="user-permissions-title-<?= esc($user->id, 'attr') ?>">
                 <div class="offcanvas-header">
                     <h2 class="offcanvas-title" id="user-permissions-title-<?= esc($user->id, 'attr') ?>"><?= esc($user->username) ?> <span class="d-block text-secondary small"><?= esc(lang('Admin.userPermissions')) ?></span></h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= esc(lang('Admin.close'), 'attr') ?>"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= esc(lang('Admin.close'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.close'), 'attr') ?>"></button>
                 </div>
                 <div class="offcanvas-body">
                     <p class="text-secondary small"><?= esc(lang('Admin.userPermissionsHint')) ?></p>

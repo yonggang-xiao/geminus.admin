@@ -1,5 +1,5 @@
 <div class="nav-item dropdown" data-notifications>
-    <button type="button" class="btn btn-icon px-0 position-relative" data-bs-toggle="dropdown" data-button-tooltip="false" aria-label="<?= esc(lang('Notifications.title'), 'attr') ?>" aria-expanded="false">
+    <button type="button" class="btn btn-icon px-0 position-relative" data-bs-toggle="dropdown" aria-label="<?= esc(lang('Notifications.title'), 'attr') ?>" aria-expanded="false">
         <i class="ti ti-bell icon" aria-hidden="true"></i>
         <?php if ($notifications !== []): ?>
             <span class="badge bg-red badge-notification" data-notification-badge></span>

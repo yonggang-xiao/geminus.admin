@@ -164,7 +164,7 @@
                                     <td class="text-end">
                                         <form method="post" action="<?= route_to('admin/profile/tokens/revoke', $token->id) ?>">
                                             <?= csrf_field() ?>
-                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.revokeToken'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><i class="ti ti-trash" aria-hidden="true"></i></button>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" aria-label="<?= esc(lang('Admin.revokeToken'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Admin.revokeToken'), 'attr') ?>" onclick="return confirm(<?= esc(json_encode(lang('Admin.confirmRevoke')), 'attr') ?>)"><i class="ti ti-trash" aria-hidden="true"></i></button>
                                         </form>
                                     </td>
                                 </tr>

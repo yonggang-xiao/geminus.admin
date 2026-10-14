@@ -62,7 +62,7 @@ use CodeIgniter\I18n\Time;
                             <td class="text-nowrap"><?= $announcement['published_at'] === null ? '-' : esc($me->formatDateTime(Time::parse($announcement['published_at'], 'UTC'))) ?></td>
                             <?php if ($canManage): ?>
                             <td class="text-nowrap"><?= esc($me->formatDateTime(Time::parse($announcement['created_at'], 'UTC')) ?? '-') ?></td>
-                            <td><a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/announcements/edit', $announcement['id']) ?>" aria-label="<?= esc(lang('Announcements.edit'), 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a></td>
+                            <td><a class="btn btn-sm btn-icon btn-outline-secondary" href="<?= route_to('admin/announcements/edit', $announcement['id']) ?>" aria-label="<?= esc(lang('Announcements.edit'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Announcements.edit'), 'attr') ?>"><i class="ti ti-edit" aria-hidden="true"></i></a></td>
                             <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>

@@ -16,7 +16,7 @@ use CodeIgniter\I18n\Time;
                     </form>
                 <?php endif; ?>
                 <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements/edit', $announcement['id']) ?>"><i class="ti ti-edit me-1" aria-hidden="true"></i><?= esc(lang('Announcements.edit')) ?></a>
-                <span class="d-inline-flex" data-button-tooltip title="<?= esc(lang('Announcements.delete'), 'attr') ?>"><button class="btn btn-outline-danger btn-icon" type="button" data-bs-toggle="modal" data-bs-target="#announcement-delete" aria-label="<?= esc(lang('Announcements.delete'), 'attr') ?>"><i class="ti ti-trash" aria-hidden="true"></i></button></span>
+                <span class="d-inline-flex" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Announcements.delete'), 'attr') ?>"><button class="btn btn-outline-danger btn-icon" type="button" data-bs-toggle="modal" data-bs-target="#announcement-delete" aria-label="<?= esc(lang('Announcements.delete'), 'attr') ?>"><i class="ti ti-trash" aria-hidden="true"></i></button></span>
             <?php endif; ?>
             <a class="btn btn-outline-secondary" href="<?= route_to('admin/announcements') ?>"><i class="ti ti-arrow-left me-1" aria-hidden="true"></i><?= esc(lang('Announcements.title')) ?></a>
         </div>
@@ -35,7 +35,7 @@ use CodeIgniter\I18n\Time;
             <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
                 <form class="modal-content" method="post" action="<?= route_to('admin/announcements/delete', $announcement['id']) ?>">
                     <?= csrf_field() ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= esc(lang('Announcements.cancel'), 'attr') ?>"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= esc(lang('Announcements.cancel'), 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Announcements.cancel'), 'attr') ?>"></button>
                     <div class="modal-status bg-danger"></div>
                     <div class="modal-body text-center py-4">
                         <i class="ti ti-alert-triangle text-danger fs-1 mb-2 d-block" aria-hidden="true"></i>

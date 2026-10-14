@@ -88,9 +88,9 @@ applyTo: 'admin/app/Views/**/*.php, admin/geminus/**/Views/**/*.php, admin/gemin
 
 - 文字操作按钮左侧使用语义对应的 Tabler 图标，例如 `<i class="ti ti-device-floppy me-1" aria-hidden="true"></i>`；保留主操作、次操作和危险操作的配色语义。同一列表的行操作统一尺寸及 `btn-icon` 样式，不改权限、路由、HTTP 方法或 CSRF。
 - 纯图标操作按钮使用 `btn-icon`，提供本地化的 `aria-label` 和 tooltip；关闭按钮也要有可访问名称和提示。装饰图标设置 `aria-hidden="true"`。表头排序、分页和插件生成的控件保留组件原有结构，不机械套用操作按钮规则。
-- 复用两个布局已加载的 `/static/js/button-tooltips.js`，不要在页面重复初始化。普通图标按钮以 `aria-label` 提供提示文案，不额外添加原生 `title` 造成双重提示。
-- navbar 的主题和语言按钮明确不显示 tooltip：设置 `data-button-tooltip="false"`，保留 `aria-label`，不添加 `title` 或 `data-bs-toggle="tooltip"`。
-- Tooltip 不与 Dropdown、Offcanvas 等 Bootstrap 组件绑定在同一元素。需要提示的组件触发按钮保留原有 `data-bs-toggle`，在独立的 `span.d-inline-flex` 上设置 `data-button-tooltip` 和经属性转义的 `title`；内层按钮保留 `aria-label`，不重复设置 `title`。不要把 tooltip 绑定到包含菜单项的祖先容器。
+- 使用布局已加载的 Tabler 官方自动初始化：普通图标按钮设置 `data-bs-toggle="tooltip"` 和经属性转义的本地化 `data-bs-title`，同时保留 `aria-label`。不额外添加原生 `title`，不创建本地提示初始化脚本。
+- navbar 的主题、语言和通知按钮不显示 tooltip：保留 `aria-label`，不添加 `title`、`data-bs-title` 或 Tooltip 初始化属性。
+- Tooltip 不与 Dropdown、Offcanvas 等 Bootstrap 组件绑定在同一元素。需要提示的组件触发按钮保留原有 `data-bs-toggle`，在独立的 `span.d-inline-flex` 上设置 `data-bs-toggle="tooltip"` 和经属性转义的 `data-bs-title`；内层按钮保留 `aria-label`，不重复设置提示。不要把 tooltip 绑定到包含菜单项的祖先容器。
 - Dropdown 触发元素与 `dropdown-menu` 保持同级；不要单独包裹触发元素而破坏菜单查找。`btn-icon` 的图标直接放在按钮内，避免额外包装导致偏移。
 
 ## 5) CI4 表单

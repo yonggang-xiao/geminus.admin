@@ -248,6 +248,15 @@ final class RoleSettingsTest extends CIUnitTestCase
                 $page->assertOK();
                 $page->assertSee($label);
                 $page->assertSee('Custom scope');
+                $roleDocument = new DOMDocument();
+                @$roleDocument->loadHTML($page->response()->getBody());
+                $roleButtons = (new DOMXPath($roleDocument))->query('//a[contains(@class, "btn-icon") and not(ancestor::header) and not(ancestor::aside)]');
+                $this->assertCount(2, $roleButtons);
+
+                foreach ($roleButtons as $button) {
+                    $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+                    $this->assertSame($button->getAttribute('aria-label'), $button->getAttribute('data-bs-title'));
+                }
                 $domainLabels = lang('Admin.permissionDomainLabels');
 
                 foreach (array_keys($permissions) as $permission) {
@@ -265,12 +274,14 @@ final class RoleSettingsTest extends CIUnitTestCase
             TableLayoutAssertions::assertTablesInCards($catalog->response()->getBody());
             $document = new DOMDocument();
             @$document->loadHTML($catalog->response()->getBody());
-            $buttons = (new DOMXPath($document))->query('//a[contains(@class, "btn-icon")]');
+            $buttons = (new DOMXPath($document))->query('//table//a[contains(@class, "btn-icon")]');
             $this->assertGreaterThan(0, $buttons->length);
 
             foreach ($buttons as $button) {
                 $this->assertSame('', $button->getAttribute('title'));
                 $this->assertNotSame('', $button->getAttribute('aria-label'));
+                $this->assertSame('tooltip', $button->getAttribute('data-bs-toggle'));
+                $this->assertSame($button->getAttribute('aria-label'), $button->getAttribute('data-bs-title'));
             }
         } finally {
             setting('AuthGroups.permissions', $original);

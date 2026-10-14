@@ -1,5 +1,5 @@
 <div class="nav-item dropdown">
-    <a href="#" class="p-0 btn btn-icon" data-bs-toggle="dropdown" data-button-tooltip="false" aria-label="<?= esc(lang('Admin.language'), 'attr') ?>">
+    <a href="#" class="p-0 btn btn-icon" data-bs-toggle="dropdown" aria-label="<?= esc(lang('Admin.language'), 'attr') ?>">
         <i class="ti ti-language icon" aria-hidden="true"></i>
     </a>
     <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">

@@ -15,7 +15,7 @@
                                     <div class="col"><h3 class="fw-normal fs-4 text-break mb-0"><?= esc($item['title']) ?></h3></div>
                                     <div class="col-auto">
                                     <?php if (isset($item['link'])): ?>
-                                        <a class="btn btn-sm btn-icon btn-ghost-secondary" href="<?= esc($item['link']['url'], 'attr') ?>" aria-label="<?= esc(lang('Dashboard.viewList', [], $locale) . ': ' . $item['moduleLabel'] . ': ' . $item['title'], 'attr') ?>"><i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+                                        <a class="btn btn-sm btn-icon btn-ghost-secondary" href="<?= esc($item['link']['url'], 'attr') ?>" aria-label="<?= esc(lang('Dashboard.viewList', [], $locale) . ': ' . $item['moduleLabel'] . ': ' . $item['title'], 'attr') ?>" data-bs-toggle="tooltip" data-bs-title="<?= esc(lang('Dashboard.viewList', [], $locale) . ': ' . $item['moduleLabel'] . ': ' . $item['title'], 'attr') ?>"><i class="ti ti-arrow-right" aria-hidden="true"></i></a>
                                     <?php else: ?>
                                         <span class="btn btn-sm btn-icon btn-ghost-secondary invisible" aria-hidden="true"><i class="ti ti-arrow-right"></i></span>
                                     <?php endif; ?>
